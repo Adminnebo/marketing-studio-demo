@@ -3,12 +3,12 @@ import { crearGeneracion, subirImagen } from '../api';
 import { TIPOS, TIPOS_VIDEO, entradasDe, faltantes, formatoDe, creditosDe } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import Avatares from './Avatares';
-import { precioDe, usd, cred } from '../precio';
+import { precioDe, usd, cred, creditos as nCred } from '../precio';
 
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
 
 // Modal para recrear una plantilla con el producto (y avatar) del usuario.
-export default function Recrear({ preset, categoria, categorias, costos, precios, saldo, rol, inicial, onCerrar, onEnviada, onRecargar }) {
+export default function Recrear({ preset, categoria, categorias, costos, precios, saldo, rol, rolReal, inicial, onCerrar, onEnviada, onRecargar }) {
   const { formatSlug, formato } = useMemo(() => formatoDe(preset, categorias, categoria), [preset, categorias, categoria]);
   const req = useMemo(() => entradasDe(preset, { formatSlug, formato }), [preset, formatSlug, formato]);
 
@@ -33,8 +33,8 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
 
   const creditos = creditosDe(preset.type, costos, duracion);
   const pr = precioDe(precios, preset.type, creditos);
-  const sinSaldo = rol !== 'super_admin' && creditos != null && saldo != null && saldo < creditos;
-  const pendientes = [...faltantes(req, { producto, avatar, prompt, url }), ...(sinSaldo ? [`Saldo insuficiente: tienes ${cred(saldo)} créditos y esta generación usa ${cred(creditos)}.`] : [])];
+  const sinSaldo = rolReal !== 'super_admin' && creditos != null && saldo != null && saldo < creditos;
+  const pendientes = [...faltantes(req, { producto, avatar, prompt, url }), ...(sinSaldo ? [`No te alcanza el saldo: tienes ${cred(saldo)} créditos y esto usa ${cred(creditos)}.`] : [])];
   const ocupado = enviando || subida?.progreso != null;
 
   const elegirArchivo = async (f) => {
@@ -89,6 +89,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                 <div>
                   <h2>{preset.name}</h2>
                   <span className="pill">{TIPOS[preset.type] || preset.type}{formato?.name ? ` · ${formato.name}` : ''}</span>
+                  <div className="rc-que">La IA rehace esta plantilla con <strong>tu producto</strong>: mismo estilo, escena y movimiento.</div>
                 </div>
                 <button type="button" className="ms-x" onClick={onCerrar} disabled={ocupado} aria-label="Cerrar">✕</button>
               </div>
@@ -97,7 +98,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                 <div className="ms-tiles">
                   {req.producto && (
                     <div>
-                      <span className="ms-label">Imagen del producto{req.productoObligatorio && <span className="req">*</span>}</span>
+                      <span className="ms-label"><span className="paso-num sm">1</span>Foto de tu producto{req.productoObligatorio ? <span className="req">*</span> : <span style={{ textTransform: 'none', fontWeight: 500 }}> (opcional)</span>}</span>
                       <button type="button"
                         className={`ms-tile ${producto ? 'filled' : ''} ${drag ? 'drag' : ''}`}
                         disabled={ocupado || !!enviada}
@@ -119,8 +120,8 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                         ) : (
                           <>
                             <span className="ms-tile-ic">📦</span>
-                            <span className="ms-tile-txt">Subir producto</span>
-                            <span className="ms-tile-sub">Arrastra o haz clic · PNG, JPG, WEBP</span>
+                            <span className="ms-tile-txt">Subir foto</span>
+                            <span className="ms-tile-sub">Producto completo y nítido, fondo liso · PNG, JPG, WEBP</span>
                           </>
                         )}
                       </button>
@@ -131,7 +132,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                   )}
                   {req.avatar && (
                     <div>
-                      <span className="ms-label">Avatar{req.avatarObligatorio ? <span className="req">*</span> : <span style={{ textTransform: 'none', fontWeight: 500 }}> (opcional)</span>}</span>
+                      <span className="ms-label" title="La persona que aparece en el video o la foto">Persona que aparece{req.avatarObligatorio ? <span className="req">*</span> : <span style={{ textTransform: 'none', fontWeight: 500 }}> (opcional)</span>}</span>
                       <button type="button" className={`ms-tile ${avatar ? 'filled' : ''}`} disabled={ocupado || !!enviada} onClick={() => setEligiendoAvatar(true)}>
                         {avatar ? (
                           <>
@@ -149,8 +150,8 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                         ) : (
                           <>
                             <span className="ms-tile-ic">🧑</span>
-                            <span className="ms-tile-txt">Elegir avatar</span>
-                            <span className="ms-tile-sub">{req.avatarObligatorio ? 'Obligatorio' : 'Si no eliges, se usa uno automático'}</span>
+                            <span className="ms-tile-txt">Elegir persona</span>
+                            <span className="ms-tile-sub">{req.avatarObligatorio ? 'Obligatorio' : 'Si no eliges, la IA pone una'}</span>
                           </>
                         )}
                       </button>
@@ -167,9 +168,9 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
               )}
 
               <div>
-                <span className="ms-label">Describe tu edición{req.promptObligatorio ? <span className="req">*</span> : <span style={{ textTransform: 'none', fontWeight: 500 }}> (opcional)</span>}</span>
+                <span className="ms-label"><span className="paso-num sm">2</span>{req.promptObligatorio ? <>Describe lo que quieres<span className="req">*</span></> : <>¿Quieres cambiar algo?<span style={{ textTransform: 'none', fontWeight: 500 }}> (opcional; si no, se hace igual a la plantilla)</span></>}</span>
                 <textarea className="ms-textarea" maxLength={5000} value={prompt} disabled={!!enviada}
-                  placeholder="Ej.: fondo azul JH, texto “Oferta de temporada”, tono profesional…"
+                  placeholder="Ej.: fondo azul, texto “Oferta de temporada”, tono profesional…"
                   onChange={(e) => setPrompt(e.target.value)} />
               </div>
 
@@ -177,19 +178,29 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
 
               {enviada ? (
                 <div className="ms-ok">
-                  <span>✅ Enviada. Se está generando; la verás en <strong>Generaciones</strong>.</span>
-                  <button type="button" className="btn" onClick={() => onCerrar('generaciones')}>Ver generaciones</button>
+                  <span>✅ ¡Listo! Se está creando{TIPOS_VIDEO.has(preset.type) ? ' (un video tarda de 2 a 10 minutos)' : ' (tarda menos de un minuto)'}. No hace falta esperar aquí: lo encuentras en <strong>Mis creaciones</strong>.</span>
+                  <span className="ms-ok-acc">
+                    <button type="button" className="btn secondary" onClick={() => onCerrar()}>Seguir viendo plantillas</button>
+                    <button type="button" className="btn" onClick={() => onCerrar('generaciones')}>Ver en Mis creaciones</button>
+                  </span>
                 </div>
               ) : (
-                <div className="ms-submit">
-                  <span className="ms-cost">
-                    {creditos != null ? <>Usa <strong>{fmtCred(creditos)} créditos</strong>{pr && <> · <strong>{usd(pr.precio)}</strong></>}{rol === 'super_admin' && pr?.costo != null && ` · costo ${usd(pr.costo)} · margen ${pr.margen} %`}{rol !== 'super_admin' && saldo != null && ` · saldo ${cred(saldo)}`}</>
-                      : TIPOS_VIDEO.has(preset.type) ? 'Calculando costo según duración…' : ''}
-                    {pendientes.length > 0 && <><br />{pendientes[0]}</>}
-                    {sinSaldo && onRecargar && <><br /><button type="button" className="mini-btn" onClick={() => onCerrar('creditos')}>💳 Ver créditos</button></>}
-                  </span>
-                  <button className="btn" type="submit" disabled={pendientes.length > 0 || ocupado}>
-                    {enviando ? 'Enviando…' : '✨ Generar'}
+                <div className="lb-resumen">
+                  <div className="lb-costo">
+                    {creditos != null ? (
+                      <>
+                        <span className="lb-costo-n">{nCred(creditos)}{pr && <span> · {usd(pr.precio)}</span>}</span>
+                        <span className="ms-cost">
+                          {rol === 'super_admin' && pr?.costo != null && `Costo ${usd(pr.costo)} · margen ${pr.margen} % · `}
+                          {rolReal !== 'super_admin' ? (saldo != null ? `Tu saldo: ${cred(saldo)} créditos` : '') : 'Super admin: no se descuenta del saldo de JH'}
+                        </span>
+                      </>
+                    ) : <span className="ms-cost">{TIPOS_VIDEO.has(preset.type) ? 'Calculando costo según la duración…' : ''}</span>}
+                    {pendientes.length > 0 && <span className="lb-falta">👉 {pendientes[0]}</span>}
+                    {sinSaldo && onRecargar && <button type="button" className="linklike" onClick={() => onCerrar('creditos')}>Ver cómo recargar →</button>}
+                  </div>
+                  <button className="btn lb-generar" type="submit" disabled={pendientes.length > 0 || ocupado}>
+                    {enviando ? 'Enviando…' : '✨ Crear con mi producto'}
                   </button>
                 </div>
               )}

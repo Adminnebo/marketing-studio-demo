@@ -80,6 +80,12 @@ export default function Plantillas({ categorias, onElegir }) {
 
   return (
     <>
+      <div className="pl-intro">
+        <div>
+          <div className="pl-intro-t">Elige una plantilla</div>
+          <div className="pl-intro-s">Toca una para usarla con la foto de tu producto. Las marcadas con <span className="ms-reco-inline">⭐ JH</span> son las que mejor van con los productos de JH.</div>
+        </div>
+      </div>
       <div className="ms-bar">
         <div className="ms-chips">
           {categorias.map((c) => (
@@ -88,17 +94,17 @@ export default function Plantillas({ categorias, onElegir }) {
             </button>
           ))}
         </div>
-        <input className="search" placeholder="Buscar plantilla…" value={qTexto} onChange={(e) => setQTexto(e.target.value)} />
+        <input className="search" placeholder="🔍 Buscar por nombre…" value={qTexto} onChange={(e) => setQTexto(e.target.value)} />
       </div>
 
       <div className="pl-filtros card">
         <div className="pl-fila">
-          <span className="filter-lbl">Sirve para JH:</span>
+          <span className="filter-lbl">Para tu producto:</span>
           <Chips opciones={Object.fromEntries(Object.entries(SIRVE_PARA).map(([k, v]) => [k, v.label]))} valores={f.sirve} conteos={fc?.sirve} onCambio={(v) => cambiar({ sirve: v })} />
           <span className="pl-sep" />
-          <span className="filter-lbl">Orden:</span>
-          <button className={`mini-btn ${f.orden === 'jh' ? 'active' : ''}`} onClick={() => cambiar({ orden: 'jh' })}>⭐ Recomendadas para JH</button>
-          <button className={`mini-btn ${f.orden === 'original' ? 'active' : ''}`} onClick={() => cambiar({ orden: 'original' })}>Original</button>
+          <span className="filter-lbl">Ordenar:</span>
+          <button className={`mini-btn ${f.orden === 'jh' ? 'active' : ''}`} onClick={() => cambiar({ orden: 'jh' })}>⭐ Mejores para JH</button>
+          <button className={`mini-btn ${f.orden === 'original' ? 'active' : ''}`} onClick={() => cambiar({ orden: 'original' })} title="El orden en que las publica el proveedor">Orden del catálogo</button>
           <button className="mini-btn pl-mas" onClick={() => setAbiertos(!abiertos)}>{abiertos ? 'Menos filtros ▲' : `Más filtros${activos ? ` (${activos})` : ''} ▼`}</button>
         </div>
         {abiertos && (
@@ -117,7 +123,7 @@ export default function Plantillas({ categorias, onElegir }) {
               <Chips opciones={ESTILOS} valores={f.estilo} conteos={fc?.estilo} onCambio={(v) => cambiar({ estilo: v })} />
             </div>
             <div className="pl-fila">
-              <span className="filter-lbl">Producto del ejemplo:</span>
+              <span className="filter-lbl" title="Qué producto aparece en la foto de ejemplo de la plantilla">Producto del ejemplo:</span>
               <Chips opciones={PRODUCTOS} valores={f.producto} conteos={fc?.producto} onCambio={(v) => cambiar({ producto: v })} />
             </div>
             <div className="pl-fila">
@@ -126,7 +132,7 @@ export default function Plantillas({ categorias, onElegir }) {
                 <button key={k} className={`mini-btn ${f.persona === k ? 'active' : ''}`} onClick={() => cambiar({ persona: k })}>{l}</button>
               ))}
               <span className="pl-sep" />
-              <span className="filter-lbl">Medio:</span>
+              <span className="filter-lbl">Resultado:</span>
               {[['', 'Todo'], ['foto', 'Foto'], ['video', 'Video']].map(([k, l]) => (
                 <button key={k} className={`mini-btn ${f.medio === k ? 'active' : ''}`} onClick={() => cambiar({ medio: k })}>{l}</button>
               ))}
@@ -145,7 +151,7 @@ export default function Plantillas({ categorias, onElegir }) {
         )}
       </div>
 
-      <div className="ms-count" style={{ margin: '0 0 10px' }}>{datos.total ? `${datos.total} plantillas` : ''}</div>
+      <div className="ms-count" style={{ margin: '0 0 10px' }}>{datos.total ? `${datos.total} plantillas${activos || f.q || f.categoria !== 'all' ? ' con estos filtros' : ''}` : ''}</div>
 
       {datos.error && !datos.items.length ? (
         <div className="empty-state">No se pudieron cargar las plantillas: {datos.error}<br />
@@ -154,7 +160,9 @@ export default function Plantillas({ categorias, onElegir }) {
       ) : !datos.items.length && datos.cargando ? (
         <div className="loading"><div className="spinner" />Cargando plantillas…</div>
       ) : !datos.items.length ? (
-        <div className="empty-state">Ninguna plantilla coincide con los filtros.</div>
+        <div className="empty-state">Ninguna plantilla coincide con los filtros.<br />
+          <button className="btn secondary" style={{ marginTop: 12 }} onClick={() => { setQTexto(''); setF({ ...VACIO, orden: f.orden }); }}>Quitar filtros y búsqueda</button>
+        </div>
       ) : (
         <div className="ms-grid">
           {datos.items.map((p) => (
@@ -164,6 +172,7 @@ export default function Plantillas({ categorias, onElegir }) {
                 <span className="ms-kind">{TIPOS[p.type] || p.type}</span>
                 {esVideo(p.cover_image) && <span className="ms-play">▶ video</span>}
                 {p.jh >= RECOMENDADA && <span className="ms-reco" title="Recomendada para los productos de JH">⭐ JH</span>}
+                <span className="ms-usar">Usar →</span>
               </div>
               <div className="ms-card-name">{p.name}</div>
             </button>

@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { TIPOS } from '@shared/reglas.mjs';
+import { TIPOS, TIPOS_VIDEO } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import { descargar } from '../api';
 import { usd } from '../precio';
 
 const ESTADOS = {
-  pendiente: 'En cola', enviando: 'Enviando', en_proceso: 'Generando', completado: 'Lista', fallido: 'Falló',
+  pendiente: 'En cola', enviando: 'Enviando', en_proceso: 'Creando', completado: 'Lista', fallido: 'No salió',
 };
 export const EN_CURSO = new Set(['pendiente', 'enviando', 'en_proceso']);
-const FILTROS = [['', 'Todas'], ['curso', 'En curso'], ['completado', 'Listas'], ['fallido', 'Fallidas']];
+const FILTROS = [['', 'Todas'], ['curso', 'Creándose'], ['completado', 'Listas'], ['fallido', 'No salieron']];
+const esVideoGen = (g) => g.preset_tipo === 'libre_video' || TIPOS_VIDEO.has(g.preset_tipo);
 
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
@@ -35,7 +36,9 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
           <>
             {g.portada && <Portada cover={g.portada} alt={g.preset_nombre} />}
             {EN_CURSO.has(g.estado) && (
-              <div className="ms-gen-overlay"><div className="spinner" />{ESTADOS[g.estado]}…</div>
+              <div className="ms-gen-overlay"><div className="spinner" />{ESTADOS[g.estado]}…
+                <span className="ms-gen-eta">{esVideoGen(g) ? 'Un video tarda de 2 a 10 min' : 'Menos de un minuto'}</span>
+              </div>
             )}
             {g.estado === 'fallido' && <div className="ms-gen-overlay err">⚠️ No se generó</div>}
           </>
@@ -56,23 +59,23 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
           {g.precio_usd != null && ` · ≈${usd(g.precio_usd)}`}
           {g.creditos_estimados != null && (g.precio_usd == null || rol === 'super_admin') && ` · ≈${Number(g.creditos_estimados).toLocaleString('es-MX', { maximumFractionDigits: 1 })} cr`}
         </div>
-        <div className="ms-gen-meta">{g.creado_por}</div>
+        {rol !== 'usuario' && <div className="ms-gen-meta">Por {g.creado_por}</div>}
         {(g.entrada?.args?.prompt || g.entrada?.params?.prompt) && (
           <div className="ms-gen-prompt" title={g.entrada.args?.prompt || g.entrada.params.prompt}>“{g.entrada.args?.prompt || g.entrada.params.prompt}”</div>
         )}
-        {g.error && <div className="ms-gen-err">{g.error}</div>}
+        {g.error && <div className="ms-gen-err">{g.error}{g.estado === 'fallido' && g.precio_usd != null && !/administrador/.test(g.error) && ' Los créditos se devolvieron a tu saldo.'}</div>}
         {errBaja && <div className="ms-gen-err">{errBaja}</div>}
         <div className="ms-gen-actions">
           {r && <button className="mini-btn" onClick={bajar} disabled={bajando}>{bajando ? 'Descargando…' : '⬇ Descargar'}</button>}
           {r && onPublicar && <button className="mini-btn" onClick={() => onPublicar(g, Math.min(i, ok.length - 1))}>📣 Publicar</button>}
-          {(g.entrada?.preset || g.entrada?.libre) && <button className="mini-btn" onClick={() => onRepetir(g)}>↻ Usar de nuevo</button>}
+          {(g.entrada?.preset || g.entrada?.libre) && <button className="mini-btn" onClick={() => onRepetir(g)} title="Abrir de nuevo con la misma foto y descripción para repetir o ajustar">↻ Usar de nuevo</button>}
         </div>
       </div>
     </div>
   );
 }
 
-export default function Generaciones({ items, cargando, error, hayMas, onMas, onRepetir, onPublicar, rol }) {
+export default function Generaciones({ items, cargando, error, hayMas, onMas, onRepetir, onPublicar, rol, onCrear }) {
   const [filtro, setFiltro] = useState('');
   const visibles = items.filter((g) => !filtro || (filtro === 'curso' ? EN_CURSO.has(g.estado) : g.estado === filtro));
   return (
@@ -83,14 +86,20 @@ export default function Generaciones({ items, cargando, error, hayMas, onMas, on
             <button key={k} className={`dr-preset ${filtro === k ? 'active' : ''}`} onClick={() => setFiltro(k)}>{l}</button>
           ))}
         </div>
-        <span className="ms-count">Se actualiza sola mientras haya generaciones en curso</span>
+        <span className="ms-count">Se actualiza sola mientras algo se está creando</span>
       </div>
       {error && <div className="banner-off">{error}</div>}
       {!items.length && cargando ? (
         <div className="loading"><div className="spinner" />Cargando generaciones…</div>
       ) : !visibles.length ? (
         <div className="empty-state">
-          {items.length ? 'Nada con este filtro.' : <>Todavía no hay generaciones.<br />Elige una plantilla en <strong>Plantillas</strong> para empezar.</>}
+          {items.length ? 'Nada con este filtro.' : (
+            <>
+              <div style={{ fontSize: '2rem' }}>🎨</div>
+              <strong>Todavía no has creado nada.</strong><br />Lo que crees aparece aquí para verlo y descargarlo.
+              {onCrear && <><br /><button className="btn" style={{ marginTop: 14 }} onClick={onCrear}>Crear mi primera foto o video</button></>}
+            </>
+          )}
         </div>
       ) : (
         <div className="ms-gens">

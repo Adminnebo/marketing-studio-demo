@@ -3,6 +3,11 @@ import { fetchCreditos } from '../api';
 import { usd, cred } from '../precio';
 
 const TIPOS = { recarga: 'Recarga', consumo: 'Generación', reembolso: 'Devolución', ajuste: 'Ajuste' };
+// Referencias de consumo (creditos aproximados; el costo exacto se ve antes de crear).
+const EJEMPLOS = [
+  ['📦', 'Foto de producto (plantilla)', 1.5], ['🪧', 'Anuncio o póster', 7.5],
+  ['🎬', 'Video de 5 s (Kling 3.0)', 10], ['🎥', 'Video de 5 s calidad cine (Cinema Studio 4.0)', 35],
+];
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 // Billetera de JH: saldo, precio por credito, paquetes para recargar (pago en linea en standby) y movimientos.
@@ -33,8 +38,21 @@ export default function Creditos({ recarga }) {
         </div>
       </div>
 
+      <div className="section-title">¿Qué puedo hacer con mis créditos?</div>
+      <div className="cr-ejemplos">
+        {EJEMPLOS.map(([ic, l, cr]) => (
+          <div key={l} className="cr-ej">
+            <span className="cr-ej-ic">{ic}</span>
+            <span className="cr-ej-l">{l}</span>
+            <span className="cr-ej-v"><strong>≈ {cred(cr)} créditos</strong>{d.precioCredito ? ` · ${usd(cr * d.precioCredito)}` : ''}</span>
+          </div>
+        ))}
+      </div>
+      <div className="ms-cost" style={{ margin: '8px 2px 0' }}>Son referencias: antes de crear siempre ves el costo exacto. Si una creación falla, los créditos se devuelven solos.</div>
+
       <div className="section-title">Recargar créditos</div>
       <div className="card">
+        <div className="card-sub">Elige un paquete. Mientras llega el pago en línea, escríbele a Nebo con el paquete que quieres y lo cargamos a tu saldo.</div>
         <div className="cr-paquetes">
           {d.paquetes.map((p) => (
             <button key={p.creditos} className={`cr-paquete ${elegido === p.creditos ? 'on' : ''}`} onClick={() => setElegido(p.creditos)}>
@@ -46,13 +64,13 @@ export default function Creditos({ recarga }) {
         </div>
         <div className="ms-submit">
           <span className="ms-cost">
-            {d.pagoEnLinea ? '' : 'El pago en línea estará disponible pronto. Por ahora, para recargar escríbele a Nebo y lo cargamos a tu saldo.'}
+            {elegido ? <>Elegiste <strong>{cred(elegido)} créditos</strong>{d.paquetes.find((p) => p.creditos === elegido)?.usd != null && <> por <strong>{usd(d.paquetes.find((p) => p.creditos === elegido).usd)}</strong></>}.{!d.pagoEnLinea && ' Pídeselo a Nebo.'}</> : 'Toca un paquete para elegirlo.'}
           </span>
-          <button className="btn" disabled={!d.pagoEnLinea || !elegido} title={d.pagoEnLinea ? '' : 'Próximamente'}>💳 Pagar y recargar</button>
+          <button className="btn" disabled={!d.pagoEnLinea || !elegido} title={d.pagoEnLinea ? '' : 'Próximamente'}>{d.pagoEnLinea ? '💳 Pagar y recargar' : '💳 Pago en línea (próximamente)'}</button>
         </div>
       </div>
 
-      <div className="section-title">Movimientos</div>
+      <div className="section-title">Historial de movimientos</div>
       <div className="card" style={{ padding: 0 }}>
         <div className="table-wrap">
           <table>

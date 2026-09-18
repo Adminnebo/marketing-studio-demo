@@ -13,8 +13,8 @@ export const TIPOS = {
   poster: 'Póster',
   ads: 'Anuncio',
   marketplace: 'Marketplace',
-  libre_video: 'Video (modelo libre)',
-  libre_imagen: 'Imagen (modelo libre)',
+  libre_video: 'Video desde cero',
+  libre_imagen: 'Foto desde cero',
 };
 
 export const CATEGORIAS_ES = {
@@ -87,9 +87,9 @@ export function entradasDe(preset, { formatSlug, formato } = {}) {
 // Errores de validacion en espanol (vacio = listo para enviar).
 export function faltantes(e, { producto, avatar, prompt, url }) {
   const out = [];
-  if (e.productoObligatorio && !producto) out.push('Esta plantilla necesita la imagen del producto.');
-  if (e.avatarObligatorio && !avatar) out.push('Esta plantilla necesita un avatar.');
-  if (e.promptObligatorio && !(prompt || '').trim()) out.push('Esta plantilla necesita una descripción.');
+  if (e.productoObligatorio && !producto) out.push('Sube la foto de tu producto.');
+  if (e.avatarObligatorio && !avatar) out.push('Elige la persona que aparece.');
+  if (e.promptObligatorio && !(prompt || '').trim()) out.push('Escribe lo que quieres.');
   if (e.aceptaUrl && e.urlObligatoria && !(url || '').trim()) out.push('Esta plantilla necesita la URL de la marca.');
   if (e.aceptaUrl && (url || '').trim() && !/^https:\/\/[^\s/]+\.[^\s]+$/i.test(url.trim())) out.push('La URL de la marca debe empezar con https://');
   return out;

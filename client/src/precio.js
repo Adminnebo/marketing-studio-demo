@@ -7,3 +7,5 @@ export function precioDe(precios, _tipo, creditos) {
 }
 export const usd = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const cred = (n) => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 });
+// "1 crédito" / "35 créditos".
+export const creditos = (n) => `${cred(n)} ${Number(n) === 1 ? 'crédito' : 'créditos'}`;

@@ -10,11 +10,12 @@ import Creditos from './components/Creditos';
 import Libre from './components/Libre';
 import { cred } from './precio';
 import Publicar from './components/Publicar';
+import { Pasos, Ayuda } from './components/Guia';
 import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
 
 const TABS = [
   { id: 'plantillas', label: 'Crear', icon: '🎨' },
-  { id: 'generaciones', label: 'Generaciones', icon: '🗂️' },
+  { id: 'generaciones', label: 'Mis creaciones', icon: '🗂️' },
   { id: 'creditos', label: 'Créditos', icon: '💳' },
   { id: 'redes', label: 'Redes', icon: '📣', min: 'admin' },
   { id: 'superadmin', label: 'Super Admin', icon: '🛡️', min: 'super_admin' },
@@ -78,6 +79,10 @@ export default function App() {
   const [costos, setCostos] = useState(null);
   const [errorCat, setErrorCat] = useState(null);
   const [abierto, setAbierto] = useState(null); // { preset, categoria, inicial }
+  const [ayuda, setAyuda] = useState(false);
+  // Crear: con plantilla (lo facil, por defecto) o desde cero. Se recuerda por navegador.
+  const [modoCrear, setModoCrearSt] = useState(() => { try { return localStorage.getItem('ms_modo_crear') || 'plantilla'; } catch { return 'plantilla'; } });
+  const setModoCrear = (m) => { setModoCrearSt(m); try { localStorage.setItem('ms_modo_crear', m); } catch { /* sin storage */ } };
   const [libre, setLibre] = useState({ n: 0, inicial: null }); // 'Usar de nuevo' de una generacion libre
   const [gens, setGens] = useState({ items: [], cargando: false, error: null, siguiente: null });
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
@@ -200,6 +205,7 @@ export default function App() {
       },
     }));
     setTab('plantillas');
+    setModoCrear('cero');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   })() : setAbierto({
     preset: g.entrada.preset,
@@ -216,7 +222,8 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1>Marketing Studio · Contenido con IA</h1>
+          <h1>Marketing</h1>
+          <div className="sub">Fotos y videos de tus productos, hechos con IA</div>
         </div>
         <nav className="platsw" aria-label="Cambiar de plataforma">
           {PLATS.map((p) => (
@@ -226,15 +233,16 @@ export default function App() {
           ))}
         </nav>
         <div className="badges">
-          {estado && (
+          {estado && (desconectado || me.rol === 'super_admin') && (
             <span className={`badge ${desconectado ? 'hf-off' : 'live'}`}>
               <span className={`dot ${desconectado ? '' : 'pulse'}`} />
               {desconectado ? 'Generador desconectado' : 'Generador conectado'}
             </span>
           )}
           <button className="badge cr-badge" onClick={() => setTab('creditos')} title="Saldo de créditos de JH">
-            💳 Saldo: {cred(me.saldo)} créditos
+            💳 Saldo: <strong>{cred(me.saldo)}</strong> créditos
           </button>
+          <button className="badge" onClick={() => setAyuda(true)} title="Cómo usar el panel">❔ Ayuda</button>
           {me.rol === 'super_admin' && saldo && (
             <span className="badge" title={`Cuenta del proveedor · plan ${saldo.subscription_plan_type} · solo lo ven los super admin`}>
               🪙 Cuenta del generador: {Number(saldo.credits).toLocaleString('es-MX', { maximumFractionDigits: 1 })}
@@ -272,6 +280,13 @@ export default function App() {
         </div>
       )}
 
+      {me.rolReal !== 'super_admin' && Number(me.saldo) <= 0 && tab !== 'creditos' && (
+        <div className="aviso-saldo">
+          <span>💳 <strong>Todavía no tienes créditos.</strong> Puedes explorar todo, pero para generar primero hay que recargar saldo.</span>
+          <button className="btn" onClick={() => setTab('creditos')}>Ver cómo recargar</button>
+        </div>
+      )}
+
       <nav className="tabs">
         {tabs.map((t) => (
           <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
@@ -291,18 +306,33 @@ export default function App() {
           <div className="loading"><div className="spinner" />Cargando catálogo…</div>
         ) : (
           <>
-            <div className="section-title">Generación libre</div>
-            <Libre key={libre.n} inicial={libre.inicial} saldo={me.saldo} rol={me.rol}
-              onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }} />
-            <div className="section-title">Plantillas de marketing</div>
-            <Plantillas categorias={categorias} onElegir={(preset, categoria) => setAbierto({ preset, categoria })} />
+            <Pasos onAyuda={() => setAyuda(true)} />
+            <div className="modos" role="tablist" aria-label="Cómo quieres crear">
+              <button role="tab" aria-selected={modoCrear === 'plantilla'} className={`modo ${modoCrear === 'plantilla' ? 'on' : ''}`} onClick={() => setModoCrear('plantilla')}>
+                <span className="modo-ic">🧩</span>
+                <span><span className="modo-t">Con una plantilla <span className="modo-tag">Recomendado</span></span>
+                  <span className="modo-s">Elige un diseño que ya funciona y ponle tu producto. Lo más fácil y rápido.</span></span>
+              </button>
+              <button role="tab" aria-selected={modoCrear === 'cero'} className={`modo ${modoCrear === 'cero' ? 'on' : ''}`} onClick={() => setModoCrear('cero')}>
+                <span className="modo-ic">✨</span>
+                <span><span className="modo-t">Desde cero</span>
+                  <span className="modo-s">Describe la escena (o deja que la IA la escriba desde tu foto) y elige duración y formato.</span></span>
+              </button>
+            </div>
+            {modoCrear === 'cero' ? (
+              <Libre key={libre.n} inicial={libre.inicial} saldo={me.saldo} rol={me.rol} rolReal={me.rolReal}
+                onVer={() => setTab('generaciones')} onRecargar={() => setTab('creditos')}
+                onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }} />
+            ) : (
+              <Plantillas categorias={categorias} onElegir={(preset, categoria) => setAbierto({ preset, categoria })} />
+            )}
           </>
         )
       )}
 
       {tab === 'generaciones' && (
         <Generaciones items={gens.items} cargando={gens.cargando} error={gens.error} hayMas={!!gens.siguiente}
-          onMas={masGens} onRepetir={repetir} rol={me.rol}
+          onMas={masGens} onRepetir={repetir} rol={me.rol} onCrear={() => setTab('plantillas')}
           onPublicar={NIVEL[me.rol] >= NIVEL.admin ? (g, indice) => setPublicando({ g, indice }) : null} />
       )}
 
@@ -336,13 +366,16 @@ export default function App() {
           saldo={me.saldo}
           onRecargar
           rol={me.rol}
+          rolReal={me.rolReal}
           inicial={abierto.inicial}
           onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }}
           onCerrar={(ir) => { setAbierto(null); if (ir === 'generaciones' || ir === 'creditos') setTab(ir); }}
         />
       )}
 
-      <div className="footer">Marketing Studio · contenido generado con IA</div>
+      {ayuda && <Ayuda onCerrar={() => setAyuda(false)} />}
+
+      <div className="footer">Marketing · contenido generado con IA · <button className="linklike" onClick={() => setAyuda(true)}>Guía rápida</button></div>
     </div>
   );
 }
