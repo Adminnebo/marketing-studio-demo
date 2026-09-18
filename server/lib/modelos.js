@@ -39,6 +39,32 @@ const DESCRIPCIONES = {
 };
 const sinMarca = (t) => String(t || '').replace(/higgsfield\s*/gi, '').trim();
 
+// Nombres limpios y parejos ("Marca Modelo Version"), familia para agrupar en el selector
+// y alias que el catalogo repite con otro id (se ocultan para no mostrar dos veces lo mismo).
+const NOMBRES = {
+  cinematic_studio_3_0: ['Cinema Studio 3.0', 'Cinema Studio'], cinematic_studio_video_v2: ['Cinema Studio 2.0', 'Cinema Studio'],
+  cinematic_studio_video: ['Cinema Studio 1.0', 'Cinema Studio'],
+  seedance_2_5: ['Seedance 2.5', 'Seedance'], seedance_2_0: ['Seedance 2.0', 'Seedance'], seedance_2_0_mini: ['Seedance 2.0 Mini', 'Seedance'],
+  seedance1_5: ['Seedance 1.5 Pro', 'Seedance'],
+  kling3_0: ['Kling 3.0', 'Kling'], kling3_0_turbo: ['Kling 3.0 Turbo', 'Kling'], kling2_6: ['Kling 2.6', 'Kling'],
+  veo3_1: ['Veo 3.1', 'Veo (Google)'], veo3_1_lite: ['Veo 3.1 Lite', 'Veo (Google)'], veo3: ['Veo 3', 'Veo (Google)'],
+  wan3_0_prime: ['Wan 3.0 Prime', 'Wan'], wan3_0: ['Wan 3.0', 'Wan'], wan2_7: ['Wan 2.7', 'Wan'], wan2_6: ['Wan 2.6', 'Wan'],
+  minimax_h3_max: ['MiniMax H3 Max', 'MiniMax'], minimax_h3: ['MiniMax H3', 'MiniMax'], minimax_hailuo: ['MiniMax Hailuo', 'MiniMax'],
+  gemini_omni_flash_1_1: ['Gemini Omni Flash 1.1', 'Gemini (Google)'], gemini_omni: ['Gemini Omni Flash 1.0', 'Gemini (Google)'],
+  grok_video_v15: ['Grok Video 1.5', 'Grok (xAI)'], grok_video: ['Grok Video 1.0', 'Grok (xAI)'],
+  flux_3_video: ['FLUX 3 Video', 'FLUX'], happy_horse_video: ['Happy Horse', 'Otros'],
+  gpt_image_2_5: ['GPT Image 2.5', 'GPT Image (OpenAI)'], gpt_image_2: ['GPT Image 2.0', 'GPT Image (OpenAI)'], openai_hazel: ['OpenAI Hazel', 'GPT Image (OpenAI)'],
+  nano_banana_pro: ['Nano Banana Pro', 'Nano Banana (Google)'], nano_banana_2: ['Nano Banana 2', 'Nano Banana (Google)'],
+  nano_banana_2_lite: ['Nano Banana 2 Lite', 'Nano Banana (Google)'], nano_banana: ['Nano Banana', 'Nano Banana (Google)'],
+  cinematic_studio_2_5: ['Cinema Studio Image 2.5', 'Cinema Studio'], marketing_studio_image: ['Marketing Studio Image', 'Marketing Studio'],
+  seedream_v5_pro: ['Seedream 5.0 Pro', 'Seedream'], seedream_v5_lite: ['Seedream 5.0 Lite', 'Seedream'], seedream_v4_5: ['Seedream 4.5', 'Seedream'],
+  soul_2: ['Soul 2.0', 'Soul'], soul_cinematic: ['Soul Cinema', 'Soul'], soul_location: ['Soul Location (escenarios)', 'Soul'],
+  flux_2: ['FLUX.2', 'FLUX'], flux_kontext: ['FLUX Kontext', 'FLUX'], recraft_v4_1: ['Recraft 4.1', 'Otros'],
+  grok_image_2_0: ['Grok Image 2.0', 'Grok (xAI)'], grok_image: ['Grok Image 1.0', 'Grok (xAI)'],
+  kling_omni_image: ['Kling O1 Image', 'Kling'], z_image: ['Z Image', 'Otros'], image_auto: ['Automático (elige el mejor)', 'Automático'],
+};
+const ALIAS = new Set(['soul_v2']); // mismo modelo que soul_2
+
 // Parametros que se muestran (el resto se deja con el valor por defecto del modelo).
 const PARAMS = {
   resolution: 'Resolución', quality: 'Calidad', mode: 'Modo', variant: 'Variante',
@@ -68,7 +94,9 @@ function normalizar(m) {
     else if (p.options?.length) params.push({ nombre: p.name, etiqueta: PARAMS[p.name], tipo: 'opciones', opciones: p.options, def: p.default ?? p.options[0] });
   }
   return {
-    id: m.id, nombre: sinMarca(m.name) || m.id, proveedor: /higgsfield/i.test(m.provider_name || '') ? '' : m.provider_name || '',
+    id: m.id, nombre: NOMBRES[m.id]?.[0] || sinMarca(m.name) || m.id,
+    familia: NOMBRES[m.id]?.[1] || sinMarca(m.provider_name) || 'Otros',
+    proveedor: /higgsfield/i.test(m.provider_name || '') ? '' : m.provider_name || '',
     descripcion: DESCRIPCIONES[m.id] || '',
     tipo: m.output_type === 'video' ? 'video' : 'imagen',
     aspectos: (m.aspect_ratios || []).filter((a) => a !== 'auto'),
@@ -84,11 +112,22 @@ async function lista() {
     hf.llamar('models_explore', { action: 'list', type: 'image', limit: 100 }),
   ]);
   const todos = [...(v.items || []), ...(i.items || [])]
-    .filter((m) => m.id && !FUERA.test(m.id) && !(m.parameters || []).some((p) => p.required === 'required' && p.name !== 'mode'))
+    .filter((m) => m.id && !FUERA.test(m.id) && !ALIAS.has(m.id) && !(m.parameters || []).some((p) => p.required === 'required' && p.name !== 'mode'))
     .map(normalizar)
     .filter((m) => m.aceptaImagen || !(m.pideImagen)); // descarta los que exigen un tipo de entrada que no manejamos
+  // Red de seguridad: si el catalogo trae dos modelos con el mismo nombre, se distinguen por su id.
+  const vistos = new Map();
+  for (const m of todos) {
+    const k = m.tipo + '|' + m.nombre.toLowerCase();
+    if (vistos.has(k)) m.nombre = `${m.nombre} (${m.id})`;
+    vistos.set(k, true);
+  }
+  // Orden: familias por su mejor modelo (destacados primero) y dentro, por destacado y version.
   const pos = (id) => (DESTACADOS.includes(id) ? DESTACADOS.indexOf(id) : 1000);
-  todos.sort((a, b) => pos(a.id) - pos(b.id) || a.nombre.localeCompare(b.nombre));
+  const mejorDe = {};
+  for (const m of todos) mejorDe[m.tipo + m.familia] = Math.min(mejorDe[m.tipo + m.familia] ?? 1e9, pos(m.id));
+  todos.sort((a, b) => mejorDe[a.tipo + a.familia] - mejorDe[b.tipo + b.familia] || a.familia.localeCompare(b.familia)
+    || pos(a.id) - pos(b.id) || b.nombre.localeCompare(a.nombre, 'es', { numeric: true }));
   _cache = { v: todos, exp: Date.now() + 60 * 60e3 };
   return todos;
 }

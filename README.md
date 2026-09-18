@@ -135,4 +135,5 @@ borrar.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
 - **Primer usuario de JH**: cargar saldo en la billetera (recarga manual) y darle acceso desde Super Admin.
 - **Cuenta de prueba** `prueba.marketing@neboaiconsulting.com` (agente sin permisos en los otros paneles, rol Usuario en Marketing): borrarla o quitarle el acceso cuando no haga falta.
+- **Cinema Studio 4.0**: existe en la web del generador pero no en el catálogo de su integración (MCP); revisar cada tanto y sumarlo cuando aparezca.
 - La clave de OpenAI es la misma del menú digital (servicio `generador`): si se rota allá, hay que actualizarla acá.

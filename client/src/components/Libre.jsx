@@ -120,7 +120,11 @@ export default function Libre({ saldo, rol, inicial, onEnviada }) {
         </div>
         <select className="search select lb-modelo" value={modelo?.id || ''} onChange={(e) => setModeloId(e.target.value)} disabled={!modelos}>
           {!modelos && <option>Cargando modelos…</option>}
-          {deTipo.map((m) => <option key={m.id} value={m.id}>{m.nombre}{m.proveedor ? ` · ${m.proveedor}` : ''}</option>)}
+          {[...new Set(deTipo.map((m) => m.familia))].map((f) => (
+            <optgroup key={f} label={f}>
+              {deTipo.filter((m) => m.familia === f).map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            </optgroup>
+          ))}
         </select>
         {modelo?.descripcion && <span className="ms-cost lb-desc">{modelo.descripcion}</span>}
       </div>

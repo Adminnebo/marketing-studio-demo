@@ -50,3 +50,15 @@ test('armar: solo params declarados, duracion valida, modo segun imagen', () => 
   assert.deepEqual(img.params.medias, [{ value: 'm2', role: 'image_references' }]);
   assert.equal(armar(zimg, { prompt: 'p', mediaId: 'm3' }).params.medias, undefined);
 });
+
+test('nombres limpios y familia; alias fuera', () => {
+  const k = normalizar({ id: 'kling3_0', name: 'Kling v3.0', provider_name: 'Kling', output_type: 'video', parameters: [], medias: [], aspect_ratios: [] });
+  assert.equal(k.nombre, 'Kling 3.0');
+  assert.equal(k.familia, 'Kling');
+  const c1 = normalizar({ id: 'cinematic_studio_video', name: 'Cinema Studio Video', provider_name: 'Higgsfield', output_type: 'video', parameters: [], medias: [], aspect_ratios: [] });
+  const c2 = normalizar({ id: 'cinematic_studio_video_v2', name: 'Cinema Studio Video', provider_name: 'Higgsfield', output_type: 'video', parameters: [], medias: [], aspect_ratios: [] });
+  assert.notEqual(c1.nombre, c2.nombre);
+  assert.equal(c1.proveedor, '');
+  const nuevo = normalizar({ id: 'modelo_x', name: 'Higgsfield Nuevo X', provider_name: 'Higgsfield', output_type: 'image', parameters: [], medias: [], aspect_ratios: [] });
+  assert.equal(nuevo.nombre, 'Nuevo X');
+});
