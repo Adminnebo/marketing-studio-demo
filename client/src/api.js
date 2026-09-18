@@ -60,8 +60,11 @@ export const fetchEstado = () => api('/estado');
 export const fetchSaldo = () => api('/saldo');
 export const fetchCategorias = () => api('/catalogo/categorias');
 export const fetchCostos = () => api('/catalogo/costos');
-export const fetchPlantillas = (categoria, cursor) =>
-  api(`/catalogo/plantillas?categoria=${encodeURIComponent(categoria)}${cursor ? `&cursor=${cursor}` : ''}`);
+export const fetchPlantillas = (params) => {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params || {})) if (v !== '' && v != null) q.set(k, v);
+  return api('/catalogo/plantillas?' + q);
+};
 export const fetchAvatares = (c = {}) => {
   const q = new URLSearchParams();
   if (c.preset_cursor) q.set('preset_cursor', c.preset_cursor);

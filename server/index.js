@@ -11,6 +11,7 @@ const { pool, migrar } = require('./lib/db');
 const hf = require('./lib/higgsfield');
 const auth = require('./lib/auth');
 const ajustes = require('./lib/config');
+const catalogo = require('./lib/catalogo');
 
 const reglasP = import('../shared/reglas.mjs');
 const PORT = process.env.PORT || 3002;
@@ -108,14 +109,16 @@ app.get('/api/catalogo/categorias', ruta(async (req, res) => res.json({ categori
 
 app.get('/api/catalogo/costos', ruta(async (req, res) => res.json(await costos())));
 
+// Catalogo completo, filtrado y ordenado para JH (ver server/lib/catalogo.js).
 app.get('/api/catalogo/plantillas', ruta(async (req, res) => {
-  const categoria = String(req.query.categoria || 'all');
-  const cursor = req.query.cursor ? Number(req.query.cursor) : null;
-  const args = { category: categoria, size: 30, ...(cursor ? { cursor } : {}) };
-  const d = await cacheado(`plantillas:${categoria}:${cursor || 0}`, 10 * 60e3,
-    () => hf.llamar('marketing_studio_v2_presets', args));
-  const p = d.presets || { total: 0, cursor: null, items: [] };
-  res.json({ total: p.total, cursor: p.cursor ?? null, items: p.items || [] });
+  const q = req.query;
+  const f = {
+    categoria: String(q.categoria || 'all'), formato: q.formato || '', sirve: q.sirve || '', producto: q.producto || '', estilo: q.estilo || '',
+    persona: ['si', 'no'].includes(q.persona) ? q.persona : '', medio: ['foto', 'video'].includes(q.medio) ? q.medio : '',
+    orientacion: ['vertical', 'horizontal', 'cuadrada'].includes(q.orientacion) ? q.orientacion : '',
+    q: String(q.q || '').slice(0, 80), orden: q.orden === 'original' ? 'original' : 'jh',
+  };
+  res.json(await catalogo.pagina(f, { desde: Math.max(0, Number(q.cursor) || 0), tam: 30 }));
 }));
 
 app.get('/api/catalogo/avatares', ruta(async (req, res) => {

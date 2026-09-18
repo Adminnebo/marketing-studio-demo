@@ -25,6 +25,20 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
 - Las reglas de cada plantilla (qué pide y cuánto cuesta) están en `shared/reglas.mjs`, portadas del widget oficial.
   Las usan el formulario y la validación del servidor.
 
+## Catálogo ordenado para JH
+
+- El panel baja el catálogo completo (986 plantillas en sep-2026) y lo sirve filtrado y ordenado desde
+  `server/lib/catalogo.js`: primero lo que mejor encaja con los productos de JH.
+- `shared/clasificacion.json` guarda, por id de plantilla, el análisis visual de su portada: producto del ejemplo,
+  estilos, si sale una persona y un puntaje de encaje con JH (0–10). Se hizo con hojas de contacto de las portadas
+  frente al catálogo real de JH (`List_ProductosIA`: material eléctrico 24 %, controles/industrial 18 %, iluminación
+  16 %, ferretería 10 %, piscina 9 %, plomería 9 %). Casi ningún ejemplo es de ferretería (el catálogo del generador
+  es de consumo), así que el encaje se decide por la composición.
+- Filtros: "Sirve para JH" (eléctrico, iluminación, agua/plomería/piscina, herramientas; reglas en
+  `shared/filtros.mjs`), estilo, producto del ejemplo, con/sin persona, foto/video, forma y orden.
+- Plantillas nuevas que aparezcan sin clasificar entran con encaje 5 y al final de su nivel; conviene reclasificar
+  cada tanto.
+
 ## Acceso y Super Admin
 
 - Se entra con la cuenta de Supabase de los otros paneles. Los `super_admin` de `profiles` entran siempre; el resto

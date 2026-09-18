@@ -453,3 +453,13 @@ tbody tr:hover { background: var(--surface-2); }
 .sa-ejemplos { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .sa-ejemplos .pill { font-weight: 500; padding: 6px 11px; align-self: flex-start; }
 .sa-conex { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; align-items: flex-start; }
+
+/* ════════════ Filtros de plantillas ════════════ */
+.pl-filtros { padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 9px; }
+.pl-fila { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pl-fila .mini-btn { margin-right: 0; }
+.pl-n { font-size: 0.68rem; opacity: 0.65; margin-left: 2px; }
+.pl-sep { width: 1px; height: 20px; background: var(--grid); margin: 0 6px; }
+.pl-mas { margin-left: auto !important; }
+.ms-cover .ms-reco { position: absolute; left: 8px; bottom: 8px; font-size: 0.68rem; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: var(--series-3); color: #111; }
+@media (max-width: 640px) { .pl-sep { display: none; } .pl-mas { margin-left: 0 !important; } }
