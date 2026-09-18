@@ -1,21 +1,21 @@
 /**
  * Ajustes del panel que controla el super_admin (tabla config, clave/valor).
- *  - usd_por_credito: cuanto nos cuesta 1 credito del generador (USD).
- *  - margen_pct: % de ganancia sobre el costo -> precio al cliente.
- *  - margen_por_tipo: { product_shots: 40, ugc: 25, ... } sobrescribe el % global.
+ *  - costo_auto: 1 = el worker actualiza solo el costo por credito con los precios del proveedor.
+ *  - usd_por_credito: cuanto nos cuesta 1 credito (USD). Con costo_auto, el del paquete de recarga MAS CARO (conservador).
+ *  - costo_info: { fuente, actualizado, paquetes: [{ creditos, usd }] } ultima lectura de precios.
+ *  - margen_pct: % de ganancia sobre el costo -> precio por credito para JH.
  *  - limite_diario_creditos: tope de creditos por usuario y dia (0 = sin tope). No aplica al super_admin.
- *  - mostrar_precio: 1 = los usuarios ven el precio en USD al generar (si hay costo configurado).
  */
 const { pool } = require('./db');
 
 const DEFECTOS = {
+  costo_auto: 1,
   usd_por_credito: 0,
+  costo_info: null,
   margen_pct: 0,
-  margen_por_tipo: {},
   limite_diario_creditos: 0,
-  mostrar_precio: 1,
 };
-const NUMEROS = ['usd_por_credito', 'margen_pct', 'limite_diario_creditos', 'mostrar_precio'];
+const NUMEROS = ['costo_auto', 'usd_por_credito', 'margen_pct', 'limite_diario_creditos'];
 
 let _cache = null;
 async function leer() {
@@ -36,25 +36,19 @@ function validar(k, valor) {
     const n = Number(valor);
     if (!Number.isFinite(n) || n < 0) throw new Error(`Valor inválido para ${k}`);
     if (k === 'margen_pct' && n > 1000) throw new Error('El margen no puede pasar de 1000 %');
-    return k === 'mostrar_precio' ? (n ? 1 : 0) : n;
+    return k === 'costo_auto' ? (n ? 1 : 0) : n;
   }
-  if (k === 'margen_por_tipo') {
-    if (!valor || typeof valor !== 'object' || Array.isArray(valor)) throw new Error('margen_por_tipo debe ser un objeto');
-    const out = {};
-    for (const [t, p] of Object.entries(valor)) {
-      if (p === '' || p == null) continue;
-      const n = Number(p);
-      if (!Number.isFinite(n) || n < 0 || n > 1000) throw new Error(`Margen inválido para ${t}`);
-      out[t] = n;
-    }
-    return out;
-  }
+  if (k === 'costo_info') return valor;
   throw new Error(`Ajuste desconocido: ${k}`);
 }
 
-async function guardar(cambios, quien) {
+async function guardar(cambios, quien, { internos = false } = {}) {
   const limpios = {};
-  for (const [k, v] of Object.entries(cambios || {})) if (k in DEFECTOS) limpios[k] = validar(k, v);
+  for (const [k, v] of Object.entries(cambios || {})) {
+    if (!(k in DEFECTOS)) continue;
+    if (k === 'costo_info' && !internos) continue; // solo lo escribe el worker
+    limpios[k] = validar(k, v);
+  }
   for (const [k, v] of Object.entries(limpios)) {
     await pool.query(
       `INSERT INTO config (clave, valor) VALUES ($1, $2) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor`,
@@ -66,12 +60,14 @@ async function guardar(cambios, quien) {
   return leer();
 }
 
-// Costo y precio (USD) de N creditos de un tipo de plantilla, con los ajustes actuales.
-function precioDe(ajustes, tipo, creditos) {
-  if (creditos == null || !ajustes.usd_por_credito) return { costo: null, precio: null, margen: null };
-  const margen = ajustes.margen_por_tipo?.[tipo] ?? ajustes.margen_pct;
-  const costo = Number(creditos) * ajustes.usd_por_credito;
-  return { costo, precio: costo * (1 + margen / 100), margen };
+// Precio de 1 credito para JH (USD) con los ajustes actuales, o null si no hay costo.
+const precioCredito = (a) => (a.usd_por_credito > 0 ? a.usd_por_credito * (1 + a.margen_pct / 100) : null);
+
+// Costo y precio (USD) de N creditos.
+function precioDe(a, _tipo, creditos) {
+  const pc = precioCredito(a);
+  if (creditos == null || pc == null) return { costo: null, precio: null, margen: null };
+  return { costo: Number(creditos) * a.usd_por_credito, precio: Number(creditos) * pc, margen: a.margen_pct };
 }
 
-module.exports = { leer, guardar, precioDe, DEFECTOS };
+module.exports = { leer, guardar, precioDe, precioCredito, DEFECTOS };

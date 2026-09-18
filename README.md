@@ -51,6 +51,17 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   usuario, si los usuarios ven el precio, consumo del mes (costo, precio y ganancia por usuario y por tipo) y los
   accesos. Cada generación guarda la foto de costo/precio al crearse.
 
+## Créditos, precios y billetera de JH
+
+- **Costo por crédito automático**: cada 6 h el worker lee los paquetes de recarga del generador y toma el **más caro por
+  crédito** (hoy 500 créditos a $26 = $0.052). Se puede pasar a manual en Super Admin (`costo_auto`).
+- **Precio por crédito para JH** = costo × (1 + % de ganancia). Es lo que ven todos los usuarios al generar y al recargar.
+- **Billetera** (tabla `billetera`): el saldo es la suma de movimientos. Cada generación de un usuario descuenta sus
+  créditos al encolarse (con lock, sin gastar dos veces el mismo saldo); si falla, el worker los devuelve una sola vez.
+  Las generaciones de los super_admin (Nebo) no tocan la billetera.
+- **Recargas**: la pestaña Créditos muestra los paquetes con el precio para JH. El pago en línea está en pausa
+  (`pagoEnLinea: false`); mientras tanto un super_admin suma créditos a mano desde Super Admin.
+
 ## Redes sociales (Zernio)
 
 La pestaña **Redes** conecta cuentas (Instagram, Facebook, TikTok, YouTube, LinkedIn, Threads, X) con el OAuth

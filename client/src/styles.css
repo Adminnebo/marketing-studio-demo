@@ -463,3 +463,17 @@ tbody tr:hover { background: var(--surface-2); }
 .pl-mas { margin-left: auto !important; }
 .ms-cover .ms-reco { position: absolute; left: 8px; bottom: 8px; font-size: 0.68rem; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: var(--series-3); color: #111; }
 @media (max-width: 640px) { .pl-sep { display: none; } .pl-mas { margin-left: 0 !important; } }
+
+/* ════════════ Créditos ════════════ */
+.cr-badge { cursor: pointer; font: inherit; font-size: 0.72rem; font-weight: 600; color: var(--text-primary); }
+.cr-badge:hover { border-color: var(--series-1); }
+.cr-unidad { font-size: 0.95rem; font-weight: 600; color: var(--text-muted); }
+.cr-paquetes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.cr-paquete { font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 18px 12px; border-radius: 14px; border: 1.5px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
+.cr-paquete:hover, .cr-paquete.on { border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 8%, var(--surface-2)); }
+.cr-cant { font-size: 1.6rem; font-weight: 750; letter-spacing: -0.02em; }
+.cr-lbl { font-size: 0.74rem; color: var(--text-muted); }
+.cr-precio { margin-top: 8px; font-size: 1.05rem; font-weight: 700; color: var(--good-ink); }
+.pill.mov-recarga, .pill.mov-reembolso { color: var(--good-ink); }
+.pill.mov-consumo { color: var(--series-1); }
+.pill.mov-ajuste { color: var(--warning); }

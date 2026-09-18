@@ -14,6 +14,8 @@ require('dotenv').config();
 const { pool, migrar } = require('./lib/db');
 const hf = require('./lib/higgsfield');
 const zernio = require('./lib/zernio');
+const billetera = require('./lib/billetera');
+const costo = require('./lib/costo');
 
 const redesP = import('../shared/redes.mjs');
 
@@ -41,6 +43,23 @@ async function enviar(g) {
   return ids;
 }
 
+// Devuelve a la billetera lo cobrado por una generacion que no salio.
+// (Las 'enviando' atascadas NO se devuelven solas: puede que si se haya generado.)
+async function devolver(id) {
+  const cr = await billetera.reembolsar(id).catch((e) => { log(`#${id} no se pudo reembolsar: ${e.message}`); return 0; });
+  if (cr) log(`#${id} reembolso de ${cr} creditos a la billetera`);
+}
+
+// Costo por credito automatico (lib/costo.js), cada 6 h.
+const COSTO_CADA_MS = 6 * 60 * 60e3;
+let ultimoCosto = 0;
+async function actualizarCosto() {
+  if (Date.now() - ultimoCosto < COSTO_CADA_MS) return;
+  ultimoCosto = Date.now();
+  const r = await costo.actualizarCosto('worker');
+  if (r.antes !== r.ahora) log(`costo por credito: ${r.antes} -> ${r.ahora} (${r.info.fuente})`);
+}
+
 async function tomarPendientes() {
   const { rows } = await pool.query(
     `UPDATE generaciones SET estado = 'enviando', enviado = now()
@@ -62,6 +81,7 @@ async function tomarPendientes() {
       await pool.query(`UPDATE generaciones SET estado = $2, error = $3, error_detalle = $4, terminado = CASE WHEN $2 = 'fallido' THEN now() END WHERE id = $1`,
         [g.id, estado, aviso, e.message.slice(0, 1000)]);
       log(`#${g.id} no se pudo enviar: ${e.message}`);
+      if (estado === 'fallido') await devolver(g.id);
     }
   }
 }
@@ -96,11 +116,13 @@ async function revisarEnProceso() {
         await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, error_detalle = $4, terminado = now(), revisado = now() WHERE id = $1`,
           [g.id, JSON.stringify(resultados), motivo, 'estados: ' + st.join(', ')]);
         log(`#${g.id} fallida: ${st.join(',')}`);
+        await devolver(g.id);
       }
     } else if (Date.now() - new Date(g.enviado).getTime() > TIMEOUT_MIN * 60e3) {
       await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, terminado = now() WHERE id = $1`,
         [g.id, JSON.stringify(resultados), `No terminó en ${TIMEOUT_MIN} minutos. Intenta de nuevo.`]);
       log(`#${g.id} vencida tras ${TIMEOUT_MIN} min`);
+      await devolver(g.id);
     } else {
       await pool.query('UPDATE generaciones SET revisado = now(), resultados = $2 WHERE id = $1', [g.id, JSON.stringify(resultados)]);
     }
@@ -160,6 +182,11 @@ async function ciclo() {
     // No inundar los logs si el generador esta desconectado.
     if (Date.now() - ultimoAviso > 60e3) { log('Error en el ciclo:', e.message); ultimoAviso = Date.now(); }
   }
+  try {
+    await actualizarCosto();
+  } catch (e) {
+    log('No se pudo leer el costo por credito:', e.message);
+  }
   // Aparte: una caida del generador no frena el seguimiento de publicaciones.
   try {
     await revisarPublicaciones();
@@ -184,4 +211,4 @@ for (const s of ['SIGTERM', 'SIGINT']) process.on(s, () => { parar = true; });
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { ciclo, tomarPendientes, revisarEnProceso, liberarAtascadas, revisarPublicaciones };
+module.exports = { ciclo, tomarPendientes, revisarEnProceso, liberarAtascadas, revisarPublicaciones, actualizarCosto, devolver };

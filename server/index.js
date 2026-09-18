@@ -12,6 +12,7 @@ const hf = require('./lib/higgsfield');
 const auth = require('./lib/auth');
 const ajustes = require('./lib/config');
 const catalogo = require('./lib/catalogo');
+const billetera = require('./lib/billetera');
 
 const reglasP = import('../shared/reglas.mjs');
 const PORT = process.env.PORT || 3002;
@@ -93,9 +94,11 @@ app.get('/api/me', ruta(async (req, res) => {
   const a = await ajustes.leer();
   res.json({
     email: req.user.email, nombre: req.user.nombre, rol: req.user.rol,
-    // El precio en USD solo se muestra si el super_admin configuro el costo por credito.
-    precios: a.usd_por_credito > 0 && (req.user.rol === 'super_admin' || a.mostrar_precio === 1)
-      ? { usdPorCredito: a.usd_por_credito, margenPct: a.margen_pct, margenPorTipo: a.margen_por_tipo } : null,
+    // Precio de 1 credito para JH (costo + ganancia); el costo solo lo ve el super_admin.
+    precios: ajustes.precioCredito(a) != null
+      ? { precioCredito: ajustes.precioCredito(a), ...(req.user.rol === 'super_admin' ? { usdPorCredito: a.usd_por_credito, margenPct: a.margen_pct } : {}) }
+      : null,
+    saldo: await billetera.saldo(),
   });
 }));
 
@@ -217,14 +220,32 @@ app.post('/api/generaciones', ruta(async (req, res) => {
     }
   }
   const pr = ajustes.precioDe(a, preset.type, creditos);
+  // Los usuarios pagan con la billetera de JH; el super_admin (Nebo) no la toca.
+  const cobra = req.user.rol !== 'super_admin';
+  if (cobra && !(Number(creditos) > 0)) {
+    return res.status(400).json({ error: 'No se pudo calcular el costo de esta plantilla. Espera a que cargue la vista previa e intenta de nuevo.' });
+  }
 
-  const { rows: [g] } = await pool.query(
-    `INSERT INTO generaciones (creado_por, user_id, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-       usd_por_credito, margen_pct, costo_usd, precio_usd)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${COLS}`,
-    [req.user.email, req.user.id, preset.id, preset.name || null, preset.type, preset.cover_image || null,
-      { args: entrada, ...extra }, creditos, a.usd_por_credito || null, pr.margen, pr.costo, pr.precio]
-  );
+  const cli = await pool.connect();
+  let g;
+  try {
+    await cli.query('BEGIN');
+    ({ rows: [g] } = await cli.query(
+      `INSERT INTO generaciones (creado_por, user_id, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
+         usd_por_credito, margen_pct, costo_usd, precio_usd)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${COLS}`,
+      [req.user.email, req.user.id, preset.id, preset.name || null, preset.type, preset.cover_image || null,
+        { args: entrada, ...extra }, creditos, a.usd_por_credito || null, pr.margen, pr.costo, pr.precio]
+    ));
+    if (cobra) await billetera.cobrar(cli, { generacionId: g.id, creditos: Number(creditos), usd: pr.precio, por: req.user.email });
+    await cli.query('COMMIT');
+  } catch (e) {
+    await cli.query('ROLLBACK').catch(() => {});
+    if (e.saldo) return res.status(402).json({ error: e.message + ' Recarga créditos para continuar.', sinSaldo: true });
+    throw e;
+  } finally {
+    cli.release();
+  }
   res.status(201).json(g);
 }));
 
@@ -260,6 +281,20 @@ app.get('/api/generaciones/:id', ruta(async (req, res) => {
   const { rows: [g] } = await pool.query(`SELECT ${COLS} FROM generaciones WHERE id = $1`, [Number(req.params.id) || 0]);
   if (!g) return res.status(404).json({ error: 'No existe.' });
   res.json(g);
+}));
+
+// Billetera de JH: saldo, precio por credito, paquetes con ganancia y movimientos.
+app.get('/api/creditos', ruta(async (req, res) => {
+  const a = await ajustes.leer();
+  const pc = ajustes.precioCredito(a);
+  const paquetes = (a.costo_info?.paquetes || []).map((p) => p.creditos).sort((x, y) => x - y);
+  res.json({
+    saldo: await billetera.saldo(),
+    precioCredito: pc,
+    paquetes: (paquetes.length ? paquetes : [500, 1000, 2000, 4000]).map((cr) => ({ creditos: cr, usd: pc != null ? Math.round(cr * pc * 100) / 100 : null })),
+    pagoEnLinea: false, // en standby: por ahora las recargas las carga un super admin
+    movimientos: (await billetera.movimientos(40)).map((m) => ({ ...m, creditos: Number(m.creditos), usd: m.usd != null ? Number(m.usd) : null })),
+  });
 }));
 
 // Redes sociales (conectar cuentas y publicar): admin de Marketing en adelante.

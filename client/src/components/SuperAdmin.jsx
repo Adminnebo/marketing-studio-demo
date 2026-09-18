@@ -1,88 +1,93 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
-import { usd } from '../precio';
+import { usd, cred } from '../precio';
 
 const num = (n, d = 1) => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: d });
 const ROLES_PANELES = { super_admin: 'Super admin', admin: 'Admin', agent: 'Agente' };
-// Tipos de plantilla agrupados como se cobran (los de animacion comparten nombre).
-const TIPOS_MARGEN = ['product_shots', 'product_shots_people', 'ads', 'poster', 'marketplace', 'ugc', 'hypermotion', '2d_motion', 'mixed_media', 'saas_motion'];
 const EJEMPLOS = [['product_shots', 1.5, 'Foto de producto'], ['ads', 7.5, 'Anuncio'], ['ugc', 65, 'Video UGC de 10 s']];
 const mesActual = () => new Date().toISOString().slice(0, 7);
 
 function Ajustes({ onGuardado }) {
   const [datos, setDatos] = useState(null);
   const [f, setF] = useState(null);
-  const [calc, setCalc] = useState({ plan: '', creditos: '' });
   const [estado, setEstado] = useState(null);
+  const [rec, setRec] = useState({ creditos: '', usd: '', nota: '' });
+  const [recEstado, setRecEstado] = useState(null);
 
-  const cargar = () => fetchAjustes().then((d) => { setDatos(d); setF({ ...d.ajustes, margen_por_tipo: { ...d.ajustes.margen_por_tipo } }); })
-    .catch((e) => setEstado({ error: e.message }));
+  const cargar = () => fetchAjustes().then((d) => { setDatos(d); setF({ ...d.ajustes }); }).catch((e) => setEstado({ error: e.message }));
   useEffect(() => { cargar(); }, []);
   if (!f) return <div className="card">{estado?.error ? <div className="ms-errors">{estado.error}</div> : <div className="spinner" />}</div>;
 
-  const margenDe = (t) => (f.margen_por_tipo[t] !== undefined && f.margen_por_tipo[t] !== '' ? Number(f.margen_por_tipo[t]) : Number(f.margen_pct));
+  const costo = Number(f.usd_por_credito) || 0;
+  const precioCredito = costo * (1 + (Number(f.margen_pct) || 0) / 100);
+  const info = datos.ajustes.costo_info;
   const guardar = async () => {
     setEstado({ guardando: true });
     try {
-      await guardarAjustes(f);
-      setEstado({ ok: 'Guardado. Aplica a las generaciones nuevas; las anteriores conservan su precio.' });
-      cargar();
-      onGuardado?.();
+      const { costo_info: _i, ...cambios } = f; // eslint-disable-line no-unused-vars
+      await guardarAjustes(cambios);
+      setEstado({ ok: 'Guardado. Aplica a las generaciones y recargas nuevas.' });
+      cargar(); onGuardado?.();
     } catch (e) { setEstado({ error: e.message }); }
   };
-  const calcUsd = Number(calc.plan) > 0 && Number(calc.creditos) > 0 ? Number(calc.plan) / Number(calc.creditos) : null;
+  const leerAhora = async () => {
+    setEstado({ guardando: true });
+    try { await actualizarCosto(); setEstado({ ok: 'Precios del proveedor actualizados.' }); cargar(); onGuardado?.(); } catch (e) { setEstado({ error: e.message }); }
+  };
+  const recargar = async () => {
+    setRecEstado({ guardando: true });
+    try {
+      const cr = Number(rec.creditos);
+      const r = await recargaManual({ creditos: cr, usd: rec.usd === '' ? (cr > 0 && precioCredito ? Math.round(cr * precioCredito * 100) / 100 : null) : Number(rec.usd), nota: rec.nota });
+      setRecEstado({ ok: `Listo. Saldo de JH: ${cred(r.saldo)} créditos.` });
+      setRec({ creditos: '', usd: '', nota: '' }); onGuardado?.();
+    } catch (e) { setRecEstado({ error: e.message }); }
+  };
 
   return (
     <div className="grid sa-grid">
       <div className="card">
         <h3>Costo y ganancia</h3>
-        <div className="card-sub">El precio al cliente = créditos × costo por crédito × (1 + % de ganancia).</div>
+        <div className="card-sub">Precio por crédito para JH = costo por crédito × (1 + % de ganancia). Es lo que ven todos al generar y al recargar.</div>
+        <label className="user-admin-check" style={{ margin: '4px 0 10px' }}>
+          <input type="checkbox" checked={Number(f.costo_auto) === 1} onChange={(e) => setF({ ...f, costo_auto: e.target.checked ? 1 : 0 })} />
+          Actualizar el costo automáticamente con los precios del proveedor (paquete más caro por crédito, cada 6 h)
+        </label>
         <div className="sa-form">
-          <label className="filter-field"><span>Costo por crédito (USD)</span>
-            <input className="search" type="number" min="0" step="0.0001" value={f.usd_por_credito} onChange={(e) => setF({ ...f, usd_por_credito: e.target.value })} />
+          <label className="filter-field"><span>Costo por crédito (USD){Number(f.costo_auto) === 1 ? ' · automático' : ''}</span>
+            <input className="search" type="number" min="0" step="0.000001" value={f.usd_por_credito} disabled={Number(f.costo_auto) === 1}
+              onChange={(e) => setF({ ...f, usd_por_credito: e.target.value })} />
           </label>
-          <label className="filter-field"><span>% de ganancia (general)</span>
+          <label className="filter-field"><span>% de ganancia</span>
             <input className="search" type="number" min="0" step="1" value={f.margen_pct} onChange={(e) => setF({ ...f, margen_pct: e.target.value })} />
           </label>
           <label className="filter-field"><span>Tope diario por usuario (créditos, 0 = sin tope)</span>
             <input className="search" type="number" min="0" step="1" value={f.limite_diario_creditos} onChange={(e) => setF({ ...f, limite_diario_creditos: e.target.value })} />
           </label>
-          <label className="user-admin-check" style={{ alignSelf: 'end', paddingBottom: 8 }}>
-            <input type="checkbox" checked={Number(f.mostrar_precio) === 1} onChange={(e) => setF({ ...f, mostrar_precio: e.target.checked ? 1 : 0 })} />
-            Los usuarios ven el precio en USD al generar
-          </label>
         </div>
+
         <div className="sa-calc">
-          <span className="filter-lbl">Calcular costo por crédito:</span>
-          <input className="search" type="number" min="0" placeholder="Precio del plan (USD/mes)" value={calc.plan} onChange={(e) => setCalc({ ...calc, plan: e.target.value })} />
-          <span>÷</span>
-          <input className="search" type="number" min="0" placeholder="Créditos del plan" value={calc.creditos} onChange={(e) => setCalc({ ...calc, creditos: e.target.value })} />
-          <span>=</span>
-          <strong>{calcUsd ? `$${calcUsd.toFixed(4)}` : '—'}</strong>
-          {calcUsd && <button className="mini-btn" onClick={() => setF({ ...f, usd_por_credito: Number(calcUsd.toFixed(6)) })}>Usar</button>}
+          <span className="filter-lbl">Precios del proveedor:</span>
+          {info ? (
+            <>
+              {info.paquetes.map((p) => <span key={p.creditos} className="pill">{cred(p.creditos)} cr = {usd(p.usd)} ({cred(p.creditos / p.usd)}/$)</span>)}
+              <span className="ms-cost">Usado: {info.fuente} · leído {new Date(info.actualizado).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+            </>
+          ) : <span className="ms-cost">Todavía no se leyeron.</span>}
+          <button className="mini-btn" onClick={leerAhora} disabled={estado?.guardando}>↻ Leer ahora</button>
         </div>
 
-        <div className="section-title">% de ganancia por tipo (vacío = el general)</div>
-        <div className="sa-tipos">
-          {TIPOS_MARGEN.map((t) => (
-            <label key={t} className="filter-field"><span>{TIPOS[t]}{['hypermotion', '2d_motion', 'mixed_media', 'saas_motion'].includes(t) ? ` (${t.replace('_', ' ')})` : ''}</span>
-              <input className="search" type="number" min="0" step="1" placeholder={String(f.margen_pct)} value={f.margen_por_tipo[t] ?? ''}
-                onChange={(e) => setF({ ...f, margen_por_tipo: { ...f.margen_por_tipo, [t]: e.target.value } })} />
-            </label>
-          ))}
-        </div>
-
-        {Number(f.usd_por_credito) > 0 && (
+        {costo > 0 && (
           <div className="sa-ejemplos">
-            {EJEMPLOS.map(([t, cr, l]) => {
-              const costo = cr * Number(f.usd_por_credito);
-              const precio = costo * (1 + margenDe(t) / 100);
-              return <span key={t} className="pill">{l} ({cr} cr): costo {usd(costo)} → precio <strong>{usd(precio)}</strong> · ganancia {usd(precio - costo)}</span>;
-            })}
+            <span className="pill">1 crédito: costo {usd(costo)} → precio JH <strong>{usd(precioCredito)}</strong></span>
+            <span className="pill">21 créditos: costo {usd(21 * costo)} → precio JH <strong>{usd(21 * precioCredito)}</strong> · ganancia {usd(21 * (precioCredito - costo))}</span>
+            {EJEMPLOS.map(([t, cr, l]) => (
+              <span key={t} className="pill">{l} ({cr} cr): costo {usd(cr * costo)} → precio <strong>{usd(cr * precioCredito)}</strong></span>
+            ))}
           </div>
         )}
-        {!Number(f.usd_por_credito) && <div className="banner-off" style={{ marginTop: 12 }}>Sin costo por crédito no se calcula precio ni ganancia: los usuarios ven créditos.</div>}
+        {!costo && <div className="banner-off" style={{ marginTop: 12 }}>Sin costo por crédito no hay precios: actívalo automático o ponlo a mano.</div>}
 
         <div className="ms-submit">
           <span className="ms-cost">{estado?.ok && <span style={{ color: 'var(--good-ink)' }}>{estado.ok}</span>}{estado?.error && <span style={{ color: 'var(--critical)' }}>{estado.error}</span>}</span>
@@ -90,17 +95,41 @@ function Ajustes({ onGuardado }) {
         </div>
       </div>
 
-      <div className="card">
-        <h3>Estado</h3>
-        <div className="card-sub">Solo lo ven los super admin.</div>
-        <div className="kpi">
-          <div className="kpi-label">Créditos disponibles</div>
-          <div className="kpi-value">{datos.saldo ? num(datos.saldo.creditos) : '—'}</div>
-          <div className="kpi-foot">{datos.saldo ? `Plan ${datos.saldo.plan}` : 'No se pudo leer el saldo'}</div>
+      <div className="grid" style={{ gap: 16 }}>
+        <div className="card">
+          <h3>Estado</h3>
+          <div className="card-sub">Solo lo ven los super admin.</div>
+          <div className="kpi">
+            <div className="kpi-label">Créditos en la cuenta del proveedor</div>
+            <div className="kpi-value">{datos.saldo ? cred(datos.saldo.creditos) : '—'}</div>
+            <div className="kpi-foot">{datos.saldo ? `Plan ${datos.saldo.plan}` : 'No se pudo leer el saldo'}</div>
+          </div>
+          <div className="sa-conex">
+            <span className={`badge ${datos.conexiones.generador ? 'live' : 'hf-off'}`}><span className="dot" />Generador {datos.conexiones.generador ? 'conectado' : 'desconectado'}</span>
+            <span className={`badge ${datos.conexiones.redes ? 'live' : 'hf-off'}`}><span className="dot" />Redes {datos.conexiones.redes ? 'configuradas' : 'sin configurar'}</span>
+          </div>
         </div>
-        <div className="sa-conex">
-          <span className={`badge ${datos.conexiones.generador ? 'live' : 'hf-off'}`}><span className="dot" />Generador {datos.conexiones.generador ? 'conectado' : 'desconectado'}</span>
-          <span className={`badge ${datos.conexiones.redes ? 'live' : 'hf-off'}`}><span className="dot" />Redes {datos.conexiones.redes ? 'configuradas' : 'sin configurar'}</span>
+
+        <div className="card">
+          <h3>Recarga manual a JH</h3>
+          <div className="card-sub">Mientras el pago en línea está en pausa: después de cobrar (transferencia, factura), suma los créditos a la billetera de JH. Un número negativo corrige el saldo.</div>
+          <div className="sa-form" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <label className="filter-field"><span>Créditos</span>
+              <input className="search" type="number" step="1" value={rec.creditos} onChange={(e) => setRec({ ...rec, creditos: e.target.value })} />
+            </label>
+            <label className="filter-field"><span>Cobrado (USD)</span>
+              <input className="search" type="number" min="0" step="0.01" value={rec.usd}
+                placeholder={Number(rec.creditos) > 0 && precioCredito ? (Number(rec.creditos) * precioCredito).toFixed(2) : ''}
+                onChange={(e) => setRec({ ...rec, usd: e.target.value })} />
+            </label>
+          </div>
+          <label className="filter-field" style={{ marginTop: 10 }}><span>Nota</span>
+            <input className="search" value={rec.nota} placeholder="Transferencia 18-sep" onChange={(e) => setRec({ ...rec, nota: e.target.value })} />
+          </label>
+          <div className="ms-submit">
+            <span className="ms-cost">{recEstado?.ok && <span style={{ color: 'var(--good-ink)' }}>{recEstado.ok}</span>}{recEstado?.error && <span style={{ color: 'var(--critical)' }}>{recEstado.error}</span>}</span>
+            <button className="btn" onClick={recargar} disabled={!Number(rec.creditos) || recEstado?.guardando}>Sumar créditos</button>
+          </div>
         </div>
       </div>
     </div>

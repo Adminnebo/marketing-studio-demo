@@ -1,19 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { precioDe } = require('../server/lib/config');
+const { precioDe, precioCredito } = require('../server/lib/config');
 
-test('precio = creditos x costo x (1 + margen), con margen por tipo', () => {
-  const a = { usd_por_credito: 0.05, margen_pct: 40, margen_por_tipo: { ugc: 25 } };
-  const foto = precioDe(a, 'product_shots', 1.5);
-  assert.equal(foto.margen, 40);
-  assert.ok(Math.abs(foto.costo - 0.075) < 1e-9);
-  assert.ok(Math.abs(foto.precio - 0.105) < 1e-9);
-  const ugc = precioDe(a, 'ugc', 65);
-  assert.equal(ugc.margen, 25);
-  assert.ok(Math.abs(ugc.precio - 4.0625) < 1e-9);
+test('precio por credito = costo x (1 + margen)', () => {
+  const a = { usd_por_credito: 26 / 500, margen_pct: 20 };
+  assert.ok(Math.abs(precioCredito(a) - 0.0624) < 1e-9);
+  const p = precioDe(a, 'product_shots', 21);
+  assert.ok(Math.abs(p.costo - 1.092) < 1e-9);
+  assert.ok(Math.abs(p.precio - 1.3104) < 1e-9);
+  assert.equal(p.margen, 20);
 });
 
-test('sin costo por credito o sin creditos no hay precio', () => {
-  assert.deepEqual(precioDe({ usd_por_credito: 0, margen_pct: 40, margen_por_tipo: {} }, 'ads', 7.5), { costo: null, precio: null, margen: null });
-  assert.equal(precioDe({ usd_por_credito: 0.05, margen_pct: 40, margen_por_tipo: {} }, 'ads', null).precio, null);
+test('sin costo no hay precio', () => {
+  assert.equal(precioCredito({ usd_por_credito: 0, margen_pct: 20 }), null);
+  assert.equal(precioDe({ usd_por_credito: 0, margen_pct: 20 }, 'ads', 7.5).precio, null);
+  assert.equal(precioDe({ usd_por_credito: 0.05, margen_pct: 20 }, 'ads', null).precio, null);
 });

@@ -6,12 +6,15 @@ import Recrear from './components/Recrear';
 import Generaciones, { EN_CURSO } from './components/Generaciones';
 import Redes from './components/Redes';
 import SuperAdmin from './components/SuperAdmin';
+import Creditos from './components/Creditos';
+import { cred } from './precio';
 import Publicar from './components/Publicar';
 import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
 
 const TABS = [
   { id: 'plantillas', label: 'Plantillas', icon: '🎨' },
   { id: 'generaciones', label: 'Generaciones', icon: '🗂️' },
+  { id: 'creditos', label: 'Créditos', icon: '💳' },
   { id: 'redes', label: 'Redes', icon: '📣', min: 'admin' },
   { id: 'superadmin', label: 'Super Admin', icon: '🛡️', min: 'super_admin' },
 ];
@@ -141,7 +144,7 @@ export default function App() {
   useEffect(() => {
     if (!s || !hayEnCurso) return undefined;
     const id = setInterval(recargarGens, 5000);
-    return () => clearInterval(id);
+    return () => { clearInterval(id); fetchMe().then(setMe).catch(() => {}); }; // al terminar, saldo al dia (reembolsos)
   }, [s, hayEnCurso, recargarGens]);
 
   // Publicaciones en curso: refrescar cada 10 s.
@@ -207,8 +210,11 @@ export default function App() {
               {desconectado ? 'Generador desconectado' : 'Generador conectado'}
             </span>
           )}
+          <button className="badge cr-badge" onClick={() => setTab('creditos')} title="Saldo de créditos de JH">
+            💳 {cred(me.saldo)} créditos
+          </button>
           {me.rol === 'super_admin' && saldo && (
-            <span className="badge" title={`Plan ${saldo.subscription_plan_type} · solo lo ven los super admin`}>
+            <span className="badge" title={`Cuenta del proveedor · plan ${saldo.subscription_plan_type} · solo lo ven los super admin`}>
               🪙 {Number(saldo.credits).toLocaleString('es-MX', { maximumFractionDigits: 1 })} créditos
             </span>
           )}
@@ -256,6 +262,8 @@ export default function App() {
           onPublicar={NIVEL[me.rol] >= NIVEL.admin ? (g, indice) => setPublicando({ g, indice }) : null} />
       )}
 
+      {tab === 'creditos' && <Creditos recarga={me.saldo} />}
+
       {tab === 'superadmin' && me.rol === 'super_admin' && <SuperAdmin yo={me.email} onAjustes={() => fetchMe().then(setMe).catch(() => {})} />}
 
       {tab === 'redes' && NIVEL[me.rol] >= NIVEL.admin && (
@@ -281,10 +289,12 @@ export default function App() {
           categorias={categorias}
           costos={costos}
           precios={me.precios}
+          saldo={me.saldo}
+          onRecargar
           rol={me.rol}
           inicial={abierto.inicial}
-          onEnviada={() => recargarGens()}
-          onCerrar={(ir) => { setAbierto(null); if (ir === 'generaciones') setTab('generaciones'); }}
+          onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }}
+          onCerrar={(ir) => { setAbierto(null); if (ir === 'generaciones' || ir === 'creditos') setTab(ir); }}
         />
       )}
 

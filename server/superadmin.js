@@ -1,6 +1,7 @@
 /**
  * Pestaña Super Admin (solo profiles.role = super_admin):
- *  - ajustes: costo por credito, % de ganancia (global y por tipo), tope diario, mostrar precio.
+ *  - ajustes: costo por credito (automatico o manual), % de ganancia, tope diario.
+ *  - billetera: recargas manuales de creditos de JH.
  *  - usuarios: dar/quitar acceso a Marketing (usuario / admin) a cualquier usuario de los paneles.
  *  - consumo: generaciones, creditos, costo, precio y ganancia por usuario y mes.
  */
@@ -10,6 +11,8 @@ const auth = require('./lib/auth');
 const ajustes = require('./lib/config');
 const hf = require('./lib/higgsfield');
 const zernio = require('./lib/zernio');
+const billetera = require('./lib/billetera');
+const costo = require('./lib/costo');
 
 const router = express.Router();
 router.use('/superadmin', auth.requireRol('super_admin'));
@@ -37,10 +40,34 @@ router.get('/superadmin/ajustes', ruta(async (req, res) => {
 
 router.put('/superadmin/ajustes', ruta(async (req, res) => {
   try {
-    res.json({ ajustes: await ajustes.guardar(req.body || {}, req.user.email) });
+    let a = await ajustes.guardar(req.body || {}, req.user.email);
+    if (req.body?.costo_auto && Number(req.body.costo_auto) === 1) {
+      try { await costo.actualizarCosto(req.user.email); a = await ajustes.leer(); } catch (e) { console.error('[costo]', e.message); }
+    }
+    res.json({ ajustes: a });
   } catch (e) {
     throw errPublico(e.message);
   }
+}));
+
+// Leer ya los precios del proveedor (sin esperar al worker).
+router.post('/superadmin/costo/actualizar', ruta(async (req, res) => {
+  const r = await costo.actualizarCosto(req.user.email);
+  res.json({ ok: true, ...r, ajustes: await ajustes.leer() });
+}));
+
+// Recarga (o ajuste negativo) manual de la billetera de JH, p. ej. tras una transferencia.
+router.post('/superadmin/recargas', ruta(async (req, res) => {
+  const creditos = Number(req.body?.creditos);
+  if (!Number.isFinite(creditos) || creditos === 0 || Math.abs(creditos) > 1e6) throw errPublico('Cantidad de créditos inválida.');
+  // Sin monto: lo que vale con el precio por credito actual (costo + ganancia).
+  const pc = ajustes.precioCredito(await ajustes.leer());
+  const usd = req.body?.usd === '' || req.body?.usd == null
+    ? (creditos > 0 && pc != null ? Math.round(creditos * pc * 100) / 100 : null) : Number(req.body.usd);
+  if (usd != null && (!Number.isFinite(usd) || usd < 0)) throw errPublico('Monto en USD inválido.');
+  const m = await billetera.recargaManual({ creditos, usd, nota: String(req.body?.nota || '').slice(0, 300), por: req.user.email });
+  console.log(`[billetera] ${req.user.email} ${creditos > 0 ? 'recargo' : 'ajusto'} ${creditos} creditos (usd ${usd})`);
+  res.status(201).json({ ok: true, movimiento: m, saldo: await billetera.saldo() });
 }));
 
 router.get('/superadmin/usuarios', ruta(async (req, res) => {

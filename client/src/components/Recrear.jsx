@@ -3,12 +3,12 @@ import { crearGeneracion, subirImagen } from '../api';
 import { TIPOS, TIPOS_VIDEO, entradasDe, faltantes, formatoDe, creditosDe } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import Avatares from './Avatares';
-import { precioDe, usd } from '../precio';
+import { precioDe, usd, cred } from '../precio';
 
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
 
 // Modal para recrear una plantilla con el producto (y avatar) del usuario.
-export default function Recrear({ preset, categoria, categorias, costos, precios, rol, inicial, onCerrar, onEnviada }) {
+export default function Recrear({ preset, categoria, categorias, costos, precios, saldo, rol, inicial, onCerrar, onEnviada, onRecargar }) {
   const { formatSlug, formato } = useMemo(() => formatoDe(preset, categorias, categoria), [preset, categorias, categoria]);
   const req = useMemo(() => entradasDe(preset, { formatSlug, formato }), [preset, formatSlug, formato]);
 
@@ -33,7 +33,8 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
 
   const creditos = creditosDe(preset.type, costos, duracion);
   const pr = precioDe(precios, preset.type, creditos);
-  const pendientes = faltantes(req, { producto, avatar, prompt, url });
+  const sinSaldo = rol !== 'super_admin' && creditos != null && saldo != null && saldo < creditos;
+  const pendientes = [...faltantes(req, { producto, avatar, prompt, url }), ...(sinSaldo ? [`Saldo insuficiente: tienes ${cred(saldo)} créditos y esta generación usa ${cred(creditos)}.`] : [])];
   const ocupado = enviando || subida?.progreso != null;
 
   const elegirArchivo = async (f) => {
@@ -182,9 +183,10 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
               ) : (
                 <div className="ms-submit">
                   <span className="ms-cost">
-                    {pr ? <>Precio aprox.: <strong>{usd(pr.precio)}</strong>{rol === 'super_admin' && ` · ${fmtCred(creditos)} créditos · costo ${usd(pr.costo)} · margen ${pr.margen} %`}</>
-                      : creditos != null ? <>Costo aprox.: <strong>{fmtCred(creditos)} créditos</strong></> : TIPOS_VIDEO.has(preset.type) ? 'Costo según duración' : ''}
+                    {creditos != null ? <>Usa <strong>{fmtCred(creditos)} créditos</strong>{pr && <> · <strong>{usd(pr.precio)}</strong></>}{rol === 'super_admin' && pr?.costo != null && ` · costo ${usd(pr.costo)} · margen ${pr.margen} %`}{rol !== 'super_admin' && saldo != null && ` · saldo ${cred(saldo)}`}</>
+                      : TIPOS_VIDEO.has(preset.type) ? 'Calculando costo según duración…' : ''}
                     {pendientes.length > 0 && <><br />{pendientes[0]}</>}
+                    {sinSaldo && onRecargar && <><br /><button type="button" className="mini-btn" onClick={() => onCerrar('creditos')}>💳 Ver créditos</button></>}
                   </span>
                   <button className="btn" type="submit" disabled={pendientes.length > 0 || ocupado}>
                     {enviando ? 'Enviando…' : '✨ Generar'}

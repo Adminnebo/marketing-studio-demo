@@ -124,3 +124,6 @@ export const guardarAjustes = (cambios) => api('/superadmin/ajustes', { method: 
 export const fetchUsuarios = () => api('/superadmin/usuarios');
 export const cambiarAcceso = (id, acceso) => api(`/superadmin/usuarios/${id}`, { method: 'PUT', body: JSON.stringify({ acceso }) });
 export const fetchConsumo = (mes) => api('/superadmin/consumo' + (mes ? `?mes=${mes}` : ''));
+export const fetchCreditos = () => api('/creditos');
+export const recargaManual = (datos) => api('/superadmin/recargas', { method: 'POST', body: JSON.stringify(datos) });
+export const actualizarCosto = () => api('/superadmin/costo/actualizar', { method: 'POST' });

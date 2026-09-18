@@ -84,6 +84,19 @@ const MIGRACIONES = [
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS margen_pct NUMERIC`,
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS costo_usd NUMERIC`,
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS precio_usd NUMERIC`,
+  // Billetera de creditos de JH: saldo = suma de movimientos (+ recarga/reembolso/ajuste, - consumo).
+  `CREATE TABLE IF NOT EXISTS billetera (
+     id BIGSERIAL PRIMARY KEY,
+     tipo TEXT NOT NULL CHECK (tipo IN ('recarga', 'consumo', 'reembolso', 'ajuste')),
+     creditos NUMERIC NOT NULL,
+     usd NUMERIC,
+     generacion_id BIGINT REFERENCES generaciones(id),
+     nota TEXT,
+     por TEXT NOT NULL,
+     creado TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  // Un solo cobro y un solo reembolso por generacion.
+  `CREATE UNIQUE INDEX IF NOT EXISTS billetera_gen_tipo_idx ON billetera (generacion_id, tipo) WHERE generacion_id IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,
 ];
