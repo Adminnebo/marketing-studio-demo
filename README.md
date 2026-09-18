@@ -39,6 +39,18 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
 - Plantillas nuevas que aparezcan sin clasificar entran con encaje 5 y al final de su nivel; conviene reclasificar
   cada tanto.
 
+## Mantenimiento automático
+
+- **Reconectar el generador** (Super Admin → Estado → 🔌): OAuth code + PKCE con la cuenta de la empresa; vuelve a
+  `/api/hf/callback` (state de un solo uso, 15 min) y reemplaza el token. El cliente OAuth se registra solo para la URL
+  del panel (`PANEL_URL`).
+- **Plantillas nuevas**: el worker las clasifica cada 12 h con `gpt-4.1` mirando la portada (mismos criterios que las
+  986 originales) y las guarda en `plantillas_clasif`; el catálogo las mezcla con `shared/clasificacion.json`. También
+  a mano desde Super Admin.
+- **Ver como** (super_admin): selector en el encabezado para ver el panel como Admin o Usuario. El servidor aplica los
+  permisos del rol elegido (cabecera `x-ver-como`, solo baja permisos y solo para super_admin); lo que se genera así no
+  se cobra a la billetera de JH.
+
 ## Acceso y Super Admin
 
 - Se entra con la cuenta de Supabase de los otros paneles. Los `super_admin` de `profiles` entran siempre; el resto
@@ -87,7 +99,12 @@ alojado por [Zernio](https://docs.zernio.com) y publica o programa cualquier res
   duplica) y el worker sigue su estado por red hasta `published`/`partial`/`failed`.
 - El medio se pasa por URL pública del resultado. Reglas por red (límites de texto, qué acepta cada una, TikTok con
   privacidad + consentimiento obligatorio, título de YouTube) en `shared/redes.mjs`.
-- Variables: `ZERNIO_API_KEY` en `panel` y `worker`. Las 2 primeras cuentas conectadas son gratis; X exige tarjeta.
+- **Webhooks**: con `ZERNIO_API_KEY` + `ZERNIO_WEBHOOK_SECRET` + `PANEL_URL`, el panel registra solo su webhook
+  (`/api/zernio/webhook`, firma HMAC-SHA256 del cuerpo crudo, eventos deduplicados en `zernio_eventos`) y las
+  publicaciones se actualizan al momento; la consulta del worker queda de respaldo cada 2 min. Los posts llevan
+  `metadata.publicacion_id`.
+- Variables: `ZERNIO_API_KEY` en `panel` y `worker` (el secreto del webhook ya está puesto). Las 2 primeras cuentas
+  conectadas son gratis; X exige tarjeta.
 
 ## Desarrollo local
 
@@ -115,9 +132,6 @@ borrar.
 
 - **Pago en línea de recargas** (Stripe/Whop o solicitud + aprobación): en pausa por decisión del cliente.
 - **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
-- **Botón "reconectar generador"** si se pierde el token OAuth.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
 - **Primera prueba real de login** con la cuenta Supabase de un super_admin y alta del primer usuario de JH (con saldo).
-- **Reclasificar plantillas** cuando aparezcan nuevas (entran con encaje 5).
-- Webhooks de Zernio (hoy el worker consulta el estado cada ~15 s).
 - La clave de OpenAI es la misma del menú digital (servicio `generador`): si se rota allá, hay que actualizarla acá.

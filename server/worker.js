@@ -16,6 +16,8 @@ const hf = require('./lib/higgsfield');
 const zernio = require('./lib/zernio');
 const billetera = require('./lib/billetera');
 const modelos = require('./lib/modelos');
+const catalogo = require('./lib/catalogo');
+const clasificar = require('./lib/clasificar');
 const costo = require('./lib/costo');
 
 const redesP = import('../shared/redes.mjs');
@@ -161,12 +163,14 @@ async function liberarAtascadas() {
 async function revisarPublicaciones() {
   if (!zernio.configurado()) return;
   const { DESDE_ZERNIO, REDES } = await redesP;
+  // Con webhooks los cambios llegan al momento; la consulta queda de respaldo y mas espaciada.
+  const cada = zernio.webhookListo() ? '2 minutes' : '15 seconds';
   const { rows } = await pool.query(
     `SELECT id, zernio_post_id, estado FROM publicaciones
      WHERE zernio_post_id IS NOT NULL AND estado IN ('programada', 'publicando')
        AND (estado = 'publicando' OR programada_para IS NULL OR programada_para < now() + interval '1 minute')
-       AND (revisado IS NULL OR revisado < now() - interval '15 seconds')
-     ORDER BY revisado NULLS FIRST LIMIT 10`
+       AND (revisado IS NULL OR revisado < now() - $1::interval)
+     ORDER BY revisado NULLS FIRST LIMIT 10`, [cada]
   );
   for (const p of rows) {
     try {
@@ -189,6 +193,17 @@ async function revisarPublicaciones() {
   }
 }
 
+// Plantillas nuevas del generador: se clasifican solas cada 12 h (arranca a los 2 min).
+const CLASIF_CADA_MS = 12 * 60 * 60e3;
+let ultimaClasif = Date.now() - CLASIF_CADA_MS + 2 * 60e3;
+async function clasificarPlantillas() {
+  if (!clasificar.configurado() || Date.now() - ultimaClasif < CLASIF_CADA_MS) return;
+  ultimaClasif = Date.now();
+  catalogo.olvidar();
+  const r = await clasificar.clasificarNuevas(await catalogo.todas(), { max: 60 });
+  if (r.hechas || r.pendientes) log(`plantillas: ${r.hechas} nuevas clasificadas, quedan ${r.pendientes}`);
+}
+
 let ultimoAviso = 0;
 async function ciclo() {
   try {
@@ -204,6 +219,11 @@ async function ciclo() {
     await actualizarCosto();
   } catch (e) {
     log('No se pudo leer el costo por credito:', e.message);
+  }
+  try {
+    await clasificarPlantillas();
+  } catch (e) {
+    log('No se pudieron clasificar plantillas:', e.message);
   }
   // Aparte: una caida del generador no frena el seguimiento de publicaciones.
   try {

@@ -15,12 +15,16 @@ const catalogo = require('./lib/catalogo');
 const billetera = require('./lib/billetera');
 const modelos = require('./lib/modelos');
 const promptAuto = require('./lib/prompt-auto');
+const hfOauth = require('./lib/hf-oauth');
+const zernio = require('./lib/zernio');
 
 const reglasP = import('../shared/reglas.mjs');
 const PORT = process.env.PORT || 3002;
 
 const app = express();
 app.set('trust proxy', 1);
+// Webhook de Zernio: necesita el cuerpo crudo para verificar la firma, va antes del parser JSON.
+app.use('/api', require('./zernio-webhook').router);
 app.use(express.json({ limit: '200kb' }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -68,6 +72,19 @@ const ruta = (fn) => async (req, res) => {
 app.get('/api/health', (req, res) => res.json({ ok: true, auth: auth.configurado() }));
 app.get('/api/config', (req, res) => res.json(auth.configPublica()));
 
+// Vuelta del OAuth del generador (la inicia un super_admin desde Super Admin). Sin sesion
+// del panel: la protege el state de un solo uso guardado al iniciar.
+app.get('/api/hf/callback', async (req, res) => {
+  if (req.query.error) return res.redirect('/?generador=error&motivo=' + encodeURIComponent(String(req.query.error).slice(0, 80)));
+  try {
+    const r = await hfOauth.completar({ code: req.query.code, state: req.query.state });
+    res.redirect('/?generador=conectado&cuenta=' + encodeURIComponent(r.cuenta || ''));
+  } catch (e) {
+    console.error('[generador callback]', e.message);
+    res.redirect('/?generador=error&motivo=' + encodeURIComponent(e.message.slice(0, 120)));
+  }
+});
+
 // Lo consultan los otros paneles (Conversaciones, Cotizaciones, Cobranzas) con su
 // propio token de Supabase para decidir si muestran la pestaña Marketing.
 const ORIGEN_PANELES = /^https:\/\/([a-z0-9-]+\.)*neboaiconsulting\.com$/;
@@ -96,6 +113,7 @@ app.get('/api/me', ruta(async (req, res) => {
   const a = await ajustes.leer();
   res.json({
     email: req.user.email, nombre: req.user.nombre, rol: req.user.rol,
+    rolReal: req.user.rolReal, verComo: req.user.rol !== req.user.rolReal ? req.user.rol : null,
     // Precio de 1 credito para JH (costo + ganancia); el costo solo lo ve el super_admin.
     precios: ajustes.precioCredito(a) != null
       ? { precioCredito: ajustes.precioCredito(a), ...(req.user.rol === 'super_admin' ? { usdPorCredito: a.usd_por_credito, margenPct: a.margen_pct } : {}) }
@@ -166,7 +184,7 @@ const COLS = `id, creado_por, estado, preset_id, preset_nombre, preset_tipo, por
 // super_admin no pagan). Devuelve { g } o { status, error } para responder.
 async function encolar(req, { presetId, presetNombre, presetTipo, portada, entrada, creditos }) {
   const a = await ajustes.leer();
-  if (a.limite_diario_creditos > 0 && req.user.rol !== 'super_admin') {
+  if (a.limite_diario_creditos > 0 && req.user.rolReal !== 'super_admin') {
     const { rows: [u] } = await pool.query(
       `SELECT COALESCE(SUM(creditos_estimados), 0) AS usados FROM generaciones
        WHERE user_id = $1 AND estado <> 'fallido'
@@ -178,7 +196,8 @@ async function encolar(req, { presetId, presetNombre, presetTipo, portada, entra
     }
   }
   const pr = ajustes.precioDe(a, presetTipo, creditos);
-  const cobra = req.user.rol !== 'super_admin';
+  // En "ver como" el super_admin prueba con permisos de usuario, pero no gasta la billetera de JH.
+  const cobra = req.user.rolReal !== 'super_admin';
   if (cobra && !(Number(creditos) > 0)) {
     return { status: 400, error: { error: 'No se pudo calcular el costo. Espera a que cargue e intenta de nuevo.' } };
   }
@@ -391,6 +410,12 @@ app.get(/^(?!\/api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html')
 async function arrancar() {
   await migrar();
   if (await hf.sembrarToken()) console.log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
+  // Webhook de Zernio: se registra solo en cuanto hay clave y secreto.
+  if (zernio.webhookListo() && process.env.PANEL_URL) {
+    zernio.asegurarWebhook(process.env.PANEL_URL)
+      .then((r) => console.log(`[zernio] webhook ${r.creado ? 'registrado' : 'actualizado'}: ${r.url}`))
+      .catch((e) => console.error('[zernio] no se pudo registrar el webhook:', e.message));
+  }
   if (!auth.configurado()) console.warn('AVISO: faltan SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_KEY; nadie podrá entrar.');
   app.listen(PORT, () => console.log(`Panel Marketing Studio en :${PORT}`));
 }

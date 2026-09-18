@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const hf = require('./higgsfield');
+const { pool } = require('./db');
 
 const filtrosP = import('../../shared/filtros.mjs');
 
@@ -30,8 +31,16 @@ function orientacion(c) {
   return h / w > 1.15 ? 'vertical' : w / h > 1.15 ? 'horizontal' : 'cuadrada';
 }
 
-function enriquecer(p, i) {
-  const c = CLASIF[p.id];
+// Clasificaciones automaticas de plantillas nuevas (worker), encima de la base del repo.
+async function clasifDeBd() {
+  try {
+    const { rows } = await pool.query('SELECT id, p, e, per, jh FROM plantillas_clasif');
+    return Object.fromEntries(rows.map((r) => [r.id, { p: r.p, e: r.e, per: r.per, jh: r.jh, auto: true }]));
+  } catch { return {}; }
+}
+
+function enriquecer(p, i, extra = {}) {
+  const c = CLASIF[p.id] || extra[p.id];
   return {
     ...p,
     _i: i,
@@ -43,6 +52,7 @@ function enriquecer(p, i) {
     _persona: c ? !!c.per : CON_PERSONA.has(p.type),
     _jh: c ? Number(c.jh) : 5,
     _clasif: !!c,
+    _auto: !!c?.auto,
     _sirve: [],
   };
 }
@@ -52,11 +62,12 @@ async function todas() {
   if (_cache && _cache.exp > Date.now()) return _cache.items;
   const items = [];
   const vistos = new Set();
+  const extra = await clasifDeBd();
   let cursor = null;
   for (let pag = 0; pag < 40; pag++) {
     const d = await hf.llamar('marketing_studio_v2_presets', { category: 'all', size: 100, ...(cursor ? { cursor } : {}) });
     const p = d.presets || {};
-    for (const x of p.items || []) if (!vistos.has(x.id)) { vistos.add(x.id); items.push(enriquecer(x, items.length)); }
+    for (const x of p.items || []) if (!vistos.has(x.id)) { vistos.add(x.id); items.push(enriquecer(x, items.length, extra)); }
     cursor = p.cursor ?? null;
     if (!cursor) break;
   }
@@ -124,4 +135,12 @@ async function pagina(f, { desde = 0, tam = 30 } = {}) {
   };
 }
 
-module.exports = { todas, pagina, filtrar, ordenar, facetas, enriquecer, CATEGORIA_DE_TIPO };
+// Para Super Admin: cuantas plantillas hay y como estan clasificadas.
+async function resumen() {
+  const items = await todas();
+  return { total: items.length, base: items.filter((p) => p._clasif && !p._auto).length, auto: items.filter((p) => p._auto).length, sinClasificar: items.filter((p) => !p._clasif).length };
+}
+
+const olvidar = () => { _cache = null; };
+
+module.exports = { todas, pagina, filtrar, ordenar, facetas, enriquecer, resumen, olvidar, CATEGORIA_DE_TIPO };

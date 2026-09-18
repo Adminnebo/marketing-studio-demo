@@ -39,10 +39,19 @@ export async function salir() {
   avisar();
 }
 
+// "Ver como" (solo super_admin): el servidor aplica los permisos del rol elegido.
+const CLAVE_VER = 'ms_ver_como';
+export function verComo() { try { return sessionStorage.getItem(CLAVE_VER) || ''; } catch { return ''; } }
+export function cambiarVerComo(rol) {
+  try { rol ? sessionStorage.setItem(CLAVE_VER, rol) : sessionStorage.removeItem(CLAVE_VER); } catch { /* sin storage */ }
+  window.location.reload();
+}
+
 async function api(ruta, opts = {}) {
+  const vc = verComo();
   const r = await fetch('/api' + ruta, {
     ...opts,
-    headers: { ...(opts.body && !(opts.body instanceof Blob) ? { 'content-type': 'application/json' } : {}), ...(opts.headers || {}), authorization: 'Bearer ' + (token || '') },
+    headers: { ...(opts.body && !(opts.body instanceof Blob) ? { 'content-type': 'application/json' } : {}), ...(opts.headers || {}), authorization: 'Bearer ' + (token || ''), ...(vc ? { 'x-ver-como': vc } : {}) },
   });
   if (r.status === 401) { await salir(); throw new Error('Sesión vencida.'); }
   const j = await r.json().catch(() => ({}));
@@ -80,6 +89,7 @@ export function subirImagen(archivo, onProgreso) {
     const x = new XMLHttpRequest();
     x.open('POST', '/api/medios');
     x.setRequestHeader('authorization', 'Bearer ' + (token || ''));
+    if (verComo()) x.setRequestHeader('x-ver-como', verComo());
     x.setRequestHeader('content-type', archivo.type);
     x.setRequestHeader('x-nombre', encodeURIComponent(archivo.name).slice(0, 200));
     x.upload.onprogress = (e) => e.lengthComputable && onProgreso?.(e.loaded / e.total);
@@ -132,3 +142,6 @@ export const fetchModelos = () => api('/modelos');
 export const costoLibre = (datos) => api('/libre/costo', { method: 'POST', body: JSON.stringify(datos) });
 export const crearLibre = (datos) => api('/libre', { method: 'POST', body: JSON.stringify(datos) });
 export const autoPrompt = (datos) => api('/libre/autoprompt', { method: 'POST', body: JSON.stringify(datos) });
+export const reconectarGenerador = () => api('/superadmin/generador/conectar', { method: 'POST' });
+export const clasificarPlantillas = () => api('/superadmin/plantillas/clasificar', { method: 'POST' });
+export const registrarWebhookRedes = () => api('/superadmin/zernio/webhook', { method: 'POST' });

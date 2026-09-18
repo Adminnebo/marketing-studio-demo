@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, clasificarPlantillas, registrarWebhookRedes } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, cred } from '../precio';
 
@@ -14,6 +14,7 @@ function Ajustes({ onGuardado }) {
   const [estado, setEstado] = useState(null);
   const [rec, setRec] = useState({ creditos: '', usd: '', nota: '' });
   const [recEstado, setRecEstado] = useState(null);
+  const [acc, setAcc] = useState(null); // mensajes de las acciones de Estado
 
   const cargar = () => fetchAjustes().then((d) => { setDatos(d); setF({ ...d.ajustes }); }).catch((e) => setEstado({ error: e.message }));
   useEffect(() => { cargar(); }, []);
@@ -105,10 +106,50 @@ function Ajustes({ onGuardado }) {
             <div className="kpi-foot">{datos.saldo ? `Plan ${datos.saldo.plan}` : 'No se pudo leer el saldo'}</div>
           </div>
           <div className="sa-conex">
-            <span className={`badge ${datos.conexiones.generador ? 'live' : 'hf-off'}`}><span className="dot" />Generador {datos.conexiones.generador ? 'conectado' : 'desconectado'}</span>
-            <span className={`badge ${datos.conexiones.redes ? 'live' : 'hf-off'}`}><span className="dot" />Redes {datos.conexiones.redes ? 'configuradas' : 'sin configurar'}</span>
+            <span className={`badge ${datos.conexiones.generador ? 'live' : 'hf-off'}`} title={datos.conexiones.generadorError || ''}>
+              <span className="dot" />Generador {datos.conexiones.generador ? 'conectado' : 'desconectado'}{datos.conexiones.generadorCuenta ? ` · ${datos.conexiones.generadorCuenta}` : ''}
+            </span>
+            <button className="mini-btn" onClick={async () => {
+              if (!window.confirm('Se abrirá el inicio de sesión del generador. Entra con la cuenta de la empresa (admin@neboaiconsulting.com) y acepta. El token actual se reemplaza por el nuevo. ¿Continuar?')) return;
+              try { const { url } = await reconectarGenerador(); window.location.href = url; } catch (e) { setAcc({ error: e.message }); }
+            }}>🔌 Reconectar generador</button>
+            <span className={`badge ${datos.conexiones.promptAuto ? 'live' : 'hf-off'}`}><span className="dot" />Prompt automático {datos.conexiones.promptAuto ? 'listo' : 'sin clave'}</span>
           </div>
         </div>
+
+        <div className="card">
+          <h3>Catálogo de plantillas</h3>
+          {datos.catalogo ? (
+            <>
+              <div className="card-sub">
+                {num(datos.catalogo.total, 0)} plantillas · {num(datos.catalogo.base, 0)} clasificadas a mano · {num(datos.catalogo.auto, 0)} automáticas · <strong>{num(datos.catalogo.sinClasificar, 0)} sin clasificar</strong>
+              </div>
+              <div className="card-sub" style={{ margin: 0 }}>Las nuevas se clasifican solas cada 12 h (encaje con JH, estilo, persona). Sin clasificar entran al final de la galería.</div>
+              <div className="ms-submit">
+                <span className="ms-cost">{acc?.clasif}</span>
+                <button className="mini-btn" disabled={!datos.catalogo.clasificadorListo || !datos.catalogo.sinClasificar} onClick={async () => {
+                  try { const r = await clasificarPlantillas(); setAcc({ clasif: r.enCurso ? 'Ya se están clasificando.' : 'Clasificando en segundo plano; recarga en unos minutos.' }); } catch (e) { setAcc({ clasif: e.message }); }
+                }}>🏷️ Clasificar nuevas ahora</button>
+              </div>
+            </>
+          ) : <div className="card-sub">No se pudo leer el catálogo.</div>}
+        </div>
+
+        <div className="card">
+          <h3>Redes (Zernio)</h3>
+          <div className="card-sub">
+            {!datos.conexiones.redes ? 'Falta la clave de Zernio. Todo lo demás está listo: al ponerla se registra solo el webhook.'
+              : datos.conexiones.webhookId ? 'Webhook registrado: las publicaciones se actualizan al momento.'
+                : datos.conexiones.webhookListo ? 'Clave lista; falta registrar el webhook.' : 'Falta ZERNIO_WEBHOOK_SECRET.'}
+          </div>
+          <div className="ms-submit">
+            <span className="ms-cost">{acc?.redes}</span>
+            <button className="mini-btn" disabled={!datos.conexiones.webhookListo} onClick={async () => {
+              try { const r = await registrarWebhookRedes(); setAcc({ redes: `Webhook ${r.creado ? 'registrado' : 'actualizado'}${r.prueba?.success ? ' y probado ✅' : r.prueba?.error ? `, la prueba falló: ${r.prueba.error}` : ''}.` }); cargar(); } catch (e) { setAcc({ redes: e.message }); }
+            }}>🔗 Registrar y probar webhook</button>
+          </div>
+        </div>
+        {acc?.error && <div className="ms-errors">{acc.error}</div>}
 
         <div className="card">
           <h3>Recarga manual a JH</h3>

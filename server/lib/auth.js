@@ -81,7 +81,12 @@ function requireAcceso(req, res, next) {
       const { rol, perfil: p } = await rolMarketing(req.user.id);
       if (!rol) return res.status(403).json({ error: 'Tu usuario no tiene acceso a Marketing. Pídeselo a un super admin.', sinAcceso: true });
       req.user.rol = rol;
+      req.user.rolReal = rol;
       req.user.nombre = p?.full_name || null;
+      // "Ver como": un super_admin puede ver el panel con los permisos de un rol menor.
+      // Solo baja permisos, nunca los sube, y solo lo honra para super_admin.
+      const verComo = String(req.headers['x-ver-como'] || '');
+      if (rol === 'super_admin' && ['admin', 'usuario'].includes(verComo)) req.user.rol = verComo;
       next();
     } catch (e) {
       console.error('[auth]', e.message);

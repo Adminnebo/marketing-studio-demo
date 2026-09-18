@@ -97,6 +97,33 @@ const MIGRACIONES = [
    )`,
   // Un solo cobro y un solo reembolso por generacion.
   `CREATE UNIQUE INDEX IF NOT EXISTS billetera_gen_tipo_idx ON billetera (generacion_id, tipo) WHERE generacion_id IS NOT NULL`,
+  // Reconexion del generador desde el panel (OAuth code + PKCE): un estado por intento, de un solo uso.
+  `CREATE TABLE IF NOT EXISTS oauth_estados (
+     state TEXT PRIMARY KEY,
+     verifier TEXT NOT NULL,
+     client_id TEXT NOT NULL,
+     redirect TEXT NOT NULL,
+     por TEXT NOT NULL,
+     creado TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  // Clasificacion automatica de plantillas nuevas (la base viene de shared/clasificacion.json).
+  `CREATE TABLE IF NOT EXISTS plantillas_clasif (
+     id TEXT PRIMARY KEY,
+     p TEXT NOT NULL,
+     e JSONB NOT NULL,
+     per BOOLEAN NOT NULL,
+     jh INT NOT NULL,
+     nombre TEXT,
+     fuente TEXT NOT NULL,
+     creado TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  // Eventos de webhook de Zernio ya procesados (llegan al menos una vez: se deduplica por id).
+  `CREATE TABLE IF NOT EXISTS zernio_eventos (
+     id TEXT PRIMARY KEY,
+     evento TEXT NOT NULL,
+     recibido TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,
 ];

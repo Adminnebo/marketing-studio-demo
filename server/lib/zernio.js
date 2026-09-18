@@ -78,4 +78,43 @@ const crearPost = (cuerpo, requestId) => llamar('POST', '/posts', { body: cuerpo
 const leerPost = (postId) => llamar('GET', `/posts/${encodeURIComponent(postId)}`);
 const borrarPost = (postId) => llamar('DELETE', `/posts/${encodeURIComponent(postId)}`);
 
-module.exports = { configurado, llamar, perfilId, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, ZernioError };
+// ── Webhooks: Zernio avisa cuando un post sale, falla o una cuenta se desconecta ──
+const SECRETO_WEBHOOK = process.env.ZERNIO_WEBHOOK_SECRET || '';
+const EVENTOS = [
+  'post.scheduled', 'post.published', 'post.partial', 'post.failed', 'post.cancelled',
+  'post.platform.published', 'post.platform.failed', 'post.platform.deleted',
+  'account.connected', 'account.disconnected',
+];
+const webhookListo = () => !!(API_KEY && SECRETO_WEBHOOK);
+
+// Registra (o actualiza) el webhook del panel en Zernio. Idempotente: busca por URL.
+async function asegurarWebhook(base) {
+  if (!webhookListo()) return { ok: false, motivo: !API_KEY ? 'sin_api_key' : 'sin_secreto' };
+  const url = `${base.replace(/\/+$/, '')}/api/zernio/webhook`;
+  const { webhooks = [] } = await llamar('GET', '/webhooks/settings');
+  const hay = webhooks.find((w) => w.url === url);
+  const cuerpo = { name: 'Marketing JH', url, secret: SECRETO_WEBHOOK, events: EVENTOS, isActive: true };
+  const r = hay ? await llamar('PUT', '/webhooks/settings', { body: { _id: hay._id, ...cuerpo } }) : await llamar('POST', '/webhooks/settings', { body: cuerpo });
+  const id = r.webhook?._id || hay?._id;
+  await pool.query(`INSERT INTO config (clave, valor) VALUES ('zernio_webhook_id', $1) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor`, [id || '']);
+  return { ok: true, id, url, creado: !hay };
+}
+
+async function probarWebhook() {
+  const { rows } = await pool.query(`SELECT valor FROM config WHERE clave = 'zernio_webhook_id'`);
+  if (!rows[0]?.valor) throw new ZernioError('El webhook no está registrado', { codigo: 'sin_webhook' });
+  return llamar('POST', '/webhooks/test', { body: { webhookId: rows[0].valor } });
+}
+
+// Firma: HMAC-SHA256 en hex del cuerpo crudo con el secreto.
+function firmaValida(cuerpoCrudo, firma) {
+  if (!SECRETO_WEBHOOK || !firma || !Buffer.isBuffer(cuerpoCrudo)) return false;
+  const esperada = require('crypto').createHmac('sha256', SECRETO_WEBHOOK).update(cuerpoCrudo).digest('hex');
+  const a = Buffer.from(String(firma).toLowerCase()); const b = Buffer.from(esperada);
+  return a.length === b.length && require('crypto').timingSafeEqual(a, b);
+}
+
+module.exports = {
+  configurado, llamar, perfilId, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, ZernioError,
+  webhookListo, asegurarWebhook, probarWebhook, firmaValida, EVENTOS,
+};

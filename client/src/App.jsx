@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { iniciarAuth, sesion, salir, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
+import { iniciarAuth, sesion, salir, cambiarVerComo, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
 import Login from './components/Login';
 import Plantillas from './components/Plantillas';
 import Recrear from './components/Recrear';
@@ -57,7 +57,15 @@ export default function App() {
   const { cargando: cargandoSesion, s, error: errorAuth } = useSesion();
   const [sinAcceso, setSinAcceso] = useState(false);
   const [avisoRedes] = useState(leerVueltaRedes);
-  const [tab, setTab] = useState(() => (avisoRedes ? 'redes' : 'plantillas'));
+  const [avisoGenerador] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.has('generador')) return null;
+    window.history.replaceState(null, '', window.location.pathname);
+    return q.get('generador') === 'conectado'
+      ? { ok: true, texto: `✅ Generador reconectado${q.get('cuenta') ? ` con ${q.get('cuenta')}` : ''}.` }
+      : { ok: false, texto: `No se pudo reconectar el generador${q.get('motivo') ? `: ${q.get('motivo')}` : ''}.` };
+  });
+  const [tab, setTab] = useState(() => (avisoRedes ? 'redes' : avisoGenerador ? 'superadmin' : 'plantillas'));
   const [redesEstado, setRedesEstado] = useState(null);
   const [cuentas, setCuentas] = useState(null);
   const [errorCuentas, setErrorCuentas] = useState(null);
@@ -235,6 +243,13 @@ export default function App() {
           <button className="btn secondary icon-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'} aria-label="Cambiar tema">
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
+          {me.rolReal === 'super_admin' && (
+            <select className="badge vc-select" value={me.verComo || ''} onChange={(e) => cambiarVerComo(e.target.value)} title="Ver el panel como otro rol">
+              <option value="">👁️ Ver como: Super admin</option>
+              <option value="admin">👁️ Ver como: Admin</option>
+              <option value="usuario">👁️ Ver como: Usuario</option>
+            </select>
+          )}
           <span className="badge user-badge" title={`${me.email} · ${ROL_ES[me.rol]}`}>
             <span className="ub-mail">{me.nombre || me.email}</span>
             <button className="logout-btn" onClick={salir} title="Cerrar sesión">Salir</button>
@@ -242,9 +257,18 @@ export default function App() {
         </div>
       </header>
 
+      {me.verComo && (
+        <div className="vc-banner">
+          👁️ Estás viendo el panel como <strong>{ROL_ES[me.verComo]}</strong>: pestañas, botones y precios como los ve ese rol. Lo que generes acá no se cobra a la billetera de JH.
+          <button className="btn" onClick={() => cambiarVerComo('')}>Volver a Super admin</button>
+        </div>
+      )}
+
+      {avisoGenerador && <div className={avisoGenerador.ok ? 'ms-ok' : 'banner-off'} style={{ marginBottom: 16 }}>{avisoGenerador.texto}</div>}
+
       {desconectado && (
         <div className="banner-off">
-          ⚠️ El panel perdió la conexión con el generador de contenido. Las generaciones quedan en cola hasta que se restablezca; avísale al administrador.
+          ⚠️ El panel perdió la conexión con el generador de contenido. Las generaciones quedan en cola hasta que se restablezca{me.rol === 'super_admin' ? <>: reconéctalo en <button className="mini-btn" onClick={() => setTab('superadmin')}>🛡️ Super Admin</button></> : '; avísale al administrador.'}
         </div>
       )}
 

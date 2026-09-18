@@ -13,6 +13,10 @@ const hf = require('./lib/higgsfield');
 const zernio = require('./lib/zernio');
 const billetera = require('./lib/billetera');
 const costo = require('./lib/costo');
+const hfOauth = require('./lib/hf-oauth');
+const catalogo = require('./lib/catalogo');
+const clasificar = require('./lib/clasificar');
+const promptAuto = require('./lib/prompt-auto');
 
 const router = express.Router();
 router.use('/superadmin', auth.requireRol('super_admin'));
@@ -26,15 +30,22 @@ const ruta = (fn) => async (req, res) => {
 const errPublico = (msg, status = 400) => Object.assign(new Error(msg), { publico: true, status });
 
 router.get('/superadmin/ajustes', ruta(async (req, res) => {
-  const [a, saldo, gen] = await Promise.all([
+  const [a, saldo, gen, cat, wh] = await Promise.all([
     ajustes.leer(),
     hf.llamar('balance', {}).catch(() => null),
     hf.estadoConexion().catch(() => ({ conectado: false })),
+    catalogo.resumen().catch(() => null),
+    pool.query(`SELECT valor FROM config WHERE clave = 'zernio_webhook_id'`).then((r) => r.rows[0]?.valor || null).catch(() => null),
   ]);
   res.json({
     ajustes: a,
     saldo: saldo ? { creditos: saldo.credits, plan: saldo.subscription_plan_type } : null,
-    conexiones: { generador: !!gen.conectado, redes: zernio.configurado() },
+    conexiones: {
+      generador: !!gen.conectado, generadorCuenta: gen.cuenta || null, generadorError: gen.error || null,
+      redes: zernio.configurado(), webhookListo: zernio.webhookListo(), webhookId: wh,
+      promptAuto: promptAuto.configurado(),
+    },
+    catalogo: cat ? { ...cat, clasificadorListo: clasificar.configurado() } : null,
   });
 }));
 
@@ -47,6 +58,41 @@ router.put('/superadmin/ajustes', ruta(async (req, res) => {
     res.json({ ajustes: a });
   } catch (e) {
     throw errPublico(e.message);
+  }
+}));
+
+// Reconectar el generador: devuelve la URL para iniciar sesion con la cuenta de la empresa.
+router.post('/superadmin/generador/conectar', ruta(async (req, res) => {
+  const base = process.env.PANEL_URL || `${req.protocol}://${req.get('host')}`;
+  res.json({ url: await hfOauth.iniciar({ base, por: req.user.email }) });
+}));
+
+// Clasificar ya las plantillas nuevas (en segundo plano; el worker tambien lo hace cada 12 h).
+let clasificando = false;
+router.post('/superadmin/plantillas/clasificar', ruta(async (req, res) => {
+  if (!clasificar.configurado()) throw errPublico('Falta la clave de la IA para clasificar.');
+  if (clasificando) return res.json({ ok: true, enCurso: true });
+  clasificando = true;
+  catalogo.olvidar();
+  catalogo.todas().then((items) => clasificar.clasificarNuevas(items, { max: 60 }))
+    .then((r) => { console.log(`[clasificar] ${req.user.email}: ${r.hechas} nuevas clasificadas, quedan ${r.pendientes}`); catalogo.olvidar(); })
+    .catch((e) => console.error('[clasificar]', e.message))
+    .finally(() => { clasificando = false; });
+  res.json({ ok: true, iniciado: true });
+}));
+
+// Webhook de Zernio: registrar/actualizar y mandar un evento de prueba.
+router.post('/superadmin/zernio/webhook', ruta(async (req, res) => {
+  const base = process.env.PANEL_URL || `${req.protocol}://${req.get('host')}`;
+  try {
+    const r = await zernio.asegurarWebhook(base);
+    if (!r.ok) throw errPublico(r.motivo === 'sin_api_key' ? 'Falta la clave de Zernio.' : 'Falta ZERNIO_WEBHOOK_SECRET.');
+    let prueba = null;
+    try { prueba = await zernio.probarWebhook(); } catch (e) { prueba = { error: e.message }; }
+    res.json({ ok: true, ...r, prueba });
+  } catch (e) {
+    if (e.publico) throw e;
+    throw errPublico('Zernio no respondió bien: ' + e.message.slice(0, 120), 502);
   }
 }));
 

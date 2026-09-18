@@ -124,7 +124,9 @@ router.post('/publicaciones', ruta(async (req, res) => {
   );
 
   try {
-    const r = await zernio.crearPost(cuerpoZernio({ texto, medio, cuentas, opciones, modo, fechaLocal: fechaLocal.length === 16 ? fechaLocal + ':00' : fechaLocal, zona }), p.request_id);
+    const cuerpo = cuerpoZernio({ texto, medio, cuentas, opciones, modo, fechaLocal: fechaLocal.length === 16 ? fechaLocal + ':00' : fechaLocal, zona });
+    cuerpo.metadata = { publicacion_id: String(p.id), panel: 'marketing-jh' }; // vuelve en los webhooks
+    const r = await zernio.crearPost(cuerpo, p.request_id);
     const post = r.post || {};
     await pool.query(
       `UPDATE publicaciones SET zernio_post_id = $2, estado = $3, plataformas = $4, actualizado = now() WHERE id = $1`,
