@@ -66,3 +66,17 @@ export function subirImagen(archivo, onProgreso) {
     x.send(archivo);
   });
 }
+
+// Descarga a traves del panel (lleva la sesion y el nombre de archivo propio).
+export async function descargar(id, i = 0) {
+  const r = await fetch(`/api/generaciones/${id}/descargar?i=${i}`, { headers: { authorization: 'Bearer ' + (sesion()?.token || '') } });
+  if (r.status === 401) { salir(); throw new Error('Sesión vencida.'); }
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'No se pudo descargar.'); }
+  const nombre = (r.headers.get('content-disposition') || '').match(/filename="([^"]+)"/)?.[1] || `marketing_${id}`;
+  const url = URL.createObjectURL(await r.blob());
+  const a = Object.assign(document.createElement('a'), { href: url, download: nombre });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}

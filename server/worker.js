@@ -34,7 +34,7 @@ async function enviar(g) {
   }
   const r = await hf.llamar('marketing_studio_v2_create', args, { timeoutMs: 120000 });
   const ids = (r.job_ids || []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
-  if (!ids.length) throw new Error('Higgsfield aceptó el pedido pero no devolvió job_ids. Revisa en higgsfield.ai antes de repetir.');
+  if (!ids.length) throw new Error('create sin job_ids: ' + JSON.stringify(r).slice(0, 300));
   return ids;
 }
 
@@ -52,8 +52,12 @@ async function tomarPendientes() {
     } catch (e) {
       // Si el error es de conexion (token), la dejamos pendiente para cuando vuelva.
       const estado = e.desconectado ? 'pendiente' : 'fallido';
-      await pool.query(`UPDATE generaciones SET estado = $2, error = $3, terminado = CASE WHEN $2 = 'fallido' THEN now() END WHERE id = $1`,
-        [g.id, estado, e.message.slice(0, 1000)]);
+      const aviso = e.desconectado ? null
+        : /sin job_ids/.test(e.message)
+          ? 'El pedido se recibió pero no se confirmó. Avísale al administrador antes de repetir (puede que sí se haya generado).'
+          : 'No se pudo enviar la generación. Revisa la imagen y la descripción e intenta de nuevo.';
+      await pool.query(`UPDATE generaciones SET estado = $2, error = $3, error_detalle = $4, terminado = CASE WHEN $2 = 'fallido' THEN now() END WHERE id = $1`,
+        [g.id, estado, aviso, e.message.slice(0, 1000)]);
       log(`#${g.id} no se pudo enviar: ${e.message}`);
     }
   }
@@ -85,13 +89,14 @@ async function revisarEnProceso() {
         await pool.query(`UPDATE generaciones SET estado = 'completado', resultados = $2, terminado = now(), revisado = now() WHERE id = $1`, [g.id, JSON.stringify(resultados)]);
         log(`#${g.id} completada (${ok.length} resultado/s)`);
       } else {
-        const motivo = st.includes('nsfw') ? 'Higgsfield rechazó el contenido (filtro de seguridad).' : `Higgsfield marcó la generación como ${st.join(', ')}.`;
-        await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, terminado = now(), revisado = now() WHERE id = $1`, [g.id, JSON.stringify(resultados), motivo]);
+        const motivo = st.includes('nsfw') ? 'El contenido fue rechazado por el filtro de seguridad. Prueba con otra imagen o descripción.' : 'La generación falló. Intenta de nuevo o prueba otra plantilla.';
+        await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, error_detalle = $4, terminado = now(), revisado = now() WHERE id = $1`,
+          [g.id, JSON.stringify(resultados), motivo, 'estados: ' + st.join(', ')]);
         log(`#${g.id} fallida: ${st.join(',')}`);
       }
     } else if (Date.now() - new Date(g.enviado).getTime() > TIMEOUT_MIN * 60e3) {
       await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, terminado = now() WHERE id = $1`,
-        [g.id, JSON.stringify(resultados), `Sin respuesta de Higgsfield en ${TIMEOUT_MIN} min (estado: ${st.join(', ')}).`]);
+        [g.id, JSON.stringify(resultados), `No terminó en ${TIMEOUT_MIN} minutos. Intenta de nuevo.`]);
       log(`#${g.id} vencida tras ${TIMEOUT_MIN} min`);
     } else {
       await pool.query('UPDATE generaciones SET revisado = now(), resultados = $2 WHERE id = $1', [g.id, JSON.stringify(resultados)]);
@@ -102,7 +107,7 @@ async function revisarEnProceso() {
 async function liberarAtascadas() {
   const { rows } = await pool.query(
     `UPDATE generaciones SET estado = 'fallido', terminado = now(),
-       error = 'El envío se interrumpió. Puede que Higgsfield sí la haya recibido: revisa en higgsfield.ai antes de repetir.'
+       error = 'El envío se interrumpió. Puede que sí se haya generado: avísale al administrador antes de repetir.'
      WHERE estado = 'enviando' AND enviado < now() - ($1 || ' minutes')::interval RETURNING id`, [ENVIANDO_ATASCADO_MIN]
   );
   for (const r of rows) log(`#${r.id} atascada en 'enviando', marcada fallida`);

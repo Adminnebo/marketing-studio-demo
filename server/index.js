@@ -40,14 +40,22 @@ const categorias = () => cacheado('categorias', 30 * 60e3, async () => {
 });
 const costos = () => cacheado('costos', 60 * 60e3, () => hf.llamar('marketing_studio_v2_costs', {}));
 
-// Envuelve rutas async: errores de Higgsfield -> 502 con mensaje claro.
+// Envuelve rutas async. Al navegador no le llega el detalle tecnico (ni el
+// nombre del proveedor): solo un mensaje generico; el detalle queda en el log.
 const ruta = (fn) => async (req, res) => {
   try {
     await fn(req, res);
   } catch (e) {
     console.error(`[${req.method} ${req.path}]`, e.message);
-    const status = e instanceof hf.HiggsfieldError ? (e.desconectado ? 503 : 502) : 500;
-    res.status(status).json({ error: e.message, desconectado: !!e.desconectado });
+    if (e instanceof hf.HiggsfieldError) {
+      return res.status(e.desconectado ? 503 : 502).json({
+        error: e.desconectado
+          ? 'El generador de contenido está desconectado. Avísale al administrador.'
+          : 'El generador de contenido no respondió bien. Intenta de nuevo en un momento.',
+        desconectado: !!e.desconectado,
+      });
+    }
+    res.status(500).json({ error: 'Error interno. Intenta de nuevo.' });
   }
 };
 
@@ -60,7 +68,7 @@ app.use('/api', auth.requireAuth);
 
 app.get('/api/me', (req, res) => res.json({ email: req.user.email, creditosVisibles: CREDITOS_VISIBLES }));
 
-app.get('/api/estado', ruta(async (req, res) => res.json(await hf.estadoConexion())));
+app.get('/api/estado', ruta(async (req, res) => res.json({ conectado: (await hf.estadoConexion()).conectado })));
 
 app.get('/api/saldo', ruta(async (req, res) => {
   if (!CREDITOS_VISIBLES) return res.status(404).json({ error: 'oculto' });
@@ -106,7 +114,7 @@ app.post('/api/medios', express.raw({ type: Object.keys(EXT), limit: '20mb' }), 
     method: 'PUT', headers: { 'content-type': slot.content_type || tipo }, body: req.body,
     signal: AbortSignal.timeout(120000),
   });
-  if (!put.ok) throw new hf.HiggsfieldError(`Falló la subida a Higgsfield (HTTP ${put.status})`);
+  if (!put.ok) throw new hf.HiggsfieldError(`PUT de la subida fallo (HTTP ${put.status})`);
   const conf = await hf.llamar('media_confirm', { type: 'image', media_id: slot.media_id });
   const r = conf.results?.[0];
   if (!r?.media_id) throw new hf.HiggsfieldError('media_confirm no devolvió media_id');
@@ -180,6 +188,24 @@ app.get('/api/generaciones', ruta(async (req, res) => {
     antes ? [limite, antes] : [limite]
   );
   res.json({ items: rows, siguiente: rows.length === limite ? rows.at(-1).id : null });
+}));
+
+// Descarga via el panel, con nombre de archivo propio (el original trae el
+// prefijo del proveedor). Solo sirve URLs que esten en los resultados de la fila.
+app.get('/api/generaciones/:id/descargar', ruta(async (req, res) => {
+  const { rows: [g] } = await pool.query('SELECT id, preset_nombre, resultados FROM generaciones WHERE id = $1', [Number(req.params.id) || 0]);
+  const ok = (g?.resultados || []).filter((r) => r.url);
+  const i = Math.max(0, Math.min(Number(req.query.i) || 0, ok.length - 1));
+  if (!ok[i]) return res.status(404).json({ error: 'No hay archivo para descargar.' });
+  const r = await fetch(ok[i].url, { signal: AbortSignal.timeout(120000) });
+  if (!r.ok || !r.body) return res.status(502).json({ error: 'No se pudo descargar el archivo.' });
+  const ext = (new URL(ok[i].url).pathname.match(/\.(png|jpe?g|webp|mp4|mov|webm)$/i) || [, 'bin'])[1].toLowerCase();
+  const base = (g.preset_nombre || 'marketing').normalize('NFD').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'marketing';
+  res.setHeader('Content-Type', r.headers.get('content-type') || 'application/octet-stream');
+  if (r.headers.get('content-length')) res.setHeader('Content-Length', r.headers.get('content-length'));
+  res.setHeader('Content-Disposition', `attachment; filename="${base}_${g.id}${ok.length > 1 ? `_${i + 1}` : ''}.${ext}"`);
+  const { Readable } = require('stream');
+  Readable.fromWeb(r.body).pipe(res);
 }));
 
 app.get('/api/generaciones/:id', ruta(async (req, res) => {

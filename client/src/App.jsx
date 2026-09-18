@@ -135,9 +135,9 @@ export default function App() {
         </nav>
         <div className="badges">
           {estado && (
-            <span className={`badge ${desconectado ? 'hf-off' : 'live'}`} title={estado.error || (estado.cuenta ? `Cuenta ${estado.cuenta}` : '')}>
+            <span className={`badge ${desconectado ? 'hf-off' : 'live'}`}>
               <span className={`dot ${desconectado ? '' : 'pulse'}`} />
-              {desconectado ? 'Higgsfield desconectado' : 'Higgsfield conectado'}
+              {desconectado ? 'Generador desconectado' : 'Generador conectado'}
             </span>
           )}
           {me?.creditosVisibles && saldo && (
@@ -157,8 +157,7 @@ export default function App() {
 
       {desconectado && (
         <div className="banner-off">
-          ⚠️ El panel perdió la conexión con la cuenta de Higgsfield. Las generaciones quedan en cola hasta que se vuelva a autorizar.
-          {estado.error && <><br /><small>{estado.error}</small></>}
+          ⚠️ El panel perdió la conexión con el generador de contenido. Las generaciones quedan en cola hasta que se restablezca; avísale al administrador.
         </div>
       )}
 
@@ -173,7 +172,7 @@ export default function App() {
 
       {tab === 'plantillas' && (
         errorCat ? (
-          <div className="empty-state">No se pudo cargar el catálogo de Higgsfield: {errorCat}<br />
+          <div className="empty-state">No se pudo cargar el catálogo: {errorCat}<br />
             <button className="btn secondary" style={{ marginTop: 12 }} onClick={cargarCatalogo}>Reintentar</button>
           </div>
         ) : !categorias ? (
@@ -201,7 +200,7 @@ export default function App() {
         />
       )}
 
-      <div className="footer">Marketing Studio · generado con Higgsfield usando los créditos del plan de la empresa</div>
+      <div className="footer">Marketing Studio · contenido generado con IA</div>
     </div>
   );
 }

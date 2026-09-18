@@ -73,6 +73,7 @@ if (!URL_BD) {
     const g = await fila(id);
     assert.equal(g.estado, 'fallido');
     assert.match(g.error, /filtro de seguridad/);
+    assert.equal(g.error_detalle, "estados: nsfw");
   });
 
   test('error de create -> fallido; desconexion -> vuelve a pendiente', async () => {
@@ -95,6 +96,6 @@ if (!URL_BD) {
     await w.liberarAtascadas();
     const g = await fila(id);
     assert.equal(g.estado, 'fallido');
-    assert.match(g.error, /revisa en higgsfield/);
+    assert.match(g.error, /avísale al administrador/);
   });
 }

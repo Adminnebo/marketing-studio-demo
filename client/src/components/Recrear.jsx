@@ -147,7 +147,7 @@ export default function Recrear({ preset, categoria, categorias, costos, inicial
                           <>
                             <span className="ms-tile-ic">🧑</span>
                             <span className="ms-tile-txt">Elegir avatar</span>
-                            <span className="ms-tile-sub">{req.avatarObligatorio ? 'Obligatorio' : 'Si no eliges, Higgsfield usa uno automático'}</span>
+                            <span className="ms-tile-sub">{req.avatarObligatorio ? 'Obligatorio' : 'Si no eliges, se usa uno automático'}</span>
                           </>
                         )}
                       </button>

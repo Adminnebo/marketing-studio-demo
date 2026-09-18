@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { TIPOS } from '@shared/reglas.mjs';
 import Portada from './Portada';
+import { descargar } from '../api';
 
 const ESTADOS = {
   pendiente: 'En cola', enviando: 'Enviando', en_proceso: 'Generando', completado: 'Lista', fallido: 'Falló',
@@ -15,7 +16,13 @@ function Tarjeta({ g, onRepetir }) {
   const ok = (g.resultados || []).filter((r) => r.url);
   const [i, setI] = useState(0);
   const r = ok[Math.min(i, ok.length - 1)];
-  const nombreArchivo = `${(g.preset_nombre || 'marketing').replace(/[^\w-]+/g, '_')}_${g.id}${ok.length > 1 ? `_${i + 1}` : ''}`;
+  const [bajando, setBajando] = useState(false);
+  const [errBaja, setErrBaja] = useState(null);
+  const bajar = async () => {
+    setBajando(true);
+    setErrBaja(null);
+    try { await descargar(g.id, Math.min(i, ok.length - 1)); } catch (e) { setErrBaja(e.message); } finally { setBajando(false); }
+  };
   return (
     <div className="ms-gen">
       <div className={`ms-gen-media ${g.estado === 'completado' && r ? 'done' : ''}`}>
@@ -50,8 +57,9 @@ function Tarjeta({ g, onRepetir }) {
         <div className="ms-gen-meta">{g.creado_por}</div>
         {g.entrada?.args?.prompt && <div className="ms-gen-prompt" title={g.entrada.args.prompt}>“{g.entrada.args.prompt}”</div>}
         {g.error && <div className="ms-gen-err">{g.error}</div>}
+        {errBaja && <div className="ms-gen-err">{errBaja}</div>}
         <div className="ms-gen-actions">
-          {r && <a className="mini-btn" href={r.url} target="_blank" rel="noreferrer" download={nombreArchivo}>⬇ Descargar</a>}
+          {r && <button className="mini-btn" onClick={bajar} disabled={bajando}>{bajando ? 'Descargando…' : '⬇ Descargar'}</button>}
           {g.entrada?.preset && <button className="mini-btn" onClick={() => onRepetir(g)}>↻ Usar de nuevo</button>}
         </div>
       </div>

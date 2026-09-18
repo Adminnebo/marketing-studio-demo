@@ -44,6 +44,8 @@ const MIGRACIONES = [
      terminado TIMESTAMPTZ,
      revisado TIMESTAMPTZ
    )`,
+  // error = mensaje para el usuario (sin nombres del proveedor); error_detalle = tecnico, solo logs/admin.
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS error_detalle TEXT`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,
 ];
