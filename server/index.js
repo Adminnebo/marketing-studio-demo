@@ -14,6 +14,7 @@ const ajustes = require('./lib/config');
 const catalogo = require('./lib/catalogo');
 const billetera = require('./lib/billetera');
 const modelos = require('./lib/modelos');
+const promptAuto = require('./lib/prompt-auto');
 
 const reglasP = import('../shared/reglas.mjs');
 const PORT = process.env.PORT || 3002;
@@ -316,9 +317,28 @@ app.post('/api/libre/costo', ruta(async (req, res) => {
   res.json({ creditos, precio: pr.precio });
 }));
 
-// Autogenerar el prompt desde la imagen: las instrucciones las define el cliente (pendiente).
+// Autogenerar el prompt desde la imagen (reglas V2 del menu digital adaptadas a ferreteria: lib/prompt-auto.js).
 app.post('/api/libre/autoprompt', ruta(async (req, res) => {
-  res.status(501).json({ error: 'El prompt automático todavía no está configurado.' });
+  const b = req.body || {};
+  const modelo = await modelos.obtener(String(b.modelo || ''));
+  if (!modelo) return res.status(400).json({ error: 'Elige un modelo.' });
+  if (!b.imagen?.url) return res.status(400).json({ error: 'Sube una imagen para autogenerar el prompt.' });
+  const op = b.opciones || {};
+  const conAudio = op.generate_audio === true || op.sound === true || op.sound === 'on';
+  try {
+    const r = await promptAuto.generar({
+      imagenUrl: b.imagen.url, tipo: modelo.tipo, duracion: b.duracion, conAudio, aspecto: b.aspecto,
+      producto: b.producto, instrucciones: b.instrucciones,
+    });
+    console.log(`[autoprompt] ${req.user.email} ${modelo.id} ${r.modelo} tokens ${r.tokens.entrada}/${r.tokens.salida} avisos ${r.avisos.length}`);
+    res.json({ prompt: r.prompt, avisos: r.avisos });
+  } catch (e) {
+    if (e instanceof promptAuto.ErrorDePrompt) {
+      console.error('[autoprompt]', e.message, e.detalle || '');
+      return res.status(e.status).json({ error: e.message });
+    }
+    throw e;
+  }
 }));
 
 app.post('/api/libre', ruta(async (req, res) => {

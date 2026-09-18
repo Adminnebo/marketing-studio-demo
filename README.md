@@ -56,7 +56,13 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
 - Arriba de la galería: cualquier modelo de video o imagen del generador (hoy 26 de video y 24 de imagen; Cinema Studio
   3.0, Seedance 2.5/2.0, Kling 3.0, Veo 3.1, GPT Image 2.5, Nano Banana Pro…). El catálogo se lee con `models_explore`
   (cache 1 h) y el formulario se arma solo: formato, duración, resolución/calidad, audio, etc. (`server/lib/modelos.js`).
-- Prompt manual o **autogenerado desde la imagen** (el botón existe; las instrucciones las define el cliente).
+- Prompt manual o **autogenerado desde la imagen** (`server/lib/prompt-auto.js`): la adaptación a ferretería y material
+  eléctrico de las reglas V2 del menú digital (Adminnebo/Restaurant, `scripts/prompt-v2.mjs` y `prompt-foto.mjs`), los
+  prompts ganadores de comida. Misma estructura y candados (elementos numerados, conteos bloqueados, tres tramos, una sola
+  acción según el ritmo, negativos por categoría); cambia el objeto: PRODUCT en vez de DISH, catálogo de acciones por
+  producto (palanca, encendido, cuarto de vuelta, recorrido de cámara…), LIGHT AND MATERIAL CUE en vez de vapor, las
+  marcas impresas del producto se preservan tal cual y nunca chispas, humo ni fuego. Devuelve el prompt en inglés y
+  avisos en español para revisar. Usa OpenAI `gpt-4.1` (el mini contaba mal las piezas repetidas); ~0,03 USD por prompt.
 - El costo en créditos se pide con `get_cost` (no genera nada) y se muestra con el precio para JH; al generar, el servidor
   lo vuelve a calcular y cobra la billetera. El worker envía con `generate_video`/`generate_image` y sigue con `job_status`.
 
@@ -107,7 +113,6 @@ borrar.
 
 ## Pendiente (detalles y correcciones finales)
 
-- **Prompt automático desde la imagen**: falta que el cliente pase las instrucciones (el endpoint responde 501).
 - **Pago en línea de recargas** (Stripe/Whop o solicitud + aprobación): en pausa por decisión del cliente.
 - **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
 - **Botón "reconectar generador"** si se pierde el token OAuth.
@@ -115,3 +120,4 @@ borrar.
 - **Primera prueba real de login** con la cuenta Supabase de un super_admin y alta del primer usuario de JH (con saldo).
 - **Reclasificar plantillas** cuando aparezcan nuevas (entran con encaje 5).
 - Webhooks de Zernio (hoy el worker consulta el estado cada ~15 s).
+- La clave de OpenAI es la misma del menú digital (servicio `generador`): si se rota allá, hay que actualizarla acá.

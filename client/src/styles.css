@@ -492,3 +492,7 @@ tbody tr:hover { background: var(--surface-2); }
 .lb-opciones .search { min-width: 0; width: 100%; }
 .lb-opciones input[type=range] { width: 100%; accent-color: var(--series-1); margin-top: 8px; }
 @media (max-width: 640px) { .lb-cuerpo { grid-template-columns: 1fr; } .lb-modelo { min-width: 0; width: 100%; } }
+.lb-auto { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; margin-bottom: 8px; }
+.lb-avisos { font-size: 0.8rem; color: var(--text-secondary); background: color-mix(in srgb, var(--warning) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
+.lb-avisos ul { margin: 4px 0 0; padding-left: 18px; }
+@media (max-width: 640px) { .lb-auto { grid-template-columns: 1fr; } }

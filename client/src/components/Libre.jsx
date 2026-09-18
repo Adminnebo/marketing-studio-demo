@@ -23,6 +23,9 @@ export default function Libre({ saldo, rol, inicial, onEnviada }) {
   const [costo, setCosto] = useState({ cargando: false, creditos: null, precio: null, error: null });
   const [enviando, setEnviando] = useState(false);
   const [generandoPrompt, setGenerandoPrompt] = useState(false);
+  const [producto, setProducto] = useState('');
+  const [indicaciones, setIndicaciones] = useState('');
+  const [avisos, setAvisos] = useState([]);
   const [msg, setMsg] = useState(null);
   const inputRef = useRef(null);
 
@@ -80,8 +83,9 @@ export default function Libre({ saldo, rol, inicial, onEnviada }) {
     setGenerandoPrompt(true);
     setMsg(null);
     try {
-      const r = await autoPrompt({ imagen: { media_id: imagen.media_id, url: imagen.url }, modelo: modelo.id, tipo });
+      const r = await autoPrompt({ imagen: { media_id: imagen.media_id, url: imagen.url }, modelo: modelo.id, tipo, duracion: duracion ? Number(duracion) : null, aspecto, opciones, producto, instrucciones: indicaciones });
       setPrompt(r.prompt || '');
+      setAvisos(r.avisos || []);
     } catch (e) { setMsg({ error: e.message }); } finally { setGenerandoPrompt(false); }
   };
 
@@ -161,6 +165,18 @@ export default function Libre({ saldo, rol, inicial, onEnviada }) {
               <button className="mini-btn" onClick={generarPrompt} disabled={generandoPrompt}>{generandoPrompt ? 'Generando…' : prompt ? '↻ Regenerar' : 'Generar prompt'}</button>
             )}
           </div>
+          {modoPrompt === 'auto' && (
+            <div className="lb-auto">
+              <input className="ms-input" maxLength={120} placeholder="Producto (opcional): Breaker Siemens 2P 40A" value={producto} onChange={(e) => setProducto(e.target.value)} />
+              <input className="ms-input" maxLength={1000} placeholder="Indicaciones (opcional): fondo de obra, destacar el amperaje, con mano…" value={indicaciones} onChange={(e) => setIndicaciones(e.target.value)} />
+            </div>
+          )}
+          {avisos.length > 0 && (
+            <div className="lb-avisos">
+              <strong>Revisa antes de generar:</strong>
+              <ul>{avisos.map((a, i) => <li key={i}>{a}</li>)}</ul>
+            </div>
+          )}
           <textarea className="ms-textarea lb-textarea" maxLength={5000} value={prompt} onChange={(e) => setPrompt(e.target.value)}
             placeholder={modoPrompt === 'auto' ? 'El prompt se generará desde la imagen; podrás revisarlo y editarlo aquí.' : tipo === 'video'
               ? 'Ej.: breaker Siemens girando lento sobre fondo negro, luz de estudio, cámara que se acerca…'

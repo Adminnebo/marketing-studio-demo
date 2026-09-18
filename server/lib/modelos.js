@@ -41,7 +41,7 @@ const sinMarca = (t) => String(t || '').replace(/higgsfield\s*/gi, '').trim();
 
 // Parametros que se muestran (el resto se deja con el valor por defecto del modelo).
 const PARAMS = {
-  resolution: 'Resolución', quality: 'Calidad', mode: 'Modo', variant: 'Variante', genre: 'Género',
+  resolution: 'Resolución', quality: 'Calidad', mode: 'Modo', variant: 'Variante',
   generate_audio: 'Audio', sound: 'Audio', slow_motion: 'Cámara lenta', speedramp: 'Velocidad',
   bitrate_mode: 'Bitrate', enable_thinking: 'Razonamiento', thinking: 'Razonamiento', model_type: 'Tipo',
   background: 'Fondo', remove_bg: 'Quitar fondo',
