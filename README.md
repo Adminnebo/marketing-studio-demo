@@ -133,5 +133,6 @@ borrar.
 - **Pago en línea de recargas** (Stripe/Whop o solicitud + aprobación): en pausa por decisión del cliente.
 - **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
-- **Primera prueba real de login** con la cuenta Supabase de un super_admin y alta del primer usuario de JH (con saldo).
+- **Primer usuario de JH**: cargar saldo en la billetera (recarga manual) y darle acceso desde Super Admin.
+- **Cuenta de prueba** `prueba.marketing@neboaiconsulting.com` (agente sin permisos en los otros paneles, rol Usuario en Marketing): borrarla o quitarle el acceso cuando no haga falta.
 - La clave de OpenAI es la misma del menú digital (servicio `generador`): si se rota allá, hay que actualizarla acá.
