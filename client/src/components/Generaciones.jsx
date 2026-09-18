@@ -57,13 +57,15 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
           {g.creditos_estimados != null && (g.precio_usd == null || rol === 'super_admin') && ` · ≈${Number(g.creditos_estimados).toLocaleString('es-MX', { maximumFractionDigits: 1 })} cr`}
         </div>
         <div className="ms-gen-meta">{g.creado_por}</div>
-        {g.entrada?.args?.prompt && <div className="ms-gen-prompt" title={g.entrada.args.prompt}>“{g.entrada.args.prompt}”</div>}
+        {(g.entrada?.args?.prompt || g.entrada?.params?.prompt) && (
+          <div className="ms-gen-prompt" title={g.entrada.args?.prompt || g.entrada.params.prompt}>“{g.entrada.args?.prompt || g.entrada.params.prompt}”</div>
+        )}
         {g.error && <div className="ms-gen-err">{g.error}</div>}
         {errBaja && <div className="ms-gen-err">{errBaja}</div>}
         <div className="ms-gen-actions">
           {r && <button className="mini-btn" onClick={bajar} disabled={bajando}>{bajando ? 'Descargando…' : '⬇ Descargar'}</button>}
           {r && onPublicar && <button className="mini-btn" onClick={() => onPublicar(g, Math.min(i, ok.length - 1))}>📣 Publicar</button>}
-          {g.entrada?.preset && <button className="mini-btn" onClick={() => onRepetir(g)}>↻ Usar de nuevo</button>}
+          {(g.entrada?.preset || g.entrada?.libre) && <button className="mini-btn" onClick={() => onRepetir(g)}>↻ Usar de nuevo</button>}
         </div>
       </div>
     </div>

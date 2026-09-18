@@ -13,6 +13,7 @@ const auth = require('./lib/auth');
 const ajustes = require('./lib/config');
 const catalogo = require('./lib/catalogo');
 const billetera = require('./lib/billetera');
+const modelos = require('./lib/modelos');
 
 const reglasP = import('../shared/reglas.mjs');
 const PORT = process.env.PORT || 3002;
@@ -160,6 +161,48 @@ app.post('/api/medios', express.raw({ type: Object.keys(EXT), limit: '20mb' }), 
 const COLS = `id, creado_por, estado, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
   precio_usd, resultados, error, creado, enviado, terminado`;
 
+// Encola una generacion: tope diario, precio y cobro a la billetera de JH (los
+// super_admin no pagan). Devuelve { g } o { status, error } para responder.
+async function encolar(req, { presetId, presetNombre, presetTipo, portada, entrada, creditos }) {
+  const a = await ajustes.leer();
+  if (a.limite_diario_creditos > 0 && req.user.rol !== 'super_admin') {
+    const { rows: [u] } = await pool.query(
+      `SELECT COALESCE(SUM(creditos_estimados), 0) AS usados FROM generaciones
+       WHERE user_id = $1 AND estado <> 'fallido'
+         AND (creado AT TIME ZONE 'America/Santo_Domingo')::date = (now() AT TIME ZONE 'America/Santo_Domingo')::date`,
+      [req.user.id]
+    );
+    if (Number(u.usados) + (Number(creditos) || 0) > a.limite_diario_creditos) {
+      return { status: 429, error: { error: 'Llegaste al límite de uso de hoy. Pídele a un super admin que lo amplíe.' } };
+    }
+  }
+  const pr = ajustes.precioDe(a, presetTipo, creditos);
+  const cobra = req.user.rol !== 'super_admin';
+  if (cobra && !(Number(creditos) > 0)) {
+    return { status: 400, error: { error: 'No se pudo calcular el costo. Espera a que cargue e intenta de nuevo.' } };
+  }
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    const { rows: [g] } = await cli.query(
+      `INSERT INTO generaciones (creado_por, user_id, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
+         usd_por_credito, margen_pct, costo_usd, precio_usd)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${COLS}`,
+      [req.user.email, req.user.id, presetId, presetNombre, presetTipo, portada, entrada, creditos,
+        a.usd_por_credito || null, pr.margen, pr.costo, pr.precio]
+    );
+    if (cobra) await billetera.cobrar(cli, { generacionId: g.id, creditos: Number(creditos), usd: pr.precio, por: req.user.email });
+    await cli.query('COMMIT');
+    return { g };
+  } catch (e) {
+    await cli.query('ROLLBACK').catch(() => {});
+    if (e.saldo) return { status: 402, error: { error: e.message + ' Recarga créditos para continuar.', sinSaldo: true } };
+    throw e;
+  } finally {
+    cli.release();
+  }
+}
+
 app.post('/api/generaciones', ruta(async (req, res) => {
   const { entradasDe, faltantes, formatoDe, creditosDe } = await reglasP;
   const b = req.body || {};
@@ -206,46 +249,12 @@ app.post('/api/generaciones', ruta(async (req, res) => {
   let creditos = null;
   try { creditos = creditosDe(preset.type, await costos(), Number(b.duracion)); } catch { /* estimado opcional */ }
 
-  // Tope diario de creditos por usuario (lo fija el super_admin; a el no le aplica).
-  const a = await ajustes.leer();
-  if (a.limite_diario_creditos > 0 && req.user.rol !== 'super_admin') {
-    const { rows: [u] } = await pool.query(
-      `SELECT COALESCE(SUM(creditos_estimados), 0) AS usados FROM generaciones
-       WHERE user_id = $1 AND estado <> 'fallido'
-         AND (creado AT TIME ZONE 'America/Santo_Domingo')::date = (now() AT TIME ZONE 'America/Santo_Domingo')::date`,
-      [req.user.id]
-    );
-    if (Number(u.usados) + (Number(creditos) || 0) > a.limite_diario_creditos) {
-      return res.status(429).json({ error: 'Llegaste al límite de uso de hoy. Pídele a un super admin que lo amplíe.' });
-    }
-  }
-  const pr = ajustes.precioDe(a, preset.type, creditos);
-  // Los usuarios pagan con la billetera de JH; el super_admin (Nebo) no la toca.
-  const cobra = req.user.rol !== 'super_admin';
-  if (cobra && !(Number(creditos) > 0)) {
-    return res.status(400).json({ error: 'No se pudo calcular el costo de esta plantilla. Espera a que cargue la vista previa e intenta de nuevo.' });
-  }
-
-  const cli = await pool.connect();
-  let g;
-  try {
-    await cli.query('BEGIN');
-    ({ rows: [g] } = await cli.query(
-      `INSERT INTO generaciones (creado_por, user_id, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-         usd_por_credito, margen_pct, costo_usd, precio_usd)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${COLS}`,
-      [req.user.email, req.user.id, preset.id, preset.name || null, preset.type, preset.cover_image || null,
-        { args: entrada, ...extra }, creditos, a.usd_por_credito || null, pr.margen, pr.costo, pr.precio]
-    ));
-    if (cobra) await billetera.cobrar(cli, { generacionId: g.id, creditos: Number(creditos), usd: pr.precio, por: req.user.email });
-    await cli.query('COMMIT');
-  } catch (e) {
-    await cli.query('ROLLBACK').catch(() => {});
-    if (e.saldo) return res.status(402).json({ error: e.message + ' Recarga créditos para continuar.', sinSaldo: true });
-    throw e;
-  } finally {
-    cli.release();
-  }
+  const r = await encolar(req, {
+    presetId: preset.id, presetNombre: preset.name || null, presetTipo: preset.type, portada: preset.cover_image || null,
+    entrada: { args: entrada, ...extra }, creditos,
+  });
+  if (r.error) return res.status(r.status).json(r.error);
+  const g = r.g;
   res.status(201).json(g);
 }));
 
@@ -281,6 +290,54 @@ app.get('/api/generaciones/:id', ruta(async (req, res) => {
   const { rows: [g] } = await pool.query(`SELECT ${COLS} FROM generaciones WHERE id = $1`, [Number(req.params.id) || 0]);
   if (!g) return res.status(404).json({ error: 'No existe.' });
   res.json(g);
+}));
+
+// ── Generacion libre (cualquier modelo de video o imagen) ──
+app.get('/api/modelos', ruta(async (req, res) => res.json({ modelos: await modelos.lista() })));
+
+// Lee y valida lo que manda el formulario; devuelve { modelo, armado } o { error }.
+async function leerLibre(b, { conPrompt = true } = {}) {
+  const modelo = await modelos.obtener(String(b.modelo || ''));
+  if (!modelo) return { error: 'Elige un modelo.' };
+  const prompt = String(b.prompt || '').trim().slice(0, 5000);
+  if (conPrompt && !prompt) return { error: 'Escribe qué quieres generar.' };
+  const mediaId = b.imagen?.media_id ? String(b.imagen.media_id) : null;
+  if (mediaId && !modelo.aceptaImagen) return { error: `${modelo.nombre} no acepta imagen de referencia.` };
+  if (!mediaId && modelo.pideImagen) return { error: `${modelo.nombre} necesita una imagen.` };
+  return { modelo, armado: modelos.armar(modelo, { prompt: prompt || 'preview', aspecto: b.aspecto, duracion: b.duracion, opciones: b.opciones || {}, mediaId }) };
+}
+
+// Costo en creditos sin generar nada (y el precio para JH si hay costo configurado).
+app.post('/api/libre/costo', ruta(async (req, res) => {
+  const l = await leerLibre(req.body || {}, { conPrompt: false });
+  if (l.error) return res.status(400).json({ error: l.error });
+  const creditos = await modelos.costo(l.armado);
+  const pr = ajustes.precioDe(await ajustes.leer(), null, creditos);
+  res.json({ creditos, precio: pr.precio });
+}));
+
+// Autogenerar el prompt desde la imagen: las instrucciones las define el cliente (pendiente).
+app.post('/api/libre/autoprompt', ruta(async (req, res) => {
+  res.status(501).json({ error: 'El prompt automático todavía no está configurado.' });
+}));
+
+app.post('/api/libre', ruta(async (req, res) => {
+  const b = req.body || {};
+  const l = await leerLibre(b);
+  if (l.error) return res.status(400).json({ error: l.error });
+  const creditos = await modelos.costo(l.armado); // el costo lo decide el servidor, no el navegador
+  const r = await encolar(req, {
+    presetId: l.modelo.id, presetNombre: l.modelo.nombre, presetTipo: l.modelo.tipo === 'video' ? 'libre_video' : 'libre_imagen',
+    portada: b.imagen?.url ? { url: b.imagen.url } : null,
+    entrada: {
+      tool: l.armado.tool, params: l.armado.params,
+      libre: { modelo: l.modelo.id, aspecto: b.aspecto || null, duracion: b.duracion || null, opciones: b.opciones || {}, promptAuto: !!b.promptAuto },
+      producto: b.imagen?.media_id ? { media_id: b.imagen.media_id, url: b.imagen.url || null, nombre: b.imagen.nombre || null } : null,
+    },
+    creditos,
+  });
+  if (r.error) return res.status(r.status).json(r.error);
+  res.status(201).json(r.g);
 }));
 
 // Billetera de JH: saldo, precio por credito, paquetes con ganancia y movimientos.

@@ -13,6 +13,8 @@ export const TIPOS = {
   poster: 'Póster',
   ads: 'Anuncio',
   marketplace: 'Marketplace',
+  libre_video: 'Video (modelo libre)',
+  libre_imagen: 'Imagen (modelo libre)',
 };
 
 export const CATEGORIAS_ES = {

@@ -51,6 +51,15 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   usuario, si los usuarios ven el precio, consumo del mes (costo, precio y ganancia por usuario y por tipo) y los
   accesos. Cada generación guarda la foto de costo/precio al crearse.
 
+## Generación libre (pestaña Crear)
+
+- Arriba de la galería: cualquier modelo de video o imagen del generador (hoy 26 de video y 24 de imagen; Cinema Studio
+  3.0, Seedance 2.5/2.0, Kling 3.0, Veo 3.1, GPT Image 2.5, Nano Banana Pro…). El catálogo se lee con `models_explore`
+  (cache 1 h) y el formulario se arma solo: formato, duración, resolución/calidad, audio, etc. (`server/lib/modelos.js`).
+- Prompt manual o **autogenerado desde la imagen** (el botón existe; las instrucciones las define el cliente).
+- El costo en créditos se pide con `get_cost` (no genera nada) y se muestra con el precio para JH; al generar, el servidor
+  lo vuelve a calcular y cobra la billetera. El worker envía con `generate_video`/`generate_image` y sigue con `job_status`.
+
 ## Créditos, precios y billetera de JH
 
 - **Costo por crédito automático**: cada 6 h el worker lee los paquetes de recarga del generador y toma el **más caro por
@@ -96,8 +105,13 @@ Proyecto propio, **Marketing Studio**, con tres servicios que salen de este mism
 Variables: ver `.env.example`. `HF_REFRESH_TOKEN` solo siembra la base de datos la primera vez; después se puede
 borrar.
 
-## Pendiente
+## Pendiente (detalles y correcciones finales)
 
-- Dominio propio (hoy la URL de Railway está fija en el conmutador de los 3 paneles).
-- Botón para volver a autorizar Higgsfield desde el panel si se pierde el token.
+- **Prompt automático desde la imagen**: falta que el cliente pase las instrucciones (el endpoint responde 501).
+- **Pago en línea de recargas** (Stripe/Whop o solicitud + aprobación): en pausa por decisión del cliente.
+- **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
+- **Botón "reconectar generador"** si se pierde el token OAuth.
+- **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
+- **Primera prueba real de login** con la cuenta Supabase de un super_admin y alta del primer usuario de JH (con saldo).
+- **Reclasificar plantillas** cuando aparezcan nuevas (entran con encaje 5).
 - Webhooks de Zernio (hoy el worker consulta el estado cada ~15 s).

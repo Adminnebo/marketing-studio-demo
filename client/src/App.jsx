@@ -7,12 +7,13 @@ import Generaciones, { EN_CURSO } from './components/Generaciones';
 import Redes from './components/Redes';
 import SuperAdmin from './components/SuperAdmin';
 import Creditos from './components/Creditos';
+import Libre from './components/Libre';
 import { cred } from './precio';
 import Publicar from './components/Publicar';
 import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
 
 const TABS = [
-  { id: 'plantillas', label: 'Plantillas', icon: '🎨' },
+  { id: 'plantillas', label: 'Crear', icon: '🎨' },
   { id: 'generaciones', label: 'Generaciones', icon: '🗂️' },
   { id: 'creditos', label: 'Créditos', icon: '💳' },
   { id: 'redes', label: 'Redes', icon: '📣', min: 'admin' },
@@ -69,6 +70,7 @@ export default function App() {
   const [costos, setCostos] = useState(null);
   const [errorCat, setErrorCat] = useState(null);
   const [abierto, setAbierto] = useState(null); // { preset, categoria, inicial }
+  const [libre, setLibre] = useState({ n: 0, inicial: null }); // 'Usar de nuevo' de una generacion libre
   const [gens, setGens] = useState({ items: [], cargando: false, error: null, siguiente: null });
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
   const gensRef = useRef(gens);
@@ -179,7 +181,19 @@ export default function App() {
   const enCurso = gens.items.filter((g) => EN_CURSO.has(g.estado)).length;
   const desconectado = estado && !estado.conectado;
 
-  const repetir = (g) => setAbierto({
+  const repetir = (g) => (g.entrada?.libre ? (() => {
+    const l = g.entrada.libre;
+    setLibre((x) => ({
+      n: x.n + 1,
+      inicial: {
+        tipo: g.preset_tipo === 'libre_imagen' ? 'imagen' : 'video', modelo: l.modelo, prompt: g.entrada.params?.prompt || '',
+        aspecto: l.aspecto, duracion: l.duracion ? String(l.duracion) : '', opciones: l.opciones || {},
+        imagen: g.entrada.producto?.media_id ? { media_id: g.entrada.producto.media_id, url: g.entrada.producto.url, nombre: g.entrada.producto.nombre || 'Imagen' } : null,
+      },
+    }));
+    setTab('plantillas');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  })() : setAbierto({
     preset: g.entrada.preset,
     categoria: g.entrada.categoria || 'all',
     inicial: {
@@ -188,7 +202,7 @@ export default function App() {
       prompt: g.entrada.args.prompt || '',
       url: g.entrada.args.brand_url || '',
     },
-  });
+  }));
 
   return (
     <div className="app">
@@ -211,11 +225,11 @@ export default function App() {
             </span>
           )}
           <button className="badge cr-badge" onClick={() => setTab('creditos')} title="Saldo de créditos de JH">
-            💳 {cred(me.saldo)} créditos
+            💳 Saldo: {cred(me.saldo)} créditos
           </button>
           {me.rol === 'super_admin' && saldo && (
             <span className="badge" title={`Cuenta del proveedor · plan ${saldo.subscription_plan_type} · solo lo ven los super admin`}>
-              🪙 {Number(saldo.credits).toLocaleString('es-MX', { maximumFractionDigits: 1 })} créditos
+              🪙 Cuenta del generador: {Number(saldo.credits).toLocaleString('es-MX', { maximumFractionDigits: 1 })}
             </span>
           )}
           <button className="btn secondary icon-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'} aria-label="Cambiar tema">
@@ -252,7 +266,13 @@ export default function App() {
         ) : !categorias ? (
           <div className="loading"><div className="spinner" />Cargando catálogo…</div>
         ) : (
-          <Plantillas categorias={categorias} onElegir={(preset, categoria) => setAbierto({ preset, categoria })} />
+          <>
+            <div className="section-title">Generación libre</div>
+            <Libre key={libre.n} inicial={libre.inicial} saldo={me.saldo} rol={me.rol}
+              onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }} />
+            <div className="section-title">Plantillas de marketing</div>
+            <Plantillas categorias={categorias} onElegir={(preset, categoria) => setAbierto({ preset, categoria })} />
+          </>
         )
       )}
 

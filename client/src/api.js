@@ -127,3 +127,8 @@ export const fetchConsumo = (mes) => api('/superadmin/consumo' + (mes ? `?mes=${
 export const fetchCreditos = () => api('/creditos');
 export const recargaManual = (datos) => api('/superadmin/recargas', { method: 'POST', body: JSON.stringify(datos) });
 export const actualizarCosto = () => api('/superadmin/costo/actualizar', { method: 'POST' });
+// ── Generacion libre ──
+export const fetchModelos = () => api('/modelos');
+export const costoLibre = (datos) => api('/libre/costo', { method: 'POST', body: JSON.stringify(datos) });
+export const crearLibre = (datos) => api('/libre', { method: 'POST', body: JSON.stringify(datos) });
+export const autoPrompt = (datos) => api('/libre/autoprompt', { method: 'POST', body: JSON.stringify(datos) });

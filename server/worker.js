@@ -29,6 +29,14 @@ const TERMINADOS_MAL = new Set(['failed', 'error', 'nsfw', 'canceled', 'cancelle
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 async function enviar(g) {
+  // Generacion libre: generate_video / generate_image con los params ya armados.
+  if (g.entrada.tool) {
+    const r = await hf.llamar(g.entrada.tool, { params: { ...g.entrada.params, use_unlim: false } }, { timeoutMs: 120000 });
+    const ids = [...(r.results || []), ...(r.jobs || [])].map((x) => x?.id).concat(r.job_ids || [])
+      .filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+    if (!ids.length) throw new Error('create sin job_ids: ' + JSON.stringify(r).slice(0, 300));
+    return [...new Set(ids)];
+  }
   const args = { ...g.entrada.args };
   // product_shots_people con avatar: el avatar va como imagen importada.
   const av = g.entrada.avatar;
@@ -88,14 +96,23 @@ async function tomarPendientes() {
 
 async function revisarEnProceso() {
   const { rows } = await pool.query(
-    `SELECT id, hf_job_ids, enviado, resultados FROM generaciones
+    `SELECT id, hf_job_ids, enviado, resultados, (entrada ? 'tool') AS libre FROM generaciones
      WHERE estado = 'en_proceso' AND (revisado IS NULL OR revisado < now() - ($1 || ' milliseconds')::interval)
      ORDER BY revisado NULLS FIRST LIMIT 8`, [REVISAR_CADA_MS]
   );
   if (!rows.length) return;
-  const ids = [...new Set(rows.flatMap((g) => g.hf_job_ids))].slice(0, 8);
-  const d = await hf.llamar('marketing_studio_v2_status', { job_ids: ids });
-  const porId = new Map((d.jobs || []).map((j) => [j.id, j]));
+  // Plantillas: marketing_studio_v2_status en lote. Libres: job_status por job.
+  const ids = [...new Set(rows.filter((g) => !g.libre).flatMap((g) => g.hf_job_ids))].slice(0, 8);
+  const porId = new Map();
+  if (ids.length) {
+    const d = await hf.llamar('marketing_studio_v2_status', { job_ids: ids });
+    for (const j of d.jobs || []) porId.set(j.id, j);
+  }
+  for (const id of rows.filter((g) => g.libre).flatMap((g) => g.hf_job_ids)) {
+    const d = await hf.llamar('job_status', { jobId: id });
+    const gen = d.generation || d;
+    porId.set(id, { id, status: gen.status, result_url: gen.results?.rawUrl || gen.results?.url || null, min_result_url: gen.results?.minUrl || null, job_set_type: gen.type || null });
+  }
 
   for (const g of rows) {
     const jobs = g.hf_job_ids.map((id) => porId.get(id)).filter(Boolean);

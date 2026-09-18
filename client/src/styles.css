@@ -477,3 +477,18 @@ tbody tr:hover { background: var(--surface-2); }
 .pill.mov-recarga, .pill.mov-reembolso { color: var(--good-ink); }
 .pill.mov-consumo { color: var(--series-1); }
 .pill.mov-ajuste { color: var(--warning); }
+
+/* ════════════ Generación libre ════════════ */
+.lb { display: flex; flex-direction: column; gap: 14px; }
+.lb-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lb-modelo { min-width: 260px; }
+.lb-desc { flex: 1; min-width: 200px; }
+.lb-cuerpo { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 14px; }
+.lb-img .ms-tile { min-height: 170px; }
+.lb-img .ms-tile.filled img { height: 170px; }
+.lb-img .ms-tile:disabled { opacity: 0.5; cursor: not-allowed; }
+.lb-textarea { min-height: 128px; }
+.lb-opciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.lb-opciones .search { min-width: 0; width: 100%; }
+.lb-opciones input[type=range] { width: 100%; accent-color: var(--series-1); margin-top: 8px; }
+@media (max-width: 640px) { .lb-cuerpo { grid-template-columns: 1fr; } .lb-modelo { min-width: 0; width: 100%; } }
