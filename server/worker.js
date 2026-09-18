@@ -13,6 +13,9 @@
 require('dotenv').config();
 const { pool, migrar } = require('./lib/db');
 const hf = require('./lib/higgsfield');
+const zernio = require('./lib/zernio');
+
+const redesP = import('../shared/redes.mjs');
 
 const POLL_MS = Number(process.env.WORKER_POLL_MS) || 4000;
 const REVISAR_CADA_MS = 8000;            // cada cuanto consultar un job en proceso
@@ -113,6 +116,39 @@ async function liberarAtascadas() {
   for (const r of rows) log(`#${r.id} atascada en 'enviando', marcada fallida`);
 }
 
+// Publicaciones en redes: sigue el estado en Zernio hasta que salgan (o fallen).
+// Las programadas solo se consultan desde su hora; las en curso, cada ~15 s.
+async function revisarPublicaciones() {
+  if (!zernio.configurado()) return;
+  const { DESDE_ZERNIO, REDES } = await redesP;
+  const { rows } = await pool.query(
+    `SELECT id, zernio_post_id, estado FROM publicaciones
+     WHERE zernio_post_id IS NOT NULL AND estado IN ('programada', 'publicando')
+       AND (estado = 'publicando' OR programada_para IS NULL OR programada_para < now() + interval '1 minute')
+       AND (revisado IS NULL OR revisado < now() - interval '15 seconds')
+     ORDER BY revisado NULLS FIRST LIMIT 10`
+  );
+  for (const p of rows) {
+    try {
+      const { post } = await zernio.leerPost(p.zernio_post_id);
+      const estado = DESDE_ZERNIO[post?.status] || p.estado;
+      const fallos = (post?.platforms || []).filter((x) => x.status === 'failed');
+      const error = fallos.length ? 'No salió en: ' + fallos.map((x) => REDES[x.platform]?.nombre || x.platform).join(', ') + '.' : null;
+      await pool.query(
+        `UPDATE publicaciones SET estado = $2, plataformas = $3, error = $4, error_detalle = $5, revisado = now(),
+           actualizado = CASE WHEN estado <> $2 THEN now() ELSE actualizado END WHERE id = $1`,
+        [p.id, estado, JSON.stringify(post?.platforms || []), error,
+          fallos.length ? fallos.map((x) => `${x.platform}: ${x.errorMessage || x.errorCategory || 'error'}`).join(' | ').slice(0, 1000) : null]
+      );
+      if (estado !== p.estado) log(`publicacion #${p.id}: ${p.estado} -> ${estado}`);
+    } catch (e) {
+      await pool.query('UPDATE publicaciones SET revisado = now() WHERE id = $1', [p.id]);
+      if (e.status === 404) await pool.query(`UPDATE publicaciones SET estado = 'cancelada' WHERE id = $1`, [p.id]);
+      log(`publicacion #${p.id}: no se pudo leer (${e.message})`);
+    }
+  }
+}
+
 let ultimoAviso = 0;
 async function ciclo() {
   try {
@@ -121,8 +157,14 @@ async function ciclo() {
     await tomarPendientes();
     await revisarEnProceso();
   } catch (e) {
-    // No inundar los logs si Higgsfield esta desconectado.
+    // No inundar los logs si el generador esta desconectado.
     if (Date.now() - ultimoAviso > 60e3) { log('Error en el ciclo:', e.message); ultimoAviso = Date.now(); }
+  }
+  // Aparte: una caida del generador no frena el seguimiento de publicaciones.
+  try {
+    await revisarPublicaciones();
+  } catch (e) {
+    log('Error revisando publicaciones:', e.message);
   }
 }
 
@@ -142,4 +184,4 @@ for (const s of ['SIGTERM', 'SIGINT']) process.on(s, () => { parar = true; });
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { ciclo, tomarPendientes, revisarEnProceso, liberarAtascadas };
+module.exports = { ciclo, tomarPendientes, revisarEnProceso, liberarAtascadas, revisarPublicaciones };

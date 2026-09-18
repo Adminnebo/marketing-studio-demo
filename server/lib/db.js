@@ -46,6 +46,30 @@ const MIGRACIONES = [
    )`,
   // error = mensaje para el usuario (sin nombres del proveedor); error_detalle = tecnico, solo logs/admin.
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS error_detalle TEXT`,
+  `CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT NOT NULL)`,
+  // Publicaciones en redes (via Zernio). request_id hace idempotente el create.
+  `CREATE TABLE IF NOT EXISTS publicaciones (
+     id BIGSERIAL PRIMARY KEY,
+     request_id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+     generacion_id BIGINT NOT NULL REFERENCES generaciones(id),
+     indice INT NOT NULL DEFAULT 0,
+     creado_por TEXT NOT NULL,
+     texto TEXT NOT NULL DEFAULT '',
+     medio JSONB NOT NULL,
+     cuentas JSONB NOT NULL,
+     opciones JSONB,
+     programada_para TIMESTAMPTZ,
+     zona TEXT,
+     estado TEXT NOT NULL DEFAULT 'enviando',
+     zernio_post_id TEXT,
+     plataformas JSONB,
+     error TEXT,
+     error_detalle TEXT,
+     creado TIMESTAMPTZ NOT NULL DEFAULT now(),
+     actualizado TIMESTAMPTZ NOT NULL DEFAULT now(),
+     revisado TIMESTAMPTZ
+   )`,
+  `CREATE INDEX IF NOT EXISTS publicaciones_estado_idx ON publicaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,
 ];

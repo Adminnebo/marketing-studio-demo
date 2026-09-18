@@ -33,7 +33,7 @@ if (!URL_BD) {
   ).then((r) => r.rows[0].id);
   const fila = (id) => pool.query('SELECT * FROM generaciones WHERE id = $1', [id]).then((r) => r.rows[0]);
 
-  test.before(async () => { await migrar(); await pool.query('TRUNCATE generaciones'); });
+  test.before(async () => { await migrar(); await pool.query('TRUNCATE publicaciones, generaciones'); });
   test.after(() => pool.end());
 
   test('pendiente -> en_proceso -> completado', async () => {

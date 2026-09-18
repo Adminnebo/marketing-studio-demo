@@ -12,7 +12,7 @@ const FILTROS = [['', 'Todas'], ['curso', 'En curso'], ['completado', 'Listas'],
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
 
-function Tarjeta({ g, onRepetir }) {
+function Tarjeta({ g, onRepetir, onPublicar }) {
   const ok = (g.resultados || []).filter((r) => r.url);
   const [i, setI] = useState(0);
   const r = ok[Math.min(i, ok.length - 1)];
@@ -60,6 +60,7 @@ function Tarjeta({ g, onRepetir }) {
         {errBaja && <div className="ms-gen-err">{errBaja}</div>}
         <div className="ms-gen-actions">
           {r && <button className="mini-btn" onClick={bajar} disabled={bajando}>{bajando ? 'Descargando…' : '⬇ Descargar'}</button>}
+          {r && onPublicar && <button className="mini-btn" onClick={() => onPublicar(g, Math.min(i, ok.length - 1))}>📣 Publicar</button>}
           {g.entrada?.preset && <button className="mini-btn" onClick={() => onRepetir(g)}>↻ Usar de nuevo</button>}
         </div>
       </div>
@@ -67,7 +68,7 @@ function Tarjeta({ g, onRepetir }) {
   );
 }
 
-export default function Generaciones({ items, cargando, error, hayMas, onMas, onRepetir }) {
+export default function Generaciones({ items, cargando, error, hayMas, onMas, onRepetir, onPublicar }) {
   const [filtro, setFiltro] = useState('');
   const visibles = items.filter((g) => !filtro || (filtro === 'curso' ? EN_CURSO.has(g.estado) : g.estado === filtro));
   return (
@@ -89,7 +90,7 @@ export default function Generaciones({ items, cargando, error, hayMas, onMas, on
         </div>
       ) : (
         <div className="ms-gens">
-          {visibles.map((g) => <Tarjeta key={g.id} g={g} onRepetir={onRepetir} />)}
+          {visibles.map((g) => <Tarjeta key={g.id} g={g} onRepetir={onRepetir} onPublicar={onPublicar} />)}
         </div>
       )}
       {hayMas && (

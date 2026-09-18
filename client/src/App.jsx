@@ -1,14 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { sesion, salir, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones } from './api';
+import { sesion, salir, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
 import Login from './components/Login';
 import Plantillas from './components/Plantillas';
 import Recrear from './components/Recrear';
 import Generaciones, { EN_CURSO } from './components/Generaciones';
+import Redes from './components/Redes';
+import Publicar from './components/Publicar';
+import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
 
 const TABS = [
   { id: 'plantillas', label: 'Plantillas', icon: '🎨' },
   { id: 'generaciones', label: 'Generaciones', icon: '🗂️' },
+  { id: 'redes', label: 'Redes', icon: '📣' },
 ];
+
+// Vuelta del flujo de conexion de una red: ?redes=1&connected=instagram&username=x  (o &error=...)
+function leerVueltaRedes() {
+  const q = new URLSearchParams(window.location.search);
+  if (!q.has('redes')) return null;
+  window.history.replaceState(null, '', window.location.pathname);
+  const red = REDES[q.get('connected') || q.get('platform')]?.nombre || q.get('connected') || q.get('platform') || 'la red';
+  if (q.get('error')) return { ok: false, texto: `No se pudo conectar ${red}. Intenta de nuevo.` };
+  if (q.get('connected')) return { ok: true, texto: `✅ ${red} conectado${q.get('username') ? ` (@${q.get('username')})` : ''}.` };
+  return { ok: true, texto: 'Conexión terminada.' };
+}
 
 // Conmutador entre plataformas (mismo que en los otros paneles, con Marketing).
 const PLATS = [
@@ -30,7 +45,13 @@ function useSesion() {
 
 export default function App() {
   const s = useSesion();
-  const [tab, setTab] = useState('plantillas');
+  const [avisoRedes] = useState(leerVueltaRedes);
+  const [tab, setTab] = useState(() => (avisoRedes ? 'redes' : 'plantillas'));
+  const [redesEstado, setRedesEstado] = useState(null);
+  const [cuentas, setCuentas] = useState(null);
+  const [errorCuentas, setErrorCuentas] = useState(null);
+  const [publicaciones, setPublicaciones] = useState(null);
+  const [publicando, setPublicando] = useState(null); // { g, indice }
   const [me, setMe] = useState(null);
   const [estado, setEstado] = useState(null);
   const [saldo, setSaldo] = useState(null);
@@ -70,6 +91,16 @@ export default function App() {
     }
   }, []);
 
+  const cargarRedes = useCallback(async () => {
+    try {
+      const e = await fetchRedesEstado();
+      setRedesEstado(e);
+      if (!e.configurado) { setCuentas([]); setPublicaciones([]); return; }
+      fetchCuentas().then((d) => { setCuentas(d.cuentas); setErrorCuentas(null); }).catch((err) => { setCuentas([]); setErrorCuentas(err.message); });
+      fetchPublicaciones().then((d) => setPublicaciones(d.items)).catch(() => setPublicaciones([]));
+    } catch { /* se reintenta al volver a la pestaña */ }
+  }, []);
+
   const masGens = async () => {
     const { siguiente } = gensRef.current;
     if (!siguiente) return;
@@ -90,11 +121,12 @@ export default function App() {
     }).catch(() => {});
     fetchEstado().then(setEstado).catch(() => {});
     cargarCatalogo();
+    cargarRedes();
     setGens((g) => ({ ...g, cargando: true }));
     recargarGens();
     const id = setInterval(() => fetchEstado().then(setEstado).catch(() => {}), 60000);
     return () => clearInterval(id);
-  }, [s, cargarCatalogo, recargarGens]);
+  }, [s, cargarCatalogo, recargarGens, cargarRedes]);
 
   // Mientras haya generaciones en curso, refrescar cada 5 s.
   const hayEnCurso = gens.items.some((g) => EN_CURSO.has(g.estado));
@@ -103,6 +135,14 @@ export default function App() {
     const id = setInterval(recargarGens, 5000);
     return () => clearInterval(id);
   }, [s, hayEnCurso, recargarGens]);
+
+  // Publicaciones en curso: refrescar cada 10 s.
+  const pubEnCurso = (publicaciones || []).some((p) => PUB_EN_CURSO.has(p.estado));
+  useEffect(() => {
+    if (!s || !pubEnCurso) return undefined;
+    const id = setInterval(() => fetchPublicaciones().then((d) => setPublicaciones(d.items)).catch(() => {}), 10000);
+    return () => clearInterval(id);
+  }, [s, pubEnCurso]);
 
   if (!s) return <Login />;
 
@@ -163,9 +203,10 @@ export default function App() {
 
       <nav className="tabs">
         {TABS.map((t) => (
-          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
+          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
             <span className="tab-ic">{t.icon}</span>{t.label}
             {t.id === 'generaciones' && enCurso > 0 && <span className="tab-count">{enCurso}</span>}
+            {t.id === 'redes' && cuentas?.length > 0 && <span className="tab-count">{cuentas.length}</span>}
           </button>
         ))}
       </nav>
@@ -184,7 +225,22 @@ export default function App() {
 
       {tab === 'generaciones' && (
         <Generaciones items={gens.items} cargando={gens.cargando} error={gens.error} hayMas={!!gens.siguiente}
-          onMas={masGens} onRepetir={repetir} />
+          onMas={masGens} onRepetir={repetir} onPublicar={(g, indice) => setPublicando({ g, indice })} />
+      )}
+
+      {tab === 'redes' && (
+        <Redes estado={redesEstado} cuentas={cuentas} errorCuentas={errorCuentas} publicaciones={publicaciones}
+          aviso={avisoRedes} onRecargar={cargarRedes} />
+      )}
+
+      {publicando && (
+        <Publicar
+          generacion={publicando.g}
+          indice={publicando.indice}
+          cuentas={cuentas}
+          onPublicada={() => fetchPublicaciones().then((d) => setPublicaciones(d.items)).catch(() => {})}
+          onCerrar={(ir) => { setPublicando(null); if (ir === 'redes') setTab('redes'); }}
+        />
       )}
 
       {abierto && categorias && (

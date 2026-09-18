@@ -80,3 +80,13 @@ export async function descargar(id, i = 0) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
+
+// ── Redes sociales ──
+export const fetchRedesEstado = () => api('/redes/estado');
+export const fetchCuentas = () => api('/redes/cuentas');
+export const conectarRed = (plataforma) => api('/redes/conectar', { method: 'POST', body: JSON.stringify({ plataforma }) });
+export const desconectarCuenta = (id) => api(`/redes/cuentas/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const fetchInfoTiktok = (id, tipo) => api(`/redes/cuentas/${encodeURIComponent(id)}/tiktok?tipo=${tipo}`);
+export const publicar = (datos) => api('/publicaciones', { method: 'POST', body: JSON.stringify(datos) });
+export const fetchPublicaciones = () => api('/publicaciones');
+export const cancelarPublicacion = (id) => api(`/publicaciones/${id}/cancelar`, { method: 'POST' });

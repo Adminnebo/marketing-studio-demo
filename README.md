@@ -25,6 +25,18 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
 - Las reglas de cada plantilla (qué pide y cuánto cuesta) están en `shared/reglas.mjs`, portadas del widget oficial.
   Las usan el formulario y la validación del servidor.
 
+## Redes sociales (Zernio)
+
+La pestaña **Redes** conecta cuentas (Instagram, Facebook, TikTok, YouTube, LinkedIn, Threads, X) con el OAuth
+alojado por [Zernio](https://docs.zernio.com) y publica o programa cualquier resultado con **📣 Publicar**.
+
+- Todas las cuentas viven en un solo perfil de Zernio (se crea solo, "JH Marketing"; su id queda en la tabla `config`).
+- El panel crea el post (`POST /v1/posts` con `x-request-id` = `publicaciones.request_id`, así un reintento no
+  duplica) y el worker sigue su estado por red hasta `published`/`partial`/`failed`.
+- El medio se pasa por URL pública del resultado. Reglas por red (límites de texto, qué acepta cada una, TikTok con
+  privacidad + consentimiento obligatorio, título de YouTube) en `shared/redes.mjs`.
+- Variables: `ZERNIO_API_KEY` en `panel` y `worker`. Las 2 primeras cuentas conectadas son gratis; X exige tarjeta.
+
 ## Desarrollo local
 
 ```bash
@@ -53,3 +65,4 @@ borrar.
 - Conectarlo a cobranzas como 4ª pestaña del conmutador de plataformas (y más adelante a los otros paneles), con el
   login de Supabase.
 - Botón para volver a autorizar Higgsfield desde el panel si se pierde el token.
+- Webhooks de Zernio (hoy el worker consulta el estado cada ~15 s).

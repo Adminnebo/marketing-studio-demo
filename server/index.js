@@ -214,6 +214,9 @@ app.get('/api/generaciones/:id', ruta(async (req, res) => {
   res.json(g);
 }));
 
+// Redes sociales (conectar cuentas y publicar).
+app.use('/api', require('./redes').router);
+
 app.use('/api', (req, res) => res.status(404).json({ error: 'Ruta no encontrada.' }));
 
 // ── Frontend compilado ──
