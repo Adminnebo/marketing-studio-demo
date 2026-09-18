@@ -272,6 +272,12 @@ export default function App() {
         </div>
       )}
 
+      {me.rolReal === 'super_admin' && saldo && Number(saldo.credits) < 100 && (
+        <div className="banner-off">
+          ⚠️ La cuenta del generador tiene solo <strong>{Number(saldo.credits).toLocaleString('es-MX', { maximumFractionDigits: 1 })} créditos</strong>. Las creaciones que cuesten más se rechazan hasta recargarla en el proveedor (plan o paquete de créditos).
+        </div>
+      )}
+
       {avisoGenerador && <div className={avisoGenerador.ok ? 'ms-ok' : 'banner-off'} style={{ marginBottom: 16 }}>{avisoGenerador.texto}</div>}
 
       {desconectado && (

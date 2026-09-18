@@ -30,6 +30,7 @@ const ENVIANDO_ATASCADO_MIN = 10;
 const TERMINADOS_OK = new Set(['completed', 'succeeded', 'success']);
 const TERMINADOS_MAL = new Set(['failed', 'error', 'nsfw', 'canceled', 'cancelled', 'rejected', 'expired']);
 
+const SIN_CREDITOS = /not_enough_credits|out of credits|insufficient credits|not enough credits/i;
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 async function enviar(g) {
@@ -90,6 +91,8 @@ async function tomarPendientes() {
       // Si el error es de conexion (token), la dejamos pendiente para cuando vuelva.
       const estado = e.desconectado ? 'pendiente' : 'fallido';
       const aviso = e.desconectado ? null
+        : SIN_CREDITOS.test(e.message)
+          ? 'La cuenta del generador se quedó sin créditos. Avísale al administrador; los créditos de esta creación se devolvieron.'
         : /sin job_ids/.test(e.message)
           ? 'El pedido se recibió pero no se confirmó. Avísale al administrador antes de repetir (puede que sí se haya generado).'
           : 'No se pudo enviar la generación. Revisa la imagen y la descripción e intenta de nuevo.';

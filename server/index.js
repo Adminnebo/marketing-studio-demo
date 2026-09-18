@@ -183,7 +183,24 @@ const COLS = `id, creado_por, estado, preset_id, preset_nombre, preset_tipo, por
 
 // Encola una generacion: tope diario, precio y cobro a la billetera de JH (los
 // super_admin no pagan). Devuelve { g } o { status, error } para responder.
+// Creditos de la cuenta del generador (cache 30 s). null si no se pudo leer: no se bloquea por eso.
+let _saldoProv = { v: null, exp: 0 };
+async function saldoProveedor() {
+  if (_saldoProv.exp > Date.now()) return _saldoProv.v;
+  const v = await hf.llamar('balance', {}).then((d) => (d?.credits != null ? Number(d.credits) : null)).catch(() => null);
+  _saldoProv = { v, exp: Date.now() + 30e3 };
+  return v;
+}
+
 async function encolar(req, { presetId, presetNombre, presetTipo, portada, entrada, creditos }) {
+  // Si la cuenta del generador no alcanza, se avisa ya y no se encola (fallaria al enviarse).
+  const prov = await saldoProveedor();
+  if (prov != null && Number(creditos) > 0 && prov < Number(creditos)) {
+    console.log(`[encolar] cuenta del generador sin creditos: ${prov} < ${creditos} (${req.user.email})`);
+    return { status: 503, error: { sinCreditosProveedor: true, error: req.user.rolReal === 'super_admin'
+      ? `La cuenta del generador tiene ${prov} créditos y esto usa ${creditos}. Recarga la cuenta del proveedor.`
+      : 'El servicio de generación se quedó sin créditos por ahora. Avísale al administrador; no se te cobró nada.' } };
+  }
   const a = await ajustes.leer();
   if (a.limite_diario_creditos > 0 && req.user.rolReal !== 'super_admin') {
     const { rows: [u] } = await pool.query(
