@@ -137,6 +137,7 @@ borrar.
 
 ## Pendiente (detalles y correcciones finales)
 
+- **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
 - **Pago en línea de recargas** (Stripe/Whop o solicitud + aprobación): en pausa por decisión del cliente.
 - **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
