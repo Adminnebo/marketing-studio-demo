@@ -15,6 +15,7 @@ const { pool, migrar } = require('./lib/db');
 const hf = require('./lib/higgsfield');
 const zernio = require('./lib/zernio');
 const billetera = require('./lib/billetera');
+const modelos = require('./lib/modelos');
 const costo = require('./lib/costo');
 
 const redesP = import('../shared/redes.mjs');
@@ -31,7 +32,7 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 async function enviar(g) {
   // Generacion libre: generate_video / generate_image con los params ya armados.
   if (g.entrada.tool) {
-    const r = await hf.llamar(g.entrada.tool, { params: { ...g.entrada.params, use_unlim: false } }, { timeoutMs: 120000 });
+    const r = await modelos.llamarGenerador(g.entrada.tool, g.entrada.params);
     const ids = [...(r.results || []), ...(r.jobs || [])].map((x) => x?.id).concat(r.job_ids || [])
       .filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
     if (!ids.length) throw new Error('create sin job_ids: ' + JSON.stringify(r).slice(0, 300));

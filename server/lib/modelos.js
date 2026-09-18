@@ -119,11 +119,33 @@ function armar(modelo, { prompt, aspecto, duracion, opciones = {}, mediaId }) {
   return { tool: modelo.tipo === 'video' ? 'generate_video' : 'generate_image', params };
 }
 
+// Llama a generate_video / generate_image. El generador a veces no genera ni cotiza:
+// devuelve un "notice" pensado para un chat (p. ej. "este prompt se parece al preset X,
+// preguntale al usuario"). Aca el usuario ya eligio generar su prompt tal cual, asi
+// que se declina la recomendacion (declined_preset_id) y se repite, hasta 3 veces.
+async function llamarGenerador(tool, params) {
+  let p = { ...params, use_unlim: false };
+  for (let i = 0; i < 3; i++) {
+    const d = await hf.llamar(tool, { params: p }, { timeoutMs: 120000 });
+    const n = d?.notice;
+    if (!n) return d;
+    // El propio aviso trae como seguir literal: retry_literal_with.declined_preset_id.
+    const presetId = n.data?.retry_literal_with?.declined_preset_id || n.data?.preset?.id;
+    if (n.type === 'preset_recommendation' && presetId && presetId !== p.declined_preset_id) {
+      console.log(`[generador] se declina el preset sugerido ${presetId} (${n.data?.preset?.name || ''})`);
+      p = { ...p, declined_preset_id: presetId };
+      continue;
+    }
+    throw new hf.HiggsfieldError(`${tool}: aviso sin resolver ${n.type}: ${String(n.message || '').slice(0, 300)}`);
+  }
+  throw new hf.HiggsfieldError(`${tool}: el generador insiste con recomendaciones de preset`);
+}
+
 async function costo(armado) {
-  const d = await hf.llamar(armado.tool, { params: { ...armado.params, get_cost: true } });
+  const d = await llamarGenerador(armado.tool, { ...armado.params, get_cost: true });
   const c = d?.cost?.credits_exact ?? d?.cost?.credits;
-  if (c == null) throw new hf.HiggsfieldError('get_cost sin costo: ' + JSON.stringify(d).slice(0, 200));
+  if (c == null) throw new hf.HiggsfieldError('get_cost sin costo: ' + JSON.stringify(d).slice(0, 600));
   return Number(c);
 }
 
-module.exports = { lista, obtener, armar, costo, normalizar };
+module.exports = { lista, obtener, armar, costo, normalizar, llamarGenerador };
