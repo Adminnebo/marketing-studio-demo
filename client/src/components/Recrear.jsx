@@ -3,11 +3,12 @@ import { crearGeneracion, subirImagen } from '../api';
 import { TIPOS, TIPOS_VIDEO, entradasDe, faltantes, formatoDe, creditosDe } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import Avatares from './Avatares';
+import { precioDe, usd } from '../precio';
 
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
 
 // Modal para recrear una plantilla con el producto (y avatar) del usuario.
-export default function Recrear({ preset, categoria, categorias, costos, inicial, onCerrar, onEnviada }) {
+export default function Recrear({ preset, categoria, categorias, costos, precios, rol, inicial, onCerrar, onEnviada }) {
   const { formatSlug, formato } = useMemo(() => formatoDe(preset, categorias, categoria), [preset, categorias, categoria]);
   const req = useMemo(() => entradasDe(preset, { formatSlug, formato }), [preset, formatSlug, formato]);
 
@@ -31,6 +32,7 @@ export default function Recrear({ preset, categoria, categorias, costos, inicial
   }, [enviando, onCerrar]);
 
   const creditos = creditosDe(preset.type, costos, duracion);
+  const pr = precioDe(precios, preset.type, creditos);
   const pendientes = faltantes(req, { producto, avatar, prompt, url });
   const ocupado = enviando || subida?.progreso != null;
 
@@ -180,7 +182,8 @@ export default function Recrear({ preset, categoria, categorias, costos, inicial
               ) : (
                 <div className="ms-submit">
                   <span className="ms-cost">
-                    {creditos != null ? <>Costo aprox.: <strong>{fmtCred(creditos)} créditos</strong></> : TIPOS_VIDEO.has(preset.type) ? 'Costo según duración' : ''}
+                    {pr ? <>Precio aprox.: <strong>{usd(pr.precio)}</strong>{rol === 'super_admin' && ` · ${fmtCred(creditos)} créditos · costo ${usd(pr.costo)} · margen ${pr.margen} %`}</>
+                      : creditos != null ? <>Costo aprox.: <strong>{fmtCred(creditos)} créditos</strong></> : TIPOS_VIDEO.has(preset.type) ? 'Costo según duración' : ''}
                     {pendientes.length > 0 && <><br />{pendientes[0]}</>}
                   </span>
                   <button className="btn" type="submit" disabled={pendientes.length > 0 || ocupado}>

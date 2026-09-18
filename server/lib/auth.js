@@ -1,93 +1,103 @@
 /**
- * Login propio del panel (mientras se prueba, sin tocar el Supabase de
- * produccion). Usuarios en PANEL_USUARIOS = "correo:hash,correo:hash"; el hash
- * es scrypt (npm run hash-password). La sesion es un token firmado con HMAC que
- * el navegador manda en Authorization: Bearer.
+ * Login con el mismo Supabase que los otros paneles (Conversaciones,
+ * Cotizaciones, Cobranzas). El navegador inicia sesion con Supabase y manda el
+ * access_token en Authorization: Bearer; aqui se verifica y se resuelve el rol.
+ *
+ * Acceso a este panel:
+ *  - super_admin (profiles.role): siempre, con todo y la pestaña Super Admin.
+ *  - el resto: solo si un super_admin le dio acceso desde Super Admin (tabla
+ *    accesos de ESTE panel, no profiles.permissions: los editores de usuarios
+ *    de los otros paneles reescriben esa lista y borrarian el acceso).
  */
-const crypto = require('crypto');
+const { createRemoteJWKSet, jwtVerify } = require('jose');
+const { pool } = require('./db');
 
-const SECRETO = process.env.SESSION_SECRET || '';
-const DURACION_MS = 12 * 60 * 60 * 1000;
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-function usuarios() {
-  const m = new Map();
-  for (const par of (process.env.PANEL_USUARIOS || '').split(',')) {
-    const i = par.indexOf(':');
-    if (i > 0) m.set(par.slice(0, i).trim().toLowerCase(), par.slice(i + 1).trim());
+const configurado = () => !!(SUPABASE_URL && ANON_KEY && SERVICE_KEY);
+const JWKS = SUPABASE_URL ? createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`)) : null;
+
+function algDe(token) {
+  try { return JSON.parse(Buffer.from(token.split('.')[0], 'base64url')).alg; } catch { return null; }
+}
+
+async function verificar(token) {
+  const opts = { issuer: `${SUPABASE_URL}/auth/v1` };
+  if (algDe(token) === 'HS256') {
+    if (!JWT_SECRET) throw new Error('HS256 sin JWT secret');
+    return (await jwtVerify(token, new TextEncoder().encode(JWT_SECRET), { ...opts, algorithms: ['HS256'] })).payload;
   }
-  return m;
+  return (await jwtVerify(token, JWKS, opts)).payload;
 }
 
-// Formato: scrypt$<salt b64url>$<hash b64url>
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16);
-  const hash = crypto.scryptSync(password, salt, 64);
-  return `scrypt$${salt.toString('base64url')}$${hash.toString('base64url')}`;
+// ── profiles (Supabase, via service key) ──
+const svc = () => ({ apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY });
+const _perfiles = new Map(); // id -> { p, exp }
+async function perfil(id) {
+  const hit = _perfiles.get(id);
+  if (hit && hit.exp > Date.now()) return hit.p;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role`, { headers: svc() });
+  if (!r.ok) throw new Error('No se pudo leer el perfil (HTTP ' + r.status + ')');
+  const p = (await r.json())[0] || null;
+  _perfiles.set(id, { p, exp: Date.now() + 60e3 });
+  return p;
 }
 
-function verificarPassword(password, guardado) {
-  const [alg, salt, hash] = (guardado || '').split('$');
-  if (alg !== 'scrypt' || !salt || !hash) return false;
-  const esperado = Buffer.from(hash, 'base64url');
-  const real = crypto.scryptSync(password, Buffer.from(salt, 'base64url'), esperado.length);
-  return crypto.timingSafeEqual(esperado, real);
+async function perfiles() {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,email,full_name,role&order=email`, { headers: svc() });
+  if (!r.ok) throw new Error('No se pudo leer la lista de usuarios (HTTP ' + r.status + ')');
+  return r.json();
 }
 
-const firmar = (datos) => crypto.createHmac('sha256', SECRETO).update(datos).digest('base64url');
-
-function emitirToken(email) {
-  const datos = Buffer.from(JSON.stringify({ email, exp: Date.now() + DURACION_MS })).toString('base64url');
-  return `${datos}.${firmar(datos)}`;
+// Rol dentro de ESTE panel: 'super_admin' | 'admin' | 'usuario' | null (sin acceso).
+async function rolMarketing(userId) {
+  const p = await perfil(userId);
+  if (p?.role === 'super_admin') return { rol: 'super_admin', perfil: p };
+  const { rows } = await pool.query('SELECT rol FROM accesos WHERE user_id = $1', [userId]);
+  return { rol: rows[0]?.rol || null, perfil: p };
 }
 
-function leerToken(token) {
-  const [datos, firma] = (token || '').split('.');
-  if (!datos || !firma || !SECRETO) return null;
-  const a = Buffer.from(firma), b = Buffer.from(firmar(datos));
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  try {
-    const p = JSON.parse(Buffer.from(datos, 'base64url').toString());
-    if (!p.exp || p.exp < Date.now()) return null;
-    if (!usuarios().has(p.email)) return null; // usuario quitado = sesion invalida
-    return p;
-  } catch { return null; }
-}
-
-// Freno simple a fuerza bruta: 8 fallos por IP+correo cada 15 min.
-const fallos = new Map();
-function bloqueado(clave) {
-  const f = fallos.get(clave);
-  if (!f || f.hasta < Date.now()) { fallos.delete(clave); return false; }
-  return f.n >= 8;
-}
-function anotarFallo(clave) {
-  const f = fallos.get(clave);
-  if (!f || f.hasta < Date.now()) fallos.set(clave, { n: 1, hasta: Date.now() + 15 * 60 * 1000 });
-  else f.n++;
-}
-
-function login(req, res) {
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
-  const clave = (req.ip || '') + '|' + email;
-  if (bloqueado(clave)) return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos.' });
-  const guardado = usuarios().get(email);
-  if (!guardado || !verificarPassword(password, guardado)) {
-    anotarFallo(clave);
-    return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });
-  }
-  fallos.delete(clave);
-  res.json({ token: emitirToken(email), email });
-}
-
-function requireAuth(req, res, next) {
+// Solo verifica la sesion (sin exigir acceso al panel): req.user = { id, email }.
+async function sesion(req, res, next) {
   const h = req.headers.authorization || '';
-  const p = leerToken(h.startsWith('Bearer ') ? h.slice(7) : '');
-  if (!p) return res.status(401).json({ error: 'Sesión vencida. Vuelve a entrar.' });
-  req.user = { email: p.email };
-  next();
+  const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'Inicia sesión.' });
+  try {
+    const p = await verificar(token);
+    req.user = { id: p.sub, email: (p.email || '').toLowerCase() };
+    next();
+  } catch {
+    res.status(401).json({ error: 'Sesión vencida. Vuelve a entrar.' });
+  }
 }
 
-function configurado() { return !!SECRETO && usuarios().size > 0; }
+// Sesion + acceso a este panel: req.user.rol
+function requireAcceso(req, res, next) {
+  sesion(req, res, async () => {
+    try {
+      const { rol, perfil: p } = await rolMarketing(req.user.id);
+      if (!rol) return res.status(403).json({ error: 'Tu usuario no tiene acceso a Marketing. Pídeselo a un super admin.', sinAcceso: true });
+      req.user.rol = rol;
+      req.user.nombre = p?.full_name || null;
+      next();
+    } catch (e) {
+      console.error('[auth]', e.message);
+      res.status(503).json({ error: 'No se pudo verificar tu acceso. Intenta de nuevo.' });
+    }
+  });
+}
 
-module.exports = { login, requireAuth, hashPassword, verificarPassword, emitirToken, leerToken, configurado };
+// Nivel minimo: usuario < admin < super_admin
+const NIVEL = { usuario: 1, admin: 2, super_admin: 3 };
+const requireRol = (min) => (req, res, next) => (
+  NIVEL[req.user?.rol] >= NIVEL[min] ? next() : res.status(403).json({ error: 'No tienes permiso para esto.' })
+);
+
+const configPublica = () => ({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: ANON_KEY });
+
+function _limpiarCache(id) { if (id) _perfiles.delete(id); else _perfiles.clear(); }
+
+module.exports = { configurado, sesion, requireAcceso, requireRol, rolMarketing, perfiles, configPublica, NIVEL, _limpiarCache };

@@ -1,7 +1,8 @@
 /**
- * Panel web de Marketing Studio: login propio, catalogo (proxy cacheado del MCP
- * de Higgsfield), subida de imagenes y alta de generaciones. Las generaciones
- * las manda y sigue el worker (server/worker.js); aqui solo se encolan.
+ * Panel web de Marketing Studio: login con el Supabase de los paneles, catalogo
+ * (proxy cacheado del MCP de Higgsfield), subida de imagenes, alta de
+ * generaciones, redes sociales y pestaña Super Admin. Las generaciones las
+ * manda y sigue el worker (server/worker.js); aqui solo se encolan.
  */
 require('dotenv').config();
 const path = require('path');
@@ -9,10 +10,10 @@ const express = require('express');
 const { pool, migrar } = require('./lib/db');
 const hf = require('./lib/higgsfield');
 const auth = require('./lib/auth');
+const ajustes = require('./lib/config');
 
 const reglasP = import('../shared/reglas.mjs');
 const PORT = process.env.PORT || 3002;
-const CREDITOS_VISIBLES = process.env.CREDITOS_VISIBLES === '1';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -61,17 +62,45 @@ const ruta = (fn) => async (req, res) => {
 
 // ── Publico ──
 app.get('/api/health', (req, res) => res.json({ ok: true, auth: auth.configurado() }));
-app.post('/api/login', auth.login);
+app.get('/api/config', (req, res) => res.json(auth.configPublica()));
 
-// ── Con sesion ──
-app.use('/api', auth.requireAuth);
+// Lo consultan los otros paneles (Conversaciones, Cotizaciones, Cobranzas) con su
+// propio token de Supabase para decidir si muestran la pestaña Marketing.
+const ORIGEN_PANELES = /^https:\/\/([a-z0-9-]+\.)*neboaiconsulting\.com$/;
+function corsPaneles(req, res, next) {
+  const o = req.headers.origin;
+  if (o && ORIGEN_PANELES.test(o)) {
+    res.setHeader('Access-Control-Allow-Origin', o);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Max-Age', '600');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+}
+app.options('/api/acceso', corsPaneles);
+app.get('/api/acceso', corsPaneles, auth.sesion, ruta(async (req, res) => {
+  const { rol } = await auth.rolMarketing(req.user.id);
+  res.json({ acceso: !!rol, rol });
+}));
 
-app.get('/api/me', (req, res) => res.json({ email: req.user.email, creditosVisibles: CREDITOS_VISIBLES }));
+// ── Con sesion y acceso a este panel ──
+app.use('/api', auth.requireAcceso);
+
+app.get('/api/me', ruta(async (req, res) => {
+  const a = await ajustes.leer();
+  res.json({
+    email: req.user.email, nombre: req.user.nombre, rol: req.user.rol,
+    // El precio en USD solo se muestra si el super_admin configuro el costo por credito.
+    precios: a.usd_por_credito > 0 && (req.user.rol === 'super_admin' || a.mostrar_precio === 1)
+      ? { usdPorCredito: a.usd_por_credito, margenPct: a.margen_pct, margenPorTipo: a.margen_por_tipo } : null,
+  });
+}));
 
 app.get('/api/estado', ruta(async (req, res) => res.json({ conectado: (await hf.estadoConexion()).conectado })));
 
-app.get('/api/saldo', ruta(async (req, res) => {
-  if (!CREDITOS_VISIBLES) return res.status(404).json({ error: 'oculto' });
+app.get('/api/saldo', auth.requireRol('super_admin'), ruta(async (req, res) => {
   res.json(await cacheado('saldo', 60e3, () => hf.llamar('balance', {})));
 }));
 
@@ -123,7 +152,7 @@ app.post('/api/medios', express.raw({ type: Object.keys(EXT), limit: '20mb' }), 
 
 // ── Generaciones ──
 const COLS = `id, creado_por, estado, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-  resultados, error, creado, enviado, terminado`;
+  precio_usd, resultados, error, creado, enviado, terminado`;
 
 app.post('/api/generaciones', ruta(async (req, res) => {
   const { entradasDe, faltantes, formatoDe, creditosDe } = await reglasP;
@@ -171,11 +200,27 @@ app.post('/api/generaciones', ruta(async (req, res) => {
   let creditos = null;
   try { creditos = creditosDe(preset.type, await costos(), Number(b.duracion)); } catch { /* estimado opcional */ }
 
+  // Tope diario de creditos por usuario (lo fija el super_admin; a el no le aplica).
+  const a = await ajustes.leer();
+  if (a.limite_diario_creditos > 0 && req.user.rol !== 'super_admin') {
+    const { rows: [u] } = await pool.query(
+      `SELECT COALESCE(SUM(creditos_estimados), 0) AS usados FROM generaciones
+       WHERE user_id = $1 AND estado <> 'fallido'
+         AND (creado AT TIME ZONE 'America/Santo_Domingo')::date = (now() AT TIME ZONE 'America/Santo_Domingo')::date`,
+      [req.user.id]
+    );
+    if (Number(u.usados) + (Number(creditos) || 0) > a.limite_diario_creditos) {
+      return res.status(429).json({ error: 'Llegaste al límite de uso de hoy. Pídele a un super admin que lo amplíe.' });
+    }
+  }
+  const pr = ajustes.precioDe(a, preset.type, creditos);
+
   const { rows: [g] } = await pool.query(
-    `INSERT INTO generaciones (creado_por, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${COLS}`,
-    [req.user.email, preset.id, preset.name || null, preset.type, preset.cover_image || null,
-      { args: entrada, ...extra }, creditos]
+    `INSERT INTO generaciones (creado_por, user_id, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
+       usd_por_credito, margen_pct, costo_usd, precio_usd)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${COLS}`,
+    [req.user.email, req.user.id, preset.id, preset.name || null, preset.type, preset.cover_image || null,
+      { args: entrada, ...extra }, creditos, a.usd_por_credito || null, pr.margen, pr.costo, pr.precio]
   );
   res.status(201).json(g);
 }));
@@ -214,8 +259,12 @@ app.get('/api/generaciones/:id', ruta(async (req, res) => {
   res.json(g);
 }));
 
-// Redes sociales (conectar cuentas y publicar).
+// Redes sociales (conectar cuentas y publicar): admin de Marketing en adelante.
+app.use(['/api/redes', '/api/publicaciones'], auth.requireRol('admin'));
 app.use('/api', require('./redes').router);
+
+// Super Admin (margen, usuarios, consumo).
+app.use('/api', require('./superadmin').router);
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Ruta no encontrada.' }));
 
@@ -227,7 +276,7 @@ app.get(/^(?!\/api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html')
 async function arrancar() {
   await migrar();
   if (await hf.sembrarToken()) console.log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
-  if (!auth.configurado()) console.warn('AVISO: falta SESSION_SECRET o PANEL_USUARIOS; nadie podrá entrar.');
+  if (!auth.configurado()) console.warn('AVISO: faltan SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_KEY; nadie podrá entrar.');
   app.listen(PORT, () => console.log(`Panel Marketing Studio en :${PORT}`));
 }
 

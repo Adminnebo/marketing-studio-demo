@@ -418,3 +418,38 @@ body {
 .rs-quitar { padding: 4px 8px; color: var(--text-muted); }
 .rs-quitar:hover { color: var(--critical) !important; }
 .mini-btn.active:hover:not(:disabled) { background: var(--series-1); color: #fff; }
+
+/* De cobranzas: campos, mensajes, KPIs y tablas */
+.filter-field { display: flex; flex-direction: column; gap: 4px; }
+.filter-field > span { font-size: 0.74rem; color: var(--text-secondary); font-weight: 600; }
+.filter-field .search { min-width: 0; width: 100%; padding: 7px 10px; font-size: 0.82rem; }
+.filter-field.check { flex-direction: row; align-items: center; gap: 7px; align-self: end; padding-bottom: 8px; }
+.filter-field.check > span { font-size: 0.8rem; font-weight: 500; }
+.bulk-msg { padding: 10px 14px; font-size: 0.82rem; border-bottom: 1px solid var(--grid); }
+.bulk-msg.ok { color: var(--good-ink); background: color-mix(in srgb, var(--good) 8%, transparent); }
+.bulk-msg.err { color: var(--critical); background: color-mix(in srgb, var(--critical) 8%, transparent); }
+.kpi .kpi-label { font-size: 0.78rem; color: var(--text-secondary); font-weight: 560; }
+.kpi .kpi-value { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.02em; margin: 6px 0 2px; }
+.kpi .kpi-foot { font-size: 0.76rem; color: var(--text-muted); }
+.kpi .kpi-foot.good { color: var(--good-ink); }
+.kpi .kpi-foot.bad { color: var(--critical); }
+.kpi-accent { height: 3px; width: 34px; border-radius: 999px; margin-bottom: 12px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 640; position: sticky; top: 0; background: var(--surface-1); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--surface-2); }
+.trunc { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+
+/* ════════════ Super Admin ════════════ */
+.sa-grid { grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); align-items: start; margin-top: 4px; }
+@media (max-width: 900px) { .sa-grid { grid-template-columns: 1fr; } }
+.sa-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 6px; }
+.sa-form .search, .sa-tipos .search { min-width: 0; width: 100%; }
+.sa-calc { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 0.84rem; }
+.sa-calc .search { flex: 0 1 190px; min-width: 120px; padding: 7px 10px; }
+.sa-tipos { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.sa-ejemplos { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.sa-ejemplos .pill { font-weight: 500; padding: 6px 11px; align-self: flex-start; }
+.sa-conex { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; align-items: flex-start; }

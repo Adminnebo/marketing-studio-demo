@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { sesion, salir, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
+import { iniciarAuth, sesion, salir, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
 import Login from './components/Login';
 import Plantillas from './components/Plantillas';
 import Recrear from './components/Recrear';
 import Generaciones, { EN_CURSO } from './components/Generaciones';
 import Redes from './components/Redes';
+import SuperAdmin from './components/SuperAdmin';
 import Publicar from './components/Publicar';
 import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
 
 const TABS = [
   { id: 'plantillas', label: 'Plantillas', icon: '🎨' },
   { id: 'generaciones', label: 'Generaciones', icon: '🗂️' },
-  { id: 'redes', label: 'Redes', icon: '📣' },
+  { id: 'redes', label: 'Redes', icon: '📣', min: 'admin' },
+  { id: 'superadmin', label: 'Super Admin', icon: '🛡️', min: 'super_admin' },
 ];
+const NIVEL = { usuario: 1, admin: 2, super_admin: 3 };
+const ROL_ES = { usuario: 'Usuario', admin: 'Admin', super_admin: 'Super admin' };
 
 // Vuelta del flujo de conexion de una red: ?redes=1&connected=instagram&username=x  (o &error=...)
 function leerVueltaRedes() {
@@ -33,18 +37,21 @@ const PLATS = [
   { key: 'marketing', label: 'Marketing', icon: '🎬' },
 ];
 
+// Sesion de Supabase: { cargando, s } (s = null sin sesion).
 function useSesion() {
-  const [s, setS] = useState(sesion);
+  const [st, setSt] = useState({ cargando: true, s: null });
   useEffect(() => {
-    const f = () => setS(sesion());
+    const f = () => setSt({ cargando: false, s: sesion() });
+    iniciarAuth().then(f).catch(() => setSt({ cargando: false, s: null, error: true }));
     window.addEventListener('ms-sesion', f);
     return () => window.removeEventListener('ms-sesion', f);
   }, []);
-  return s;
+  return st;
 }
 
 export default function App() {
-  const s = useSesion();
+  const { cargando: cargandoSesion, s, error: errorAuth } = useSesion();
+  const [sinAcceso, setSinAcceso] = useState(false);
   const [avisoRedes] = useState(leerVueltaRedes);
   const [tab, setTab] = useState(() => (avisoRedes ? 'redes' : 'plantillas'));
   const [redesEstado, setRedesEstado] = useState(null);
@@ -115,13 +122,14 @@ export default function App() {
 
   useEffect(() => {
     if (!s) return undefined;
+    setSinAcceso(false);
     fetchMe().then((m) => {
       setMe(m);
-      if (m.creditosVisibles) fetchSaldo().then(setSaldo).catch(() => {});
-    }).catch(() => {});
+      if (m.rol === 'super_admin') fetchSaldo().then(setSaldo).catch(() => {});
+      if (NIVEL[m.rol] >= NIVEL.admin) cargarRedes();
+    }).catch((e) => { if (e.sinAcceso) setSinAcceso(true); });
     fetchEstado().then(setEstado).catch(() => {});
     cargarCatalogo();
-    cargarRedes();
     setGens((g) => ({ ...g, cargando: true }));
     recargarGens();
     const id = setInterval(() => fetchEstado().then(setEstado).catch(() => {}), 60000);
@@ -144,7 +152,26 @@ export default function App() {
     return () => clearInterval(id);
   }, [s, pubEnCurso]);
 
+  if (cargandoSesion) return <div className="app"><div className="loading"><div className="spinner" />Cargando…</div></div>;
+  if (errorAuth) return <div className="app"><div className="loading" style={{ color: 'var(--critical)' }}>No se pudo iniciar. Recarga la página.</div></div>;
   if (!s) return <Login />;
+  if (sinAcceso) {
+    return (
+      <div className="app">
+        <div className="noacc">
+          <div className="noacc__ic">🔒</div>
+          <h1>Sin acceso a Marketing</h1>
+          <p>Tu usuario no tiene acceso a este panel. Pídeselo a un super admin.</p>
+          <div className="noacc__links">
+            {PLATS.filter((p) => p.url).map((p) => <a key={p.key} className="noacc__link" href={p.url}>{p.icon} {p.label} →</a>)}
+          </div>
+          <button className="noacc__out" onClick={salir}>Cerrar sesión</button>
+        </div>
+      </div>
+    );
+  }
+  if (!me) return <div className="app"><div className="loading"><div className="spinner" />Cargando…</div></div>;
+  const tabs = TABS.filter((t) => !t.min || NIVEL[me.rol] >= NIVEL[t.min]);
 
   const enCurso = gens.items.filter((g) => EN_CURSO.has(g.estado)).length;
   const desconectado = estado && !estado.conectado;
@@ -180,16 +207,16 @@ export default function App() {
               {desconectado ? 'Generador desconectado' : 'Generador conectado'}
             </span>
           )}
-          {me?.creditosVisibles && saldo && (
-            <span className="badge" title={`Plan ${saldo.subscription_plan_type}`}>
+          {me.rol === 'super_admin' && saldo && (
+            <span className="badge" title={`Plan ${saldo.subscription_plan_type} · solo lo ven los super admin`}>
               🪙 {Number(saldo.credits).toLocaleString('es-MX', { maximumFractionDigits: 1 })} créditos
             </span>
           )}
           <button className="btn secondary icon-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'} aria-label="Cambiar tema">
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <span className="badge user-badge" title={s.email}>
-            <span className="ub-mail">{s.email}</span>
+          <span className="badge user-badge" title={`${me.email} · ${ROL_ES[me.rol]}`}>
+            <span className="ub-mail">{me.nombre || me.email}</span>
             <button className="logout-btn" onClick={salir} title="Cerrar sesión">Salir</button>
           </span>
         </div>
@@ -202,7 +229,7 @@ export default function App() {
       )}
 
       <nav className="tabs">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
             <span className="tab-ic">{t.icon}</span>{t.label}
             {t.id === 'generaciones' && enCurso > 0 && <span className="tab-count">{enCurso}</span>}
@@ -225,10 +252,13 @@ export default function App() {
 
       {tab === 'generaciones' && (
         <Generaciones items={gens.items} cargando={gens.cargando} error={gens.error} hayMas={!!gens.siguiente}
-          onMas={masGens} onRepetir={repetir} onPublicar={(g, indice) => setPublicando({ g, indice })} />
+          onMas={masGens} onRepetir={repetir} rol={me.rol}
+          onPublicar={NIVEL[me.rol] >= NIVEL.admin ? (g, indice) => setPublicando({ g, indice }) : null} />
       )}
 
-      {tab === 'redes' && (
+      {tab === 'superadmin' && me.rol === 'super_admin' && <SuperAdmin yo={me.email} onAjustes={() => fetchMe().then(setMe).catch(() => {})} />}
+
+      {tab === 'redes' && NIVEL[me.rol] >= NIVEL.admin && (
         <Redes estado={redesEstado} cuentas={cuentas} errorCuentas={errorCuentas} publicaciones={publicaciones}
           aviso={avisoRedes} onRecargar={cargarRedes} />
       )}
@@ -250,6 +280,8 @@ export default function App() {
           categoria={abierto.categoria}
           categorias={categorias}
           costos={costos}
+          precios={me.precios}
+          rol={me.rol}
           inicial={abierto.inicial}
           onEnviada={() => recargarGens()}
           onCerrar={(ir) => { setAbierto(null); if (ir === 'generaciones') setTab('generaciones'); }}

@@ -4,25 +4,28 @@
   "private": true,
   "description": "Panel intermediario de Higgsfield Marketing Studio para JH: panel web + worker que usa los creditos del plan via el MCP de Higgsfield.",
   "type": "commonjs",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "concurrently -n web,worker,client -c blue,green,magenta \"node --watch server/index.js\" \"node --watch server/worker.js\" \"vite client --config client/vite.config.mjs\"",
     "build": "vite build client --config client/vite.config.mjs",
     "start": "node server/index.js",
     "start:worker": "node server/worker.js",
-    "hash-password": "node server/scripts/hash-password.js",
     "test": "node --test test/"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "jose": "^6.2.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "@supabase/supabase-js": "^2.110.1"
   }
 }

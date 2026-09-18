@@ -70,6 +70,20 @@ const MIGRACIONES = [
      revisado TIMESTAMPTZ
    )`,
   `CREATE INDEX IF NOT EXISTS publicaciones_estado_idx ON publicaciones (estado)`,
+  // Acceso al panel para quien no es super_admin (lo dan los super_admin desde la pestaña Super Admin).
+  `CREATE TABLE IF NOT EXISTS accesos (
+     user_id UUID PRIMARY KEY,
+     email TEXT NOT NULL,
+     rol TEXT NOT NULL CHECK (rol IN ('usuario', 'admin')),
+     otorgado_por TEXT NOT NULL,
+     actualizado TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  // Foto de costo/precio al crear cada generacion (cambiar el margen no reescribe el pasado).
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS user_id UUID`,
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS usd_por_credito NUMERIC`,
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS margen_pct NUMERIC`,
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS costo_usd NUMERIC`,
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS precio_usd NUMERIC`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,
 ];

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { TIPOS } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import { descargar } from '../api';
+import { usd } from '../precio';
 
 const ESTADOS = {
   pendiente: 'En cola', enviando: 'Enviando', en_proceso: 'Generando', completado: 'Lista', fallido: 'Falló',
@@ -12,7 +13,7 @@ const FILTROS = [['', 'Todas'], ['curso', 'En curso'], ['completado', 'Listas'],
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
 
-function Tarjeta({ g, onRepetir, onPublicar }) {
+function Tarjeta({ g, rol, onRepetir, onPublicar }) {
   const ok = (g.resultados || []).filter((r) => r.url);
   const [i, setI] = useState(0);
   const r = ok[Math.min(i, ok.length - 1)];
@@ -52,7 +53,8 @@ function Tarjeta({ g, onRepetir, onPublicar }) {
         </div>
         <div className="ms-gen-meta">
           {TIPOS[g.preset_tipo] || g.preset_tipo} · {fecha(g.creado)}
-          {g.creditos_estimados != null && ` · ≈${Number(g.creditos_estimados).toLocaleString('es-MX', { maximumFractionDigits: 1 })} cr`}
+          {g.precio_usd != null && ` · ≈${usd(g.precio_usd)}`}
+          {g.creditos_estimados != null && (g.precio_usd == null || rol === 'super_admin') && ` · ≈${Number(g.creditos_estimados).toLocaleString('es-MX', { maximumFractionDigits: 1 })} cr`}
         </div>
         <div className="ms-gen-meta">{g.creado_por}</div>
         {g.entrada?.args?.prompt && <div className="ms-gen-prompt" title={g.entrada.args.prompt}>“{g.entrada.args.prompt}”</div>}
@@ -68,7 +70,7 @@ function Tarjeta({ g, onRepetir, onPublicar }) {
   );
 }
 
-export default function Generaciones({ items, cargando, error, hayMas, onMas, onRepetir, onPublicar }) {
+export default function Generaciones({ items, cargando, error, hayMas, onMas, onRepetir, onPublicar, rol }) {
   const [filtro, setFiltro] = useState('');
   const visibles = items.filter((g) => !filtro || (filtro === 'curso' ? EN_CURSO.has(g.estado) : g.estado === filtro));
   return (
@@ -90,7 +92,7 @@ export default function Generaciones({ items, cargando, error, hayMas, onMas, on
         </div>
       ) : (
         <div className="ms-gens">
-          {visibles.map((g) => <Tarjeta key={g.id} g={g} onRepetir={onRepetir} onPublicar={onPublicar} />)}
+          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} onRepetir={onRepetir} onPublicar={onPublicar} />)}
         </div>
       )}
       {hayMas && (

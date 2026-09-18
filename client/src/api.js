@@ -1,33 +1,57 @@
-// Cliente del API del panel. La sesion (token firmado) vive en localStorage.
-const CLAVE = 'ms_sesion';
+// Cliente del API del panel. La sesion es la de Supabase (la misma cuenta de
+// los otros paneles); el access_token se adjunta en cada llamada.
+import { createClient } from '@supabase/supabase-js';
 
-export function sesion() {
-  try { return JSON.parse(localStorage.getItem(CLAVE)) || null; } catch { return null; }
+let supabase = null;
+let token = null;
+const avisar = () => window.dispatchEvent(new Event('ms-sesion'));
+
+// Carga la config publica y restaura la sesion guardada. Devuelve la sesion (o null).
+export async function iniciarAuth() {
+  const cfg = await (await fetch('/api/config')).json();
+  supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+  const { data: { session } } = await supabase.auth.getSession();
+  token = session?.access_token || null;
+  supabase.auth.onAuthStateChange((_e, s) => {
+    const antes = token;
+    token = s?.access_token || null;
+    if (!!antes !== !!token) avisar();
+  });
+  return session ? { email: session.user.email } : null;
 }
-function guardar(s) {
-  try { s ? localStorage.setItem(CLAVE, JSON.stringify(s)) : localStorage.removeItem(CLAVE); } catch { /* sin storage */ }
-  window.dispatchEvent(new Event('ms-sesion'));
-}
-export const salir = () => guardar(null);
+
+export function sesion() { return token ? { token } : null; }
 
 export async function entrar(email, password) {
-  const r = await fetch('/api/login', {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password }),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || 'No se pudo entrar.');
-  guardar({ token: j.token, email: j.email });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    const m = (error.message || '').toLowerCase();
+    throw new Error(m.includes('invalid login') ? 'Correo o contraseña incorrectos.'
+      : m.includes('not confirmed') ? 'El correo no está confirmado.' : error.message);
+  }
+  token = data.session?.access_token || null;
+  avisar();
+}
+
+export async function salir() {
+  try { await supabase?.auth.signOut(); } catch { /* sin red */ }
+  token = null;
+  avisar();
 }
 
 async function api(ruta, opts = {}) {
-  const s = sesion();
   const r = await fetch('/api' + ruta, {
     ...opts,
-    headers: { ...(opts.body && !(opts.body instanceof Blob) ? { 'content-type': 'application/json' } : {}), ...(opts.headers || {}), authorization: 'Bearer ' + (s?.token || '') },
+    headers: { ...(opts.body && !(opts.body instanceof Blob) ? { 'content-type': 'application/json' } : {}), ...(opts.headers || {}), authorization: 'Bearer ' + (token || '') },
   });
-  if (r.status === 401) { salir(); throw new Error('Sesión vencida.'); }
+  if (r.status === 401) { await salir(); throw new Error('Sesión vencida.'); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(j.error || `Error ${r.status}`); e.desconectado = !!j.desconectado; throw e; }
+  if (!r.ok) {
+    const e = new Error(j.error || `Error ${r.status}`);
+    e.desconectado = !!j.desconectado;
+    e.sinAcceso = !!j.sinAcceso;
+    throw e;
+  }
   return j;
 }
 
@@ -52,7 +76,7 @@ export function subirImagen(archivo, onProgreso) {
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest();
     x.open('POST', '/api/medios');
-    x.setRequestHeader('authorization', 'Bearer ' + (sesion()?.token || ''));
+    x.setRequestHeader('authorization', 'Bearer ' + (token || ''));
     x.setRequestHeader('content-type', archivo.type);
     x.setRequestHeader('x-nombre', encodeURIComponent(archivo.name).slice(0, 200));
     x.upload.onprogress = (e) => e.lengthComputable && onProgreso?.(e.loaded / e.total);
@@ -69,7 +93,7 @@ export function subirImagen(archivo, onProgreso) {
 
 // Descarga a traves del panel (lleva la sesion y el nombre de archivo propio).
 export async function descargar(id, i = 0) {
-  const r = await fetch(`/api/generaciones/${id}/descargar?i=${i}`, { headers: { authorization: 'Bearer ' + (sesion()?.token || '') } });
+  const r = await fetch(`/api/generaciones/${id}/descargar?i=${i}`, { headers: { authorization: 'Bearer ' + (token || '') } });
   if (r.status === 401) { salir(); throw new Error('Sesión vencida.'); }
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'No se pudo descargar.'); }
   const nombre = (r.headers.get('content-disposition') || '').match(/filename="([^"]+)"/)?.[1] || `marketing_${id}`;
@@ -90,3 +114,10 @@ export const fetchInfoTiktok = (id, tipo) => api(`/redes/cuentas/${encodeURIComp
 export const publicar = (datos) => api('/publicaciones', { method: 'POST', body: JSON.stringify(datos) });
 export const fetchPublicaciones = () => api('/publicaciones');
 export const cancelarPublicacion = (id) => api(`/publicaciones/${id}/cancelar`, { method: 'POST' });
+
+// ── Super Admin ──
+export const fetchAjustes = () => api('/superadmin/ajustes');
+export const guardarAjustes = (cambios) => api('/superadmin/ajustes', { method: 'PUT', body: JSON.stringify(cambios) });
+export const fetchUsuarios = () => api('/superadmin/usuarios');
+export const cambiarAcceso = (id, acceso) => api(`/superadmin/usuarios/${id}`, { method: 'PUT', body: JSON.stringify({ acceso }) });
+export const fetchConsumo = (mes) => api('/superadmin/consumo' + (mes ? `?mes=${mes}` : ''));

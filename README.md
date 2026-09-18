@@ -8,7 +8,7 @@ normales del plan** de la cuenta de Higgsfield de la empresa. No usa la API de p
 
 ```
 navegador ──► panel (Express + React)      ──► Postgres ◄── worker
-               · login propio                   · hf_token       · manda las generaciones pendientes
+               · login Supabase (paneles)       · hf_token       · manda las generaciones pendientes
                · catálogo (proxy cacheado)      · generaciones   · sigue su estado hasta tener el resultado
                · sube la imagen del producto                     · renueva el token de Higgsfield
                      │                                                  │
@@ -24,6 +24,18 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   mitad de un envío, la generación queda como fallida y hay que revisarla a mano. Nunca se reenvía sola.
 - Las reglas de cada plantilla (qué pide y cuánto cuesta) están en `shared/reglas.mjs`, portadas del widget oficial.
   Las usan el formulario y la validación del servidor.
+
+## Acceso y Super Admin
+
+- Se entra con la cuenta de Supabase de los otros paneles. Los `super_admin` de `profiles` entran siempre; el resto
+  solo si un super_admin le da acceso (**Usuario**: genera y descarga; **Admin**: además redes sociales). Ese acceso
+  vive en la tabla `accesos` de este panel, no en `profiles.permissions` (los editores de usuarios de los otros
+  paneles reescriben esa lista completa y lo borrarían).
+- `GET /api/acceso` (con el token de Supabase, CORS solo para `*.neboaiconsulting.com`) lo consultan Conversaciones,
+  Cotizaciones y Cobranzas para mostrar u ocultar su pestaña/botón de Marketing.
+- Pestaña **Super Admin**: costo por crédito (USD), % de ganancia general y por tipo, tope diario de créditos por
+  usuario, si los usuarios ven el precio, consumo del mes (costo, precio y ganancia por usuario y por tipo) y los
+  accesos. Cada generación guarda la foto de costo/precio al crearse.
 
 ## Redes sociales (Zernio)
 
@@ -61,8 +73,6 @@ borrar.
 
 ## Pendiente
 
-- Mostrar los créditos (`CREDITOS_VISIBLES=1`, en standby).
-- Conectarlo a cobranzas como 4ª pestaña del conmutador de plataformas (y más adelante a los otros paneles), con el
-  login de Supabase.
+- Dominio propio (hoy la URL de Railway está fija en el conmutador de los 3 paneles).
 - Botón para volver a autorizar Higgsfield desde el panel si se pierde el token.
 - Webhooks de Zernio (hoy el worker consulta el estado cada ~15 s).
