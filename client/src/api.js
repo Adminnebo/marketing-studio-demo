@@ -143,5 +143,7 @@ export const costoLibre = (datos) => api('/libre/costo', { method: 'POST', body:
 export const crearLibre = (datos) => api('/libre', { method: 'POST', body: JSON.stringify(datos) });
 export const autoPrompt = (datos) => api('/libre/autoprompt', { method: 'POST', body: JSON.stringify(datos) });
 export const reconectarGenerador = () => api('/superadmin/generador/conectar', { method: 'POST' });
+export const verificarCli = () => api('/superadmin/cli/verificar', { method: 'POST' });
+export const cargarSesionCli = (paquete) => api('/superadmin/cli/sesion', { method: 'POST', body: JSON.stringify({ paquete }) });
 export const clasificarPlantillas = () => api('/superadmin/plantillas/clasificar', { method: 'POST' });
 export const registrarWebhookRedes = () => api('/superadmin/zernio/webhook', { method: 'POST' });

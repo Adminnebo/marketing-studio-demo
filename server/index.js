@@ -16,6 +16,7 @@ const billetera = require('./lib/billetera');
 const modelos = require('./lib/modelos');
 const promptAuto = require('./lib/prompt-auto');
 const hfOauth = require('./lib/hf-oauth');
+const hfCli = require('./lib/hf-cli');
 const zernio = require('./lib/zernio');
 
 const reglasP = import('../shared/reglas.mjs');
@@ -56,7 +57,7 @@ const ruta = (fn) => async (req, res) => {
     await fn(req, res);
   } catch (e) {
     console.error(`[${req.method} ${req.path}]`, e.message);
-    if (e instanceof hf.HiggsfieldError) {
+    if (e instanceof hf.HiggsfieldError || e instanceof hfCli.CliError) {
       return res.status(e.desconectado ? 503 : 502).json({
         error: e.desconectado
           ? 'El generador de contenido está desconectado. Avísale al administrador.'

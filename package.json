@@ -15,17 +15,18 @@
     "test": "node --test --test-concurrency=1 test/"
   },
   "dependencies": {
+    "@higgsfield/cli": "1.1.25",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
-    "pg": "^8.13.1",
-    "jose": "^6.2.3"
+    "jose": "^6.2.3",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.110.1",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "vite": "^5.4.11",
-    "@supabase/supabase-js": "^2.110.1"
+    "vite": "^5.4.11"
   }
 }

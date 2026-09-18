@@ -19,6 +19,7 @@ const modelos = require('./lib/modelos');
 const catalogo = require('./lib/catalogo');
 const clasificar = require('./lib/clasificar');
 const costo = require('./lib/costo');
+const hfCli = require('./lib/hf-cli');
 
 const redesP = import('../shared/redes.mjs');
 
@@ -32,6 +33,9 @@ const TERMINADOS_MAL = new Set(['failed', 'error', 'nsfw', 'canceled', 'cancelle
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 async function enviar(g) {
+  // Modelos que solo tiene la CLI (Cinema Studio 4.0...): crea con la CLI; el seguimiento
+  // es el mismo job_status de abajo (el generador ve esos trabajos igual).
+  if (g.entrada.tool === 'cli') return modelos.crearCli(g.entrada.params);
   // Generacion libre: generate_video / generate_image con los params ya armados.
   if (g.entrada.tool) {
     const r = await modelos.llamarGenerador(g.entrada.tool, g.entrada.params);
@@ -204,6 +208,17 @@ async function clasificarPlantillas() {
   if (r.hechas || r.pendientes) log(`plantillas: ${r.hechas} nuevas clasificadas, quedan ${r.pendientes}`);
 }
 
+// Sesion de la CLI: se usa (y asi se renueva) cada 6 h aunque nadie genere con esos modelos.
+const CLI_CADA_MS = 6 * 60 * 60e3;
+let ultimaCli = 0;
+async function mantenerCli() {
+  if (!hfCli.instalada() || Date.now() - ultimaCli < CLI_CADA_MS) return;
+  ultimaCli = Date.now();
+  if (!(await hfCli.estado()).cargada) return;
+  const c = await hfCli.cuenta();
+  log(`sesion de la CLI ok: ${c.email} (${c.creditos} creditos)`);
+}
+
 let ultimoAviso = 0;
 async function ciclo() {
   try {
@@ -225,6 +240,11 @@ async function ciclo() {
   } catch (e) {
     log('No se pudieron clasificar plantillas:', e.message);
   }
+  try {
+    await mantenerCli();
+  } catch (e) {
+    log('La sesion de la CLI fallo:', e.message);
+  }
   // Aparte: una caida del generador no frena el seguimiento de publicaciones.
   try {
     await revisarPublicaciones();
@@ -237,6 +257,7 @@ let parar = false;
 async function main() {
   await migrar();
   if (await hf.sembrarToken()) log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
+  if (await hfCli.sembrar().catch((e) => log('HF_CLI_SESION invalida:', e.message))) log('Sesion de la CLI sembrada desde HF_CLI_SESION.');
   log(`Worker Marketing Studio arrancado (cada ${POLL_MS} ms)`);
   while (!parar) {
     await ciclo();

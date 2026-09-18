@@ -499,3 +499,8 @@ tbody tr:hover { background: var(--surface-2); }
 /* "Ver como" (super admin) */
 .vc-select { cursor: pointer; font: inherit; font-size: 0.72rem; font-weight: 600; color: var(--text-primary); }
 .vc-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; padding: 12px 14px; border-radius: 12px; font-size: 0.86rem; color: var(--text-primary); background: color-mix(in srgb, var(--series-5) 12%, transparent); border: 1px solid color-mix(in srgb, var(--series-5) 35%, transparent); }
+.sa-cli { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border, rgba(127,127,127,.2)); display: flex; flex-direction: column; gap: 8px; }
+.sa-cli .sa-conex { margin-top: 0; }
+.sa-cli-form { display: flex; flex-direction: column; gap: 8px; }
+.sa-cli-form textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+.sa-cli-form code { font-size: 12px; }

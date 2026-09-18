@@ -4,19 +4,22 @@
  * armado de los params de generate_video / generate_image.
  */
 const hf = require('./higgsfield');
+const hfCli = require('./hf-cli');
 
 // Utilidades y modelos que piden cosas que el formulario no maneja (videos de
 // entrada, productos/estilos de otro flujo, sprites, upscalers...).
 const FUERA = /upscale|background|outpaint|topaz|deflicker|remover|sam_3|clipify|sync_so|autosprite|preset|multiplier|^ms_image$|^marketing_studio_video$|hf_mult_|video_edit|kling_video_edit|soul_cast|nano_banana_2_shots/;
 // Orden de aparicion: primero los mas usados; el resto va despues, por nombre.
 const DESTACADOS = [
-  'cinematic_studio_3_0', 'seedance_2_5', 'seedance_2_0', 'kling3_0', 'veo3_1', 'wan3_0', 'seedance_2_0_mini', 'minimax_h3', 'kling3_0_turbo', 'veo3_1_lite',
+  'cinematic_studio_video_4_0', 'cinematic_studio_3_0', 'cinematic_studio_video_3_5', 'seedance_2_5', 'seedance_2_0', 'kling3_0', 'veo3_1', 'wan3_0', 'seedance_2_0_mini', 'minimax_h3', 'kling3_0_turbo', 'veo3_1_lite',
   'gpt_image_2_5', 'nano_banana_pro', 'cinematic_studio_2_5', 'nano_banana_2', 'seedream_v5_pro', 'marketing_studio_image', 'soul_2', 'flux_2', 'recraft_v4_1',
 ];
 // Descripciones en espanol de los principales (el resto no muestra descripcion:
 // la del proveedor viene en ingles y a veces lo nombra).
 const DESCRIPCIONES = {
-  cinematic_studio_3_0: 'El más avanzado: calidad de cine, hasta 4K y 15 s.',
+  cinematic_studio_video_4_0: 'El más nuevo: calidad de cine, de 4 a 30 s, con audio.',
+  cinematic_studio_3_0: 'Calidad de cine, hasta 4K y 15 s.',
+  cinematic_studio_video_3_5: 'Calidad de cine, hasta 15 s.',
   seedance_2_5: 'Uso general, hasta 30 s y 1080p, con audio; acepta imagen de referencia.',
   seedance_2_0: 'Consistente con la imagen de referencia; ideal para producto. Hasta 4K.',
   seedance_2_0_mini: 'Versión rápida y económica de Seedance 2.0.',
@@ -42,6 +45,7 @@ const sinMarca = (t) => String(t || '').replace(/higgsfield\s*/gi, '').trim();
 // Nombres limpios y parejos ("Marca Modelo Version"), familia para agrupar en el selector
 // y alias que el catalogo repite con otro id (se ocultan para no mostrar dos veces lo mismo).
 const NOMBRES = {
+  cinematic_studio_video_4_0: ['Cinema Studio 4.0', 'Cinema Studio'], cinematic_studio_video_3_5: ['Cinema Studio 3.5', 'Cinema Studio'],
   cinematic_studio_3_0: ['Cinema Studio 3.0', 'Cinema Studio'], cinematic_studio_video_v2: ['Cinema Studio 2.0', 'Cinema Studio'],
   cinematic_studio_video: ['Cinema Studio 1.0', 'Cinema Studio'],
   seedance_2_5: ['Seedance 2.5', 'Seedance'], seedance_2_0: ['Seedance 2.0', 'Seedance'], seedance_2_0_mini: ['Seedance 2.0 Mini', 'Seedance'],
@@ -104,17 +108,48 @@ function normalizar(m) {
   };
 }
 
+// Modelos que el MCP no expone y se generan con la CLI (lib/hf-cli.js). Mismo formato
+// que normalizar(); los limites salen de `higgsfield workflow get <id>` y de probar el costo.
+const RES = { nombre: 'resolution', etiqueta: 'Resolución', tipo: 'opciones', opciones: ['480p', '720p', '1080p'], def: '720p' };
+const ASPECTOS_CS = ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'];
+const CLI_MODELOS = [
+  {
+    id: 'cinematic_studio_video_4_0', aspectos: ASPECTOS_CS, duracion: { min: 4, max: 30, def: 5 },
+    params: [RES, { nombre: 'generate_audio', etiqueta: 'Audio', tipo: 'bool', def: true },
+      { nombre: 'bitrate_mode', etiqueta: 'Bitrate', tipo: 'opciones', opciones: ['standard', 'high'], def: 'standard' }],
+    modoAuto: true,
+  },
+  {
+    id: 'cinematic_studio_video_3_5', aspectos: ASPECTOS_CS, duracion: { min: 4, max: 15, def: 8 },
+    params: [RES, { nombre: 'generate_audio', etiqueta: 'Audio', tipo: 'bool', def: false }],
+    fijos: { prompt_language: 'en' }, // por defecto la CLI lo manda en chino
+  },
+].map((m) => ({
+  ...m, nombre: NOMBRES[m.id][0], familia: NOMBRES[m.id][1], proveedor: '', descripcion: DESCRIPCIONES[m.id] || '',
+  tipo: 'video', rolImagen: 'start_image', aceptaImagen: true, pideImagen: false, modoAuto: !!m.modoAuto, via: 'cli',
+}));
+
 let _cache = null;
+// Los de la CLI se muestran solo mientras su sesion este cargada (se mira en cada pedido, no se cachea).
 async function lista() {
+  const todos = await completo();
+  const cli = await hfCli.estado().catch(() => null);
+  return cli?.cargada && cli.instalada ? todos : todos.filter((m) => m.via !== 'cli');
+}
+
+async function completo() {
   if (_cache && _cache.exp > Date.now()) return _cache.v;
   const [v, i] = await Promise.all([
     hf.llamar('models_explore', { action: 'list', type: 'video', limit: 100 }),
     hf.llamar('models_explore', { action: 'list', type: 'image', limit: 100 }),
   ]);
-  const todos = [...(v.items || []), ...(i.items || [])]
+  const delMcp = [...(v.items || []), ...(i.items || [])]
     .filter((m) => m.id && !FUERA.test(m.id) && !ALIAS.has(m.id) && !(m.parameters || []).some((p) => p.required === 'required' && p.name !== 'mode'))
     .map(normalizar)
     .filter((m) => m.aceptaImagen || !(m.pideImagen)); // descarta los que exigen un tipo de entrada que no manejamos
+  // Los de la CLI solo si esta instalada y no aparecieron ya en el MCP.
+  const ids = new Set(delMcp.map((m) => m.id));
+  const todos = [...delMcp, ...(hfCli.instalada() ? CLI_MODELOS.filter((m) => !ids.has(m.id)).map((m) => ({ ...m })) : [])];
   // Red de seguridad: si el catalogo trae dos modelos con el mismo nombre, se distinguen por su id.
   const vistos = new Map();
   for (const m of todos) {
@@ -155,7 +190,26 @@ function armar(modelo, { prompt, aspecto, duracion, opciones = {}, mediaId }) {
     // seedance 2.5: t2v / omni_reference; gemini omni 1.1: text-to-video / image-to-video
     params.mode = modelo.id.startsWith('gemini_omni') ? (mediaId ? 'image-to-video' : 'text-to-video') : (mediaId ? 'omni_reference' : 't2v');
   }
+  if (modelo.via === 'cli') {
+    // La CLI recibe la imagen como start_image (su id del generador) y el modo aparte.
+    delete params.medias; delete params.use_unlim;
+    if (mediaId) params.start_image = mediaId;
+    Object.assign(params, modelo.fijos || {});
+    return { tool: 'cli', params };
+  }
   return { tool: modelo.tipo === 'video' ? 'generate_video' : 'generate_image', params };
+}
+
+// { model, prompt, aspect_ratio, ... } -> argumentos de `higgsfield generate <accion>`.
+function argsCli(accion, params) {
+  const { model, ...resto } = params;
+  const args = ['generate', accion, model];
+  for (const [k, v] of Object.entries(resto)) {
+    if (v == null || v === '') continue;
+    const flag = '--' + k.replace(/_/g, '-');
+    args.push(typeof v === 'boolean' ? `${flag}=${v}` : flag, ...(typeof v === 'boolean' ? [] : [String(v)]));
+  }
+  return args;
 }
 
 // Llama a generate_video / generate_image. El generador a veces no genera ni cotiza:
@@ -181,10 +235,23 @@ async function llamarGenerador(tool, params) {
 }
 
 async function costo(armado) {
+  if (armado.tool === 'cli') {
+    const d = await hfCli.llamar(argsCli('cost', armado.params), { timeoutMs: 60000 });
+    if (d?.credits == null) throw new Error('costo sin creditos: ' + JSON.stringify(d).slice(0, 300));
+    return Number(d.credits);
+  }
   const d = await llamarGenerador(armado.tool, { ...armado.params, get_cost: true });
   const c = d?.cost?.credits_exact ?? d?.cost?.credits;
   if (c == null) throw new hf.HiggsfieldError('get_cost sin costo: ' + JSON.stringify(d).slice(0, 600));
   return Number(c);
 }
 
-module.exports = { lista, obtener, armar, costo, normalizar, llamarGenerador };
+// Crea el trabajo con la CLI (sin --wait: vuelve con los ids y el worker lo sigue con job_status).
+async function crearCli(params) {
+  const d = await hfCli.llamar(argsCli('create', params), { timeoutMs: 120000 });
+  const ids = [d].flat().map((x) => (typeof x === 'string' ? x : x?.id || x?.job_id)).filter((x) => typeof x === 'string' && x.trim());
+  if (!ids.length) throw new Error('create sin job_ids: ' + JSON.stringify(d).slice(0, 300));
+  return ids.map((x) => x.trim());
+}
+
+module.exports = { lista, obtener, armar, costo, normalizar, llamarGenerador, argsCli, crearCli, CLI_MODELOS };

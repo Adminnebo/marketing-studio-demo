@@ -123,6 +123,16 @@ const MIGRACIONES = [
      evento TEXT NOT NULL,
      recibido TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  // Sesion de la CLI del generador (modelos que el MCP no tiene). Rota como hf_token.
+  `CREATE TABLE IF NOT EXISTS hf_cli_sesion (
+     id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+     archivos JSONB NOT NULL,
+     cuenta TEXT,
+     cargada_por TEXT,
+     actualizado TIMESTAMPTZ NOT NULL DEFAULT now(),
+     ultimo_uso TIMESTAMPTZ,
+     ultimo_error TEXT
+   )`,
   `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,

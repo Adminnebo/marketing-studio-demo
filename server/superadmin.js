@@ -17,6 +17,7 @@ const hfOauth = require('./lib/hf-oauth');
 const catalogo = require('./lib/catalogo');
 const clasificar = require('./lib/clasificar');
 const promptAuto = require('./lib/prompt-auto');
+const hfCli = require('./lib/hf-cli');
 
 const router = express.Router();
 router.use('/superadmin', auth.requireRol('super_admin'));
@@ -30,12 +31,13 @@ const ruta = (fn) => async (req, res) => {
 const errPublico = (msg, status = 400) => Object.assign(new Error(msg), { publico: true, status });
 
 router.get('/superadmin/ajustes', ruta(async (req, res) => {
-  const [a, saldo, gen, cat, wh] = await Promise.all([
+  const [a, saldo, gen, cat, wh, cli] = await Promise.all([
     ajustes.leer(),
     hf.llamar('balance', {}).catch(() => null),
     hf.estadoConexion().catch(() => ({ conectado: false })),
     catalogo.resumen().catch(() => null),
     pool.query(`SELECT valor FROM config WHERE clave = 'zernio_webhook_id'`).then((r) => r.rows[0]?.valor || null).catch(() => null),
+    hfCli.estado().catch(() => null),
   ]);
   res.json({
     ajustes: a,
@@ -44,6 +46,8 @@ router.get('/superadmin/ajustes', ruta(async (req, res) => {
       generador: !!gen.conectado, generadorCuenta: gen.cuenta || null, generadorError: gen.error || null,
       redes: zernio.configurado(), webhookListo: zernio.webhookListo(), webhookId: wh,
       promptAuto: promptAuto.configurado(),
+      cli: cli && { instalada: cli.instalada, cargada: cli.cargada, ok: cli.cargada && !cli.ultimoError, cuenta: cli.cuenta,
+        ultimoUso: cli.ultimoUso, error: cli.ultimoError, desconectada: cli.desconectada },
     },
     catalogo: cat ? { ...cat, clasificadorListo: clasificar.configurado() } : null,
   });
@@ -65,6 +69,20 @@ router.put('/superadmin/ajustes', ruta(async (req, res) => {
 router.post('/superadmin/generador/conectar', ruta(async (req, res) => {
   const base = process.env.PANEL_URL || `${req.protocol}://${req.get('host')}`;
   res.json({ url: await hfOauth.iniciar({ base, por: req.user.email }) });
+}));
+
+// Sesion de la CLI (Cinema Studio 4.0 y otros que el MCP no tiene).
+router.post('/superadmin/cli/verificar', ruta(async (req, res) => {
+  try { res.json({ ok: true, ...(await hfCli.cuenta()) }); } catch (e) {
+    throw errPublico(e.desconectado ? 'La sesión venció o no está cargada: cárgala de nuevo.' : 'No respondió: ' + e.message.slice(0, 200), 502);
+  }
+}));
+router.post('/superadmin/cli/sesion', ruta(async (req, res) => {
+  try { await hfCli.guardarSesion(String(req.body?.paquete || ''), { por: req.user.email }); } catch (e) { throw errPublico(e.message); }
+  let c;
+  try { c = await hfCli.cuenta(); } catch (e) { throw errPublico('Se guardó, pero no funciona: ' + e.message.slice(0, 200), 502); }
+  console.log(`[cli] ${req.user.email} cargo la sesion de la CLI (${c.email})`);
+  res.json({ ok: true, ...c });
 }));
 
 // Clasificar ya las plantillas nuevas (en segundo plano; el worker tambien lo hace cada 12 h).

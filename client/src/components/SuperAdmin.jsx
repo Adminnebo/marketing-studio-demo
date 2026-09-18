@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, clasificarPlantillas, registrarWebhookRedes } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, clasificarPlantillas, registrarWebhookRedes } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, cred } from '../precio';
 
@@ -7,6 +7,45 @@ const num = (n, d = 1) => Number(n || 0).toLocaleString('es-MX', { maximumFracti
 const ROLES_PANELES = { super_admin: 'Super admin', admin: 'Admin', agent: 'Agente' };
 const EJEMPLOS = [['product_shots', 1.5, 'Foto de producto'], ['ads', 7.5, 'Anuncio'], ['ugc', 65, 'Video UGC de 10 s']];
 const mesActual = () => new Date().toISOString().slice(0, 7);
+
+// Segunda conexion (CLI) para los modelos que la principal no tiene, como Cinema Studio 4.0.
+function SesionCli({ cli, onCambio }) {
+  const [abierto, setAbierto] = useState(false);
+  const [paquete, setPaquete] = useState('');
+  const [msg, setMsg] = useState(null);
+  if (!cli) return null;
+  const ok = cli.cargada && !cli.desconectada;
+  const correr = async (fn, texto) => {
+    setMsg({ cargando: true });
+    try { const r = await fn(); setMsg({ ok: `${texto} ${r.email} · ${cred(r.creditos)} créditos.` }); setPaquete(''); setAbierto(false); onCambio?.(); } catch (e) { setMsg({ error: e.message }); }
+  };
+  return (
+    <div className="sa-cli">
+      <div className="sa-conex">
+        <span className={`badge ${ok ? 'live' : 'hf-off'}`} title={cli.error || ''}>
+          <span className="dot" />Modelos extra (Cinema Studio 4.0) {!cli.instalada ? 'no instalado' : !cli.cargada ? 'sin sesión' : cli.desconectada ? 'sesión vencida' : 'conectado'}{cli.cuenta ? ` · ${cli.cuenta}` : ''}
+        </span>
+        {cli.cargada && <button className="mini-btn" disabled={msg?.cargando} onClick={() => correr(verificarCli, 'Funciona:')}>✓ Verificar</button>}
+        <button className="mini-btn" onClick={() => setAbierto(!abierto)}>{cli.cargada ? '🔑 Reemplazar sesión' : '🔑 Cargar sesión'}</button>
+      </div>
+      {abierto && (
+        <div className="sa-cli-form">
+          <div className="card-sub" style={{ margin: 0 }}>
+            Esta conexión no se puede abrir desde aquí. En una computadora: inicia sesión con <code>npx @higgsfield/cli auth login</code> usando la cuenta de la empresa,
+            corre <code>node scripts/sesion-cli.js</code> en este proyecto y pega el texto que imprime. Después se renueva sola.
+          </div>
+          <textarea className="search" rows={3} value={paquete} onChange={(e) => setPaquete(e.target.value)} placeholder="Pega aquí el paquete de sesión" />
+          <div className="ms-submit">
+            <span className="ms-cost" />
+            <button className="btn" disabled={!paquete.trim() || msg?.cargando} onClick={() => correr(() => cargarSesionCli(paquete.trim()), 'Sesión cargada:')}>Guardar y probar</button>
+          </div>
+        </div>
+      )}
+      {msg?.ok && <div className="ms-cost" style={{ color: 'var(--good-ink)' }}>{msg.ok}</div>}
+      {msg?.error && <div className="ms-cost" style={{ color: 'var(--critical)' }}>{msg.error}</div>}
+    </div>
+  );
+}
 
 function Ajustes({ onGuardado }) {
   const [datos, setDatos] = useState(null);
@@ -115,6 +154,7 @@ function Ajustes({ onGuardado }) {
             }}>🔌 Reconectar generador</button>
             <span className={`badge ${datos.conexiones.promptAuto ? 'live' : 'hf-off'}`}><span className="dot" />Prompt automático {datos.conexiones.promptAuto ? 'listo' : 'sin clave'}</span>
           </div>
+          <SesionCli cli={datos.conexiones.cli} onCambio={cargar} />
         </div>
 
         <div className="card">
