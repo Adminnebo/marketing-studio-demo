@@ -77,6 +77,13 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   avisos en español para revisar. Usa OpenAI `gpt-4.1` (el mini contaba mal las piezas repetidas); ~0,03 USD por prompt.
 - El costo en créditos se pide con `get_cost` (no genera nada) y se muestra con el precio para JH; al generar, el servidor
   lo vuelve a calcular y cobra la billetera. El worker envía con `generate_video`/`generate_image` y sigue con `job_status`.
+- **Cinema Studio 4.0 y 3.5** no están en el MCP: se cotizan y crean con la CLI oficial (`@higgsfield/cli`, misma cuenta y
+  créditos; `server/lib/hf-cli.js`). Su sesión rota como `hf_token`, así que vive en la base (`hf_cli_sesion`) y cada
+  llamada la toma con `FOR UPDATE`, corre la CLI en un directorio temporal y guarda lo renovado. El seguimiento es el mismo
+  `job_status`. Se carga una vez (la CLI inicia sesión por navegador contra localhost): `npx @higgsfield/cli auth login` →
+  `node scripts/sesion-cli.js` → pegar en Super Admin (o variable `HF_CLI_SESION` del worker, solo si la tabla está
+  vacía); después **borrar la sesión local** (`~/.config/higgsfield`), si no, dos copias rotan el mismo token. El worker la
+  usa cada 6 h para que no venza. CS 4.0: 4–30 s, 480p/720p/1080p, 7 cr/s a 720p.
 
 ## Créditos, precios y billetera de JH
 
@@ -135,5 +142,6 @@ borrar.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
 - **Primer usuario de JH**: cargar saldo en la billetera (recarga manual) y darle acceso desde Super Admin.
 - **Cuenta de prueba** `prueba.marketing@neboaiconsulting.com` (agente sin permisos en los otros paneles, rol Usuario en Marketing): borrarla o quitarle el acceso cuando no haga falta.
-- **Cinema Studio 4.0**: existe en la web del generador pero no en el catálogo de su integración (MCP); revisar cada tanto y sumarlo cuando aparezca.
+- **Probar Cinema Studio 4.0 desde el panel** con una generación real (la CLI y el seguimiento ya se probaron por separado: video de 5 s, 35 créditos).
+- **Sesión de la CLI** (Cinema Studio 4.0 y 3.5): se renueva sola; si Super Admin la marca vencida, recargarla con `scripts/sesion-cli.js`. Si el MCP llega a exponer estos modelos, el panel usa el del MCP y la CLI deja de hacer falta.
 - La clave de OpenAI es la misma del menú digital (servicio `generador`): si se rota allá, hay que actualizarla acá.
