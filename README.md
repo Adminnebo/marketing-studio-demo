@@ -77,6 +77,11 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   avisos en español para revisar. Usa OpenAI `gpt-4.1` (el mini contaba mal las piezas repetidas); ~0,03 USD por prompt.
 - El costo en créditos se pide con `get_cost` (no genera nada) y se muestra con el precio para JH; al generar, el servidor
   lo vuelve a calcular y cobra la billetera. El worker envía con `generate_video`/`generate_image` y sigue con `job_status`.
+- La pestaña Crear empieza eligiendo **plantilla** (recomendado) o **desde cero**. Desde cero es un asistente de 5 pasos
+  (qué crear · formato, duración y calidad · foto · descripción · revisar y crear) con barra clicable para volver a
+  cualquiera. El orden no es casual: la descripción que escribe la IA se arma para la duración (tramos y ritmo), el
+  formato y el sonido elegidos, así que van antes; si después se cambia alguno (o la foto), el paso 5 avisa que la
+  descripción quedó descuadrada y ofrece reescribirla.
 - **Cinema Studio 4.0 y 3.5** no están en el MCP: se cotizan y crean con la CLI oficial (`@higgsfield/cli`, misma cuenta y
   créditos; `server/lib/hf-cli.js`). Su sesión rota como `hf_token`, así que vive en la base (`hf_cli_sesion`) y cada
   llamada la toma con `FOR UPDATE`, corre la CLI en un directorio temporal y guarda lo renovado. El seguimiento es el mismo
@@ -145,5 +150,5 @@ borrar.
 - **Cuenta de prueba** `prueba.marketing@neboaiconsulting.com` (agente sin permisos en los otros paneles, rol Usuario en Marketing): borrarla o quitarle el acceso cuando no haga falta.
 - **Probar Cinema Studio 4.0 desde el panel** con una generación real (la CLI y el seguimiento ya se probaron por separado: video de 5 s, 35 créditos).
 - **Sesión de la CLI** (Cinema Studio 4.0 y 3.5): se renueva sola; si Super Admin la marca vencida, recargarla con `scripts/sesion-cli.js`. Si el MCP llega a exponer estos modelos, el panel usa el del MCP y la CLI deja de hacer falta.
-- **Facilidad de uso, 2.ª vuelta**: Crear, Mis creaciones y Créditos ya están rediseñados; faltan Super Admin y Redes, y ajustar con lo que digan los usuarios de JH al usarlo.
+- **Facilidad de uso, 2.ª vuelta**: Crear (asistente de 5 pasos), Mis creaciones y Créditos ya están rediseñados; faltan **Super Admin y Redes**, y ajustar con lo que digan los usuarios de JH al usarlo.
 - La clave de OpenAI es la misma del menú digital (servicio `generador`): si se rota allá, hay que actualizarla acá.
