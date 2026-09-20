@@ -5,9 +5,9 @@ export function Pasos({ onAyuda }) {
   return (
     <div className="pasos">
       {[
-        ['1', 'Elige cómo crear', 'Con una plantilla ya probada o desde cero.'],
-        ['2', 'Sube la foto de tu producto', 'Fondo liso, producto completo y nítido.'],
-        ['3', 'Genera y descarga', 'Tarda de 1 a 10 minutos; lo encuentras en Mis creaciones.'],
+        ['1', 'Elige cómo crear', 'Con una plantilla ya probada o desde cero, paso a paso.'],
+        ['2', 'Completa los pasos', 'Puedes volver atrás y cambiar lo que sea antes de crear.'],
+        ['3', 'Revisa y crea', 'Ves el costo antes de gastar; el resultado queda en Mis creaciones.'],
       ].map(([n, t, s]) => (
         <div key={n} className="paso">
           <span className="paso-num">{n}</span>
@@ -18,6 +18,15 @@ export function Pasos({ onAyuda }) {
     </div>
   );
 }
+
+// Tutorial del camino largo (desde cero), en el mismo orden que el asistente.
+const TUTORIAL = [
+  ['Elige video o foto', 'Y el modelo de IA: si no sabes cuál, deja el recomendado.'],
+  ['Formato, duración y calidad', 'Va antes de la descripción a propósito: la descripción que escribe la IA se arma para esa duración (reparte la escena en tres tramos), ese formato y el sonido. Si después cambias algo, el panel te avisa y te ofrece reescribirla.'],
+  ['Sube la foto de tu producto', 'La IA copia el producto tal como se ve. Sin foto no puede escribir la descripción por ti y el producto saldría inventado.'],
+  ['La descripción', 'Deja que la IA la escriba desde tu foto (unos 20 segundos) o escríbela tú. Puedes editarla siempre, y revisa los avisos si aparecen.'],
+  ['Revisar y crear', 'Repasa todo en una sola pantalla, con un botón Editar en cada línea, y crea cuando esté bien. Ahí ves cuántos créditos usa.'],
+];
 
 const PREGUNTAS = [
   ['¿Plantilla o desde cero?', 'Empieza con una plantilla: es un diseño que ya funciona y solo cambias el producto. "Desde cero" sirve cuando quieres algo muy específico: describes la escena (o dejas que la IA la escriba a partir de la foto) y eliges duración y formato.'],
@@ -41,6 +50,13 @@ export function Ayuda({ onCerrar }) {
           <div className="ms-modal__head">
             <h2>Guía rápida</h2>
             <button className="ms-x" onClick={onCerrar} aria-label="Cerrar">✕</button>
+          </div>
+          <div className="ayuda-tut">
+            <div className="ayuda-p">Crear desde cero, paso a paso</div>
+            <ol className="ayuda-ol">
+              {TUTORIAL.map(([t, d]) => <li key={t}><strong>{t}.</strong> {d}</li>)}
+            </ol>
+            <div className="ayuda-r">Con una plantilla es más corto: eliges el diseño, subes la foto y creas.</div>
           </div>
           {PREGUNTAS.map(([p, r]) => (
             <div key={p} className="ayuda-item">

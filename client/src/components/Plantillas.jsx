@@ -106,6 +106,11 @@ export default function Plantillas({ categorias, onElegir }) {
           <button className={`mini-btn ${f.orden === 'jh' ? 'active' : ''}`} onClick={() => cambiar({ orden: 'jh' })}>⭐ Mejores para JH</button>
           <button className={`mini-btn ${f.orden === 'original' ? 'active' : ''}`} onClick={() => cambiar({ orden: 'original' })} title="El orden en que las publica el proveedor">Orden del catálogo</button>
           <button className="mini-btn pl-mas" onClick={() => setAbiertos(!abiertos)}>{abiertos ? 'Menos filtros ▲' : `Más filtros${activos ? ` (${activos})` : ''} ▼`}</button>
+          {(activos > 0 || f.q) && !abiertos && (
+            <button className="mini-btn danger" onClick={() => { setQTexto(''); setF({ ...VACIO, categoria: f.categoria, orden: f.orden }); }}>
+              ✕ Quitar {activos + (f.q ? 1 : 0)} filtro{activos + (f.q ? 1 : 0) > 1 ? 's' : ''}
+            </button>
+          )}
         </div>
         {abiertos && (
           <>

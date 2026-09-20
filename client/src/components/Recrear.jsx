@@ -91,7 +91,10 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                   <span className="pill">{TIPOS[preset.type] || preset.type}{formato?.name ? ` · ${formato.name}` : ''}</span>
                   <div className="rc-que">La IA rehace esta plantilla con <strong>tu producto</strong>: mismo estilo, escena y movimiento.</div>
                 </div>
-                <button type="button" className="ms-x" onClick={onCerrar} disabled={ocupado} aria-label="Cerrar">✕</button>
+                <div className="rc-cerrar">
+                  <button type="button" className="linklike" onClick={() => onCerrar()} disabled={ocupado}>← Volver a las plantillas</button>
+                  <button type="button" className="ms-x" onClick={onCerrar} disabled={ocupado} aria-label="Cerrar">✕</button>
+                </div>
               </div>
 
               {(req.producto || req.avatar) && (
