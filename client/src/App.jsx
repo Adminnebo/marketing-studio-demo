@@ -86,8 +86,8 @@ export default function App() {
   const setModoCrear = (m) => { setModoCrearSt(m); try { localStorage.setItem('ms_modo_crear', m); } catch { /* sin storage */ } };
   const [libre, setLibre] = useState({ n: 0, inicial: null }); // 'Usar de nuevo' de una generacion libre
   const [gens, setGens] = useState({ items: [], cargando: false, error: null, siguiente: null });
-  // Camila (buscar productos de JH). productoListo = foto ya preparada para crear ({ media_id, url, nombre, producto }).
-  const [camila, setCamila] = useState({ ok: false, abierta: false, destino: null });
+  // Camila (buscar productos de JH; se ve siempre, aunque no este conectada al catalogo). productoListo = foto ya preparada para crear ({ media_id, url, nombre, producto }).
+  const [camila, setCamila] = useState({ conectada: true, abierta: false, destino: null });
   const [productoListo, setProductoListo] = useState(null);
   const abrirCamila = useCallback((destino = null) => setCamila((c) => ({ ...c, abierta: true, destino })), []);
   const cerrarCamila = useCallback(() => setCamila((c) => ({ ...c, abierta: false, destino: null })), []);
@@ -153,7 +153,7 @@ export default function App() {
       if (NIVEL[m.rol] >= NIVEL.admin) cargarRedes();
     }).catch((e) => { if (e.sinAcceso) setSinAcceso(true); });
     fetchEstado().then(setEstado).catch(() => {});
-    fetchCamilaEstado().then((e) => setCamila((c) => ({ ...c, ok: !!e.configurado }))).catch(() => {});
+    fetchCamilaEstado().then((e) => setCamila((c) => ({ ...c, conectada: !!e.configurado }))).catch(() => {});
     cargarCatalogo();
     setGens((g) => ({ ...g, cargando: true }));
     recargarGens();
@@ -321,12 +321,10 @@ export default function App() {
         ))}
       </nav>
         {/* Camila siempre a mano: busca productos de JH y deja la foto lista para crear. */}
-        {camila.ok && (
-          <button className="cm-tab-btn" onClick={() => abrirCamila()} title="Pídele un producto a Camila">
-            <span className="cm-av">C</span>
-            <span><span className="cm-tab-l">Camila</span><br /><span className="cm-tab-v">Buscar producto</span></span>
-          </button>
-        )}
+        <button className="cm-tab-btn" onClick={() => abrirCamila()} title="Pídele un producto a Camila">
+          <span className="cm-av">C</span>
+          <span><span className="cm-tab-l">Camila</span><br /><span className="cm-tab-v">Buscar producto</span></span>
+        </button>
         {/* Saldo siempre a la vista (la barra queda fija arriba al bajar). */}
         <button className={`saldo-chip ${saldoValor != null && saldoValor < 0 ? 'neg' : ''}`} onClick={() => setTab('creditos')}
           title={externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
@@ -356,11 +354,11 @@ export default function App() {
                   <span>{productoListo.nombre}{productoListo.producto?.codigo ? ` · Cód. ${productoListo.producto.codigo}` : ''}</span>
                 </div>
                 <div className="cm-listo-bar-acc">
-                  {camila.ok && <button className="mini-btn" onClick={() => abrirCamila()}>Cambiar</button>}
+                  <button className="mini-btn" onClick={() => abrirCamila()}>Cambiar</button>
                   <button className="mini-btn" onClick={() => setProductoListo(null)}>Quitar</button>
                 </div>
               </div>
-            ) : camila.ok && (
+            ) : (
               <div className="cm-listo-bar cm-invita">
                 <div className="cm-listo-bar-t">
                   <strong>¿No tienes la foto del producto?</strong>
@@ -383,7 +381,7 @@ export default function App() {
             </div>
             {modoCrear === 'cero' ? (
               <Libre key={libre.n} inicial={libre.inicial} {...saldoProps} rol={me.rol} rolReal={me.rolReal}
-                productoListo={productoListo} onBuscarCamila={camila.ok ? () => abrirCamila('libre') : null}
+                productoListo={productoListo} onBuscarCamila={() => abrirCamila('libre')}
                 onVer={() => setTab('generaciones')} onRecargar={() => setTab('creditos')}
                 onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }} />
             ) : (
@@ -432,7 +430,7 @@ export default function App() {
           rolReal={me.rolReal}
           inicial={abierto.inicial}
           productoListo={productoListo}
-          onBuscarCamila={camila.ok ? () => abrirCamila('plantilla') : null}
+          onBuscarCamila={() => abrirCamila('plantilla')}
           onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }}
           onCerrar={(ir) => { setAbierto(null); if (ir === 'generaciones' || ir === 'creditos') setTab(ir); }}
         />
@@ -440,11 +438,9 @@ export default function App() {
 
       {ayuda && <Ayuda onCerrar={() => setAyuda(false)} />}
 
-      {camila.ok && (
-        <Camila abierta={camila.abierta} destino={camila.destino} usado={productoListo?.producto?.codigo}
-          onCerrar={cerrarCamila} onUsado={setProductoListo}
-          onIr={(modo) => { setTab('plantillas'); setModoCrear(modo); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
-      )}
+      <Camila abierta={camila.abierta} destino={camila.destino} conectada={camila.conectada} usado={productoListo?.producto?.codigo}
+        onCerrar={cerrarCamila} onUsado={setProductoListo}
+        onIr={(modo) => { setTab('plantillas'); setModoCrear(modo); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
 
       <div className="footer">Marketing · contenido generado con IA · <button className="linklike" onClick={() => setAyuda(true)}>Guía rápida</button></div>
     </div>

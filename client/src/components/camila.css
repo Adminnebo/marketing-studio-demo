@@ -150,3 +150,5 @@
 .lb-camila { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 14px; font-size: 0.82rem; color: var(--text-secondary); }
 .rc-camila { margin-top: 8px; width: 100%; justify-content: center; }
 .cm-invita .cm-listo-bar-t span { white-space: normal; }
+.cm-aviso { font-size: 0.78rem; color: var(--text-secondary); background: color-mix(in srgb, var(--warning) 14%, var(--surface-1)); padding: 8px 16px; border-bottom: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border)); }
+.cm-cab-t .dot.apagado { background: var(--text-muted); }

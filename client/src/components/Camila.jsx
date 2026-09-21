@@ -52,7 +52,7 @@ function Producto({ p, usando, usado, onUsar, onVer }) {
  * dice si tiene foto y con "Usar para crear" la foto queda lista en el panel.
  * destino: 'libre' | 'plantilla' cuando se abrio desde un paso "Tu foto" (usar = aplicar y cerrar).
  */
-export default function Camila({ abierta, destino, usado, onCerrar, onUsado, onIr }) {
+export default function Camila({ abierta, destino, usado, conectada = true, onCerrar, onUsado, onIr }) {
   const [conv, setConv] = useState({ id: null, mensajes: [] });
   const [cargada, setCargada] = useState(false);
   const [texto, setTexto] = useState('');
@@ -103,6 +103,13 @@ export default function Camila({ abierta, destino, usado, onCerrar, onUsado, onI
     const provisional = { id: `tmp${Date.now()}`, rol: 'usuario', texto: limpio };
     setConv((c) => ({ ...c, mensajes: [...c.mensajes, provisional] }));
     setEnviando(true);
+    if (!conectada) {
+      // Sin catalogo todavia: se ve como funciona, pero Camila avisa en vez de buscar.
+      await new Promise((ok) => setTimeout(ok, 900));
+      setConv((c) => ({ ...c, mensajes: [...c.mensajes, { id: `tmpc${Date.now()}`, rol: 'camila', texto: 'Todavía no estoy conectada al catálogo de JH, así que no puedo buscar productos. En cuanto me conecten, te los busco aquí mismo 🙂' }] }));
+      setEnviando(false);
+      return;
+    }
     try {
       const r = await mensajeCamila({ conversacionId: conv.id, texto: limpio });
       setConv((c) => ({ id: r.conversacionId, mensajes: [...c.mensajes.filter((m) => m.id !== provisional.id), r.usuario, r.camila] }));
@@ -143,11 +150,17 @@ export default function Camila({ abierta, destino, usado, onCerrar, onUsado, onI
           <Avatar />
           <div className="cm-cab-t">
             <strong>Camila</strong>
-            <span><span className="dot pulse" /> Busca en el catálogo de JH</span>
+            {conectada
+              ? <span><span className="dot pulse" /> Busca en el catálogo de JH</span>
+              : <span><span className="dot apagado" /> Todavía sin conexión al catálogo</span>}
           </div>
           {conv.mensajes.length > 0 && <button className="mini-btn" onClick={nueva} disabled={enviando} title="Empezar otra búsqueda">↺ Nueva</button>}
           <button className="ms-x" onClick={onCerrar} aria-label="Cerrar">✕</button>
         </header>
+
+        {!conectada && (
+          <div className="cm-aviso">🔌 Camila todavía no está conectada al catálogo de JH. Ya puedes ver cómo funciona; muy pronto va a buscar productos de verdad.</div>
+        )}
 
         {destino && (
           <div className="cm-destino">

@@ -145,7 +145,7 @@ El equipo le pide un producto a Camila en lenguaje natural (botón **Camila · B
 - "Usar para crear" importa la foto al generador (`media_import_url`); no se cobra nada hasta crear.
 - No pasa por WhatsApp, el CRM ni Sword. Queda guardado por usuario: `camila_conversaciones`, `camila_mensajes` (con las búsquedas, tokens y tiempo) y `camila_usos`.
 - IA: `gpt-4.1-mini` (cambiable con `CAMILA_MODELO`), con la misma `OPENAI_API_KEY`. Tope de 40 mensajes cada 10 min por usuario.
-- Se activa con `JH_CATALOGO` en el servicio `panel`: JSON `{ host, puerto, instancia, base, usuario, password }`, el mismo formato de la fuente "Base JH" de Jarvis. Sin esa variable el botón no aparece.
+- Se activa con `JH_CATALOGO` en el servicio `panel`: JSON `{ host, puerto, instancia, base, usuario, password }`, el mismo formato de la fuente "Base JH" de Jarvis. Sin esa variable Camila igual se ve (botón, chat y ejemplos), avisa que todavía no está conectada al catálogo y no busca nada.
 
 ## Desarrollo local
 
