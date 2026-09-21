@@ -5,6 +5,7 @@ import Portada from './Portada';
 import Avatares from './Avatares';
 import Dictar from './Dictar';
 import FichaTecnica, { sumarTexto } from './FichaTecnica';
+import EditorGrande, { BotonAmpliar } from './EditorGrande';
 import { precioDe, usd, cred, creditos as nCred } from '../precio';
 
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
@@ -26,6 +27,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
   const [avatar, setAvatar] = useState(inicial?.avatar || null);
   const [eligiendoAvatar, setEligiendoAvatar] = useState(false);
   const [prompt, setPrompt] = useState(inicial?.prompt || '');
+  const [grande, setGrande] = useState(false);
   const [url, setUrl] = useState(inicial?.url || '');
   const [duracion, setDuracion] = useState(null);
   const [enviando, setEnviando] = useState(false);
@@ -188,9 +190,12 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
 
               <div>
                 <span className="ms-label"><span className="paso-num sm">2</span>{req.promptObligatorio ? <>Describe lo que quieres<span className="req">*</span></> : <>¿Quieres cambiar algo?<span style={{ textTransform: 'none', fontWeight: 500 }}> (opcional; si no, se hace igual a la plantilla)</span></>}</span>
+<div className="eg-envol">
                 <textarea className="ms-textarea" maxLength={5000} value={prompt} disabled={!!enviada}
                   placeholder="Ej.: fondo azul, texto “Oferta de temporada”, tono profesional…"
                   onChange={(e) => setPrompt(e.target.value)} />
+                {!enviada && <BotonAmpliar onClick={() => setGrande(true)} />}
+                </div>
                 {!enviada && <div style={{ marginTop: 6 }}><Dictar valor={prompt} onCambiar={setPrompt} max={5000} /></div>}
                 {!enviada && productoListo?.producto?.codigo && producto?.media_id === productoListo.media_id && (
                   <div style={{ marginTop: 8 }}>
@@ -234,6 +239,8 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
           )}
         </div>
       </div>
+      {grande && <EditorGrande titulo="¿Quieres cambiar algo?" valor={prompt} onCambio={setPrompt} max={5000} onCerrar={() => setGrande(false)}
+        nota="Se manda tal cual junto con la plantilla: describe los cambios que quieras (fondo, texto, tono…)." />}
     </div>
   );
 }

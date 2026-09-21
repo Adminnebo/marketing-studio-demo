@@ -139,3 +139,45 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .ft-nota { font-size: 0.76rem; color: var(--text-muted); }
 .ft-err { font-size: 0.8rem; color: var(--critical); }
 .ft-nada { margin: 0; font-size: 0.82rem; color: var(--text-muted); }
+
+/* ── Selector de modelos: recomendados en tarjetas + todos por familia ── */
+.mp-recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.mp-card { position: relative; display: flex; flex-direction: column; gap: 5px; text-align: left; font: inherit; cursor: pointer; padding: 12px 14px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--surface-1); color: var(--text-primary); transition: border-color .12s, box-shadow .12s; }
+.mp-card:hover { border-color: color-mix(in srgb, var(--series-1) 50%, var(--border)); }
+.mp-card.on { border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 6%, var(--surface-1)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--series-1) 14%, transparent); }
+.mp-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mp-top b { font-size: 0.95rem; }
+.mp-tag { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 999px; color: #fff; }
+.mp-tag.t1 { background: var(--series-2); }
+.mp-tag.t2 { background: var(--series-5); }
+.mp-tag.t0 { background: var(--surface-3, var(--surface-2)); color: var(--text-secondary); }
+.mp-check { margin-left: auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; border: 1.5px solid var(--baseline); color: #fff; flex: none; }
+.mp-card.on .mp-check { background: var(--series-1); border-color: var(--series-1); }
+.mp-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; }
+.mp-ver { margin-top: 8px; }
+.mp-todos { margin-top: 10px; display: flex; flex-direction: column; gap: 12px; }
+.mp-fam-t { font-size: 0.7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+.mp-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.mp-card.chica { padding: 8px 11px; border-width: 1px; border-radius: 10px; gap: 3px; }
+.mp-card.chica b { font-size: 0.84rem; }
+.mp-card.chica .mp-desc { font-size: 0.74rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mp-card.chica .mp-check { width: 17px; height: 17px; font-size: 10px; }
+
+/* ── Editor de texto en grande (boton en la esquina) ── */
+.eg-envol { position: relative; }
+.eg-envol > textarea { padding-right: 38px; }
+.eg-amp { position: absolute; top: 7px; right: 7px; z-index: 2; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); opacity: .85; }
+.eg-amp:hover { opacity: 1; color: var(--series-1); border-color: color-mix(in srgb, var(--series-1) 45%, var(--border)); }
+.eg-velo { position: fixed; inset: 0; z-index: 90; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.eg-caja { width: min(980px, 100%); height: min(86vh, 900px); display: flex; flex-direction: column; background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4); overflow: hidden; }
+.eg-cab { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.eg-cab b { font-size: 0.98rem; flex: 1; min-width: 0; }
+.eg-cuenta { font-size: 0.76rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.eg-texto { flex: 1; width: 100%; resize: none; border: 0; outline: none; padding: 18px 22px; font: inherit; font-size: 1rem; line-height: 1.7; background: var(--surface-1); color: var(--text-primary); }
+.eg-nota { padding: 9px 16px; border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted); background: var(--surface-2); }
+.lb-rev-acc { display: inline-flex; gap: 12px; flex: none; }
+.mp-top { padding-right: 28px; }
+.mp-check { position: absolute; top: 12px; right: 12px; margin-left: 0; }
+.mp-card.chica .mp-check { top: 9px; right: 10px; }

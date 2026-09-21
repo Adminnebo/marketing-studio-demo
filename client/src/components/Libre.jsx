@@ -3,6 +3,7 @@ import { fetchModelos, costoLibre, crearLibre, autoPrompt, subirImagen } from '.
 import { usd, cred, creditos as nCred } from '../precio';
 import Dictar from './Dictar';
 import FichaTecnica, { sumarTexto } from './FichaTecnica';
+import EditorGrande, { BotonAmpliar } from './EditorGrande';
 
 // Formatos con nombre y para que sirve cada uno (los demas se muestran tal cual).
 const FORMATOS = {
@@ -53,6 +54,8 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
   const [indicaciones, setIndicaciones] = useState('');
   const [dictado, setDictado] = useState(''); // lo dictado, antes de elegir cómo usarlo
   const [avisos, setAvisos] = useState([]);
+  const [grande, setGrande] = useState(null); // caja abierta en grande: 'prompt' | 'indicaciones' | 'dictado'
+  const [indicBase, setIndicBase] = useState(null); // indicaciones con las que la IA escribio la descripcion
   const [msg, setMsg] = useState(null);
   const [drag, setDrag] = useState(false);
   const [base, setBase] = useState(null); // ajustes con los que se escribió la descripción
@@ -141,6 +144,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
       setPrompt(r.prompt || '');
       setAvisos(r.avisos || []);
       setBase(ajustesActuales);
+      setIndicBase(instrucciones || '');
     } catch (e) { setMsg({ error: e.message }); } finally { setGenerandoPrompt(false); }
   };
 
@@ -232,32 +236,45 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
               <button key={k} className={tipo === k ? 'on' : ''} onClick={() => { setTipo(k); setModeloId(''); }}><span>{ic}</span>{l}</button>
             ))}
           </div>
-          {modelo && (
-            <div className="lb-grupo">
-              <div className="lb-lbl">Modelo de IA</div>
-              {!verModelos ? (
-                <div className="lb-modelo-elegido">
-                  <div>
-                    <strong>{modelo.nombre}</strong>{modelo.id === recomendado?.id && <span className="modo-tag">Recomendado</span>}
-                    <div className="ms-cost">{modelo.descripcion || 'Cada modelo tiene su estilo y su precio.'}</div>
-                  </div>
-                  <button className="linklike" onClick={() => setVerModelos(true)}>Cambiar modelo</button>
+          {modelo && (() => {
+            // Recomendados primero (vienen marcados del servidor); si el tipo no tiene, el primero de la lista.
+            const recs = deTipo.filter((m) => m.rec);
+            const destacados = recs.length ? recs : deTipo.slice(0, 1);
+            const elegidoAparte = !destacados.some((m) => m.id === modelo.id);
+            const familias = [...new Set(deTipo.map((m) => m.familia))];
+            const Tarjeta = ({ m, chica }) => (
+              <button key={m.id} className={`mp-card ${chica ? 'chica' : ''} ${m.id === modelo.id ? 'on' : ''}`} onClick={() => setModeloId(m.id)} aria-pressed={m.id === modelo.id}>
+                <span className="mp-top">
+                  <b>{m.nombre}</b>
+                  {!chica && (m.rec ? <span className={`mp-tag t${m.rec.orden}`}>{m.rec.etiqueta}</span> : m.id === recomendado?.id ? <span className="mp-tag t1">Recomendado</span> : <span className="mp-tag t0">Elegido</span>)}
+                  <span className="mp-check" aria-hidden="true">{m.id === modelo.id ? '✓' : ''}</span>
+                </span>
+                {(m.rec?.desc || m.descripcion) && <span className="mp-desc">{chica ? m.descripcion || m.rec?.desc : m.rec?.desc || m.descripcion}</span>}
+              </button>
+            );
+            return (
+              <div className="lb-grupo">
+                <div className="lb-lbl">Modelo de IA</div>
+                <div className="mp-recs">
+                  {destacados.map((m) => <Tarjeta key={m.id} m={m} />)}
+                  {elegidoAparte && <Tarjeta m={modelo} />}
                 </div>
-              ) : (
-                <div className="lb-modelo-fila">
-                  <select className="search select lb-modelo" value={modelo.id} onChange={(e) => setModeloId(e.target.value)} disabled={!modelos}>
-                    {[...new Set(deTipo.map((m) => m.familia))].map((f) => (
-                      <optgroup key={f} label={f}>
-                        {deTipo.filter((m) => m.familia === f).map((m) => <option key={m.id} value={m.id}>{m.nombre}{m.id === recomendado?.id ? ' (recomendado)' : ''}</option>)}
-                      </optgroup>
+                <button className="linklike mp-ver" onClick={() => setVerModelos(!verModelos)}>
+                  {verModelos ? 'Ocultar los demás modelos ▲' : `Ver todos los modelos (${deTipo.length}) ▼`}
+                </button>
+                {verModelos && (
+                  <div className="mp-todos">
+                    {familias.map((f) => (
+                      <div key={f} className="mp-fam">
+                        <div className="mp-fam-t">{f}</div>
+                        <div className="mp-lista">{deTipo.filter((m) => m.familia === f).map((m) => <Tarjeta key={m.id} m={m} chica />)}</div>
+                      </div>
                     ))}
-                  </select>
-                  <span className="ms-cost lb-desc">{modelo.descripcion}</span>
-                  <button className="linklike" onClick={() => setVerModelos(false)}>Listo</button>
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </section>
       )}
 
@@ -421,10 +438,13 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
 
           {modoPrompt === 'dictar' && (
             <div className="lb-dictado">
-              <textarea className="ms-textarea lb-textarea" maxLength={2000} value={dictado} onChange={(e) => setDictado(e.target.value)}
-                placeholder={tipo === 'video'
-                  ? 'Toca 🎙 Dictar y cuenta qué quieres ver: la escena, el fondo, qué se mueve, cómo se mueve la cámara, el ambiente, qué destacar del producto…'
-                  : 'Toca 🎙 Dictar y cuenta cómo quieres la foto: el fondo, la luz, el ángulo, el ambiente, qué destacar del producto…'} />
+              <div className="eg-envol">
+                <textarea className="ms-textarea lb-textarea" maxLength={2000} value={dictado} onChange={(e) => setDictado(e.target.value)}
+                  placeholder={tipo === 'video'
+                    ? 'Toca 🎙 Dictar y cuenta qué quieres ver: la escena, el fondo, qué se mueve, cómo se mueve la cámara, el ambiente, qué destacar del producto…'
+                    : 'Toca 🎙 Dictar y cuenta cómo quieres la foto: el fondo, la luz, el ángulo, el ambiente, qué destacar del producto…'} />
+                <BotonAmpliar onClick={() => setGrande('dictado')} />
+              </div>
               <Dictar grande valor={dictado} onCambiar={setDictado} />
               {dictado.trim() && (
                 <div className="lb-usar">
@@ -461,7 +481,10 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
                 <input className="ms-input" maxLength={120} placeholder="Ej.: Breaker Siemens 2P 40A" value={producto} onChange={(e) => setProducto(e.target.value)} />
               </label>
               <label className="filter-field" style={{ width: '100%' }}><span>Tus indicaciones para la IA (opcional): escribe o dicta qué quieres</span>
-                <textarea className="ms-textarea lb-ind" maxLength={2000} placeholder="Ej.: fondo de obra, que se vea el amperaje, una mano con guante baja la palanca, luz cálida…" value={indicaciones} onChange={(e) => setIndicaciones(e.target.value)} />
+                <div className="eg-envol">
+                  <textarea className="ms-textarea lb-ind" maxLength={2000} placeholder="Ej.: fondo de obra, que se vea el amperaje, una mano con guante baja la palanca, luz cálida…" value={indicaciones} onChange={(e) => setIndicaciones(e.target.value)} />
+                  <BotonAmpliar onClick={(e) => { e.preventDefault(); setGrande('indicaciones'); }} />
+                </div>
               </label>
               <Dictar valor={indicaciones} onCambiar={setIndicaciones} />
               <button className="btn secondary" onClick={() => generarPrompt()} disabled={!imagen || generandoPrompt}>
@@ -470,6 +493,12 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
             </div>
           )}
 
+          {usaIa && prompt.trim() && indicBase !== null && indicaciones.trim() !== indicBase.trim() && !generandoPrompt && (
+            <div className="lb-avisos">
+              Cambiaste tus indicaciones después de escribir la descripción. El modelo solo recibe la descripción: reescríbela para que las incluya.
+              <button className="linklike" style={{ marginLeft: 6 }} onClick={() => generarPrompt()}>↻ Reescribir descripción</button>
+            </div>
+          )}
           {avisos.length > 0 && modoPrompt !== 'dictar' && (
             <div className="lb-avisos">
               <strong>Revisa esto antes de crear:</strong>
@@ -479,10 +508,13 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
           {modoPrompt !== 'dictar' && (!usaIa || prompt || generandoPrompt) && (
             <>
               {usaIa && <div className="lb-lbl">Descripción que recibe el modelo</div>}
-              <textarea className="ms-textarea lb-textarea" maxLength={5000} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={generandoPrompt}
-                placeholder={generandoPrompt ? 'La IA está escribiendo la descripción…' : tipo === 'video'
-                  ? 'Ej.: breaker Siemens sobre fondo negro, luz de estudio, la cámara se acerca despacio hasta la etiqueta…'
-                  : 'Ej.: lámpara LED sobre mesa de madera, luz cálida, estilo catálogo…'} />
+              <div className="eg-envol">
+                <textarea className="ms-textarea lb-textarea" maxLength={5000} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={generandoPrompt}
+                  placeholder={generandoPrompt ? 'La IA está escribiendo la descripción…' : tipo === 'video'
+                    ? 'Ej.: breaker Siemens sobre fondo negro, luz de estudio, la cámara se acerca despacio hasta la etiqueta…'
+                    : 'Ej.: lámpara LED sobre mesa de madera, luz cálida, estilo catálogo…'} />
+                {!generandoPrompt && <BotonAmpliar onClick={() => setGrande('prompt')} />}
+              </div>
               {!usaIa && <Dictar valor={prompt} onCambiar={setPrompt} max={5000} />}
               {usaIa && prompt && <div className="lb-nota">Está en inglés porque así la entiende mejor el modelo. Puedes editarla.</div>}
             </>
@@ -505,7 +537,10 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
               <div key={n} className={`lb-rev ${!v || v === 'Falta escribirla' ? 'falta' : ''}`}>
                 <span className="lb-rev-k">{k}</span>
                 <span className="lb-rev-v">{v || '—'}</span>
-                <button className="linklike" onClick={() => ir(n)}>Editar</button>
+                <span className="lb-rev-acc">
+                  {n === 4 && prompt.trim() && <button className="linklike" onClick={() => setGrande('prompt')}>Ver completa ⤢</button>}
+                  <button className="linklike" onClick={() => ir(n)}>Editar</button>
+                </span>
               </div>
             ))}
           </div>
@@ -513,12 +548,24 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
             <div className="lb-avisos">
               <strong>Ojo:</strong> después de escribir la descripción cambiaste {desajuste.join(' y ')}.
               {usaIa && imagen
-                ? <> Conviene reescribirla para que cuadre. <button className="linklike" onClick={generarPrompt} disabled={generandoPrompt}>{generandoPrompt ? 'Escribiendo…' : '↻ Reescribir descripción'}</button></>
+                ? <> Conviene reescribirla para que cuadre. <button className="linklike" onClick={() => generarPrompt()} disabled={generandoPrompt}>{generandoPrompt ? 'Escribiendo…' : '↻ Reescribir descripción'}</button></>
                 : <> Revísala para que cuadre. <button className="linklike" onClick={() => ir(4)}>Editar descripción</button></>}
             </div>
           )}
           {msg?.error && <div className="ms-errors">{msg.error}</div>}
         </section>
+      )}
+
+      {grande && (
+        grande === 'prompt' ? (
+          <EditorGrande titulo={`Descripción que recibe el modelo`} valor={prompt} onCambio={setPrompt} max={5000} onCerrar={() => setGrande(null)}
+            nota={usaIa ? 'Está en inglés porque así la entiende mejor el modelo. Lo que edites aquí es exactamente lo que recibe.' : 'Esto es exactamente lo que recibe el modelo.'} />
+        ) : grande === 'indicaciones' ? (
+          <EditorGrande titulo="Tus indicaciones para la IA" valor={indicaciones} onCambio={setIndicaciones} max={2000} onCerrar={() => setGrande(null)}
+            nota="La IA las usa para escribir la descripción. Si ya estaba escrita, reescríbela para que las incluya." />
+        ) : (
+          <EditorGrande titulo="Lo que dictaste" valor={dictado} onCambio={setDictado} max={2000} onCerrar={() => setGrande(null)} />
+        )
       )}
 
       {/* Pie fijo: costo, lo que falta y navegación entre pasos */}

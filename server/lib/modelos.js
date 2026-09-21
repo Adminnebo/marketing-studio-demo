@@ -14,6 +14,11 @@ const DESTACADOS = [
   'cinematic_studio_video_4_0', 'cinematic_studio_3_0', 'cinematic_studio_video_3_5', 'seedance_2_5', 'seedance_2_0', 'kling3_0', 'veo3_1', 'wan3_0', 'seedance_2_0_mini', 'minimax_h3', 'kling3_0_turbo', 'veo3_1_lite',
   'gpt_image_2_5', 'nano_banana_pro', 'cinematic_studio_2_5', 'nano_banana_2', 'seedream_v5_pro', 'marketing_studio_image', 'soul_2', 'flux_2', 'recraft_v4_1',
 ];
+// Recomendados: van primero y el panel los muestra como tarjetas destacadas.
+const RECOMENDADOS = {
+  seedance_2_5: { orden: 1, etiqueta: 'Mejor modelo general', desc: 'Lo mejor para casi todo: fiel a tu producto, hasta 30 s en 1080p y con audio.' },
+  cinematic_studio_video_4_0: { orden: 2, etiqueta: 'Más cinematográfico', desc: 'Tomas con look de cine: movimientos de cámara, luz y profundidad. Para piezas más premium.' },
+};
 // Descripciones en espanol de los principales (el resto no muestra descripcion:
 // la del proveedor viene en ingles y a veces lo nombra).
 const DESCRIPCIONES = {
@@ -163,6 +168,9 @@ async function completo() {
   for (const m of todos) mejorDe[m.tipo + m.familia] = Math.min(mejorDe[m.tipo + m.familia] ?? 1e9, pos(m.id));
   todos.sort((a, b) => mejorDe[a.tipo + a.familia] - mejorDe[b.tipo + b.familia] || a.familia.localeCompare(b.familia)
     || pos(a.id) - pos(b.id) || b.nombre.localeCompare(a.nombre, 'es', { numeric: true }));
+  // Los recomendados van primero (en su orden) y llevan su etiqueta.
+  for (const m of todos) if (RECOMENDADOS[m.id]) m.rec = RECOMENDADOS[m.id];
+  todos.sort((a, b) => (a.rec?.orden ?? 99) - (b.rec?.orden ?? 99));
   _cache = { v: todos, exp: Date.now() + 60 * 60e3 };
   return todos;
 }
