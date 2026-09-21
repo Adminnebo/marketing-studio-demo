@@ -464,7 +464,7 @@ function pedido({ imagenUrl, tipo, duracion = 5, conAudio = false, aspecto = '9:
   }
   const nombre = limpio(producto, 120);
   lineas.push(nombre ? `Nombre del producto: "${nombre}".` : 'No hay nombre del producto: identificalo por la foto.');
-  const pedidoUsuario = limpio(instrucciones, 1000);
+  const pedidoUsuario = limpio(instrucciones, 2000); // dictado: la gente habla mas de lo que escribe
   lineas.push(pedidoUsuario ? bloqueDePedido(pedidoUsuario, esVideo) : esVideo ? 'Sin pedido del usuario: usá los valores por defecto de las reglas.' : 'Sin pedido del usuario: usá la escena por defecto.');
   lineas.push(esVideo ? 'Escribí el prompt para esta foto.' : 'Escribí el prompt para esta foto.');
   return {

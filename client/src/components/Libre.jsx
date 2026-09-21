@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchModelos, costoLibre, crearLibre, autoPrompt, subirImagen } from '../api';
 import { usd, cred, creditos as nCred } from '../precio';
+import Dictar from './Dictar';
 
 // Formatos con nombre y para que sirve cada uno (los demas se muestran tal cual).
 const FORMATOS = {
@@ -49,6 +50,7 @@ export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRec
   const [generandoPrompt, setGenerandoPrompt] = useState(false);
   const [producto, setProducto] = useState('');
   const [indicaciones, setIndicaciones] = useState('');
+  const [dictado, setDictado] = useState(''); // lo dictado, antes de elegir cómo usarlo
   const [avisos, setAvisos] = useState([]);
   const [msg, setMsg] = useState(null);
   const [drag, setDrag] = useState(false);
@@ -119,11 +121,11 @@ export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRec
     } catch (e) { setSubida({ error: e.message }); }
   };
 
-  const generarPrompt = async () => {
+  const generarPrompt = async (instrucciones = indicaciones) => {
     setGenerandoPrompt(true);
     setMsg(null);
     try {
-      const r = await autoPrompt({ imagen: { media_id: imagen.media_id, url: imagen.url }, modelo: modelo.id, tipo, duracion: duracion ? Number(duracion) : null, aspecto, opciones, producto, instrucciones: indicaciones });
+      const r = await autoPrompt({ imagen: { media_id: imagen.media_id, url: imagen.url }, modelo: modelo.id, tipo, duracion: duracion ? Number(duracion) : null, aspecto, opciones, producto, instrucciones });
       setPrompt(r.prompt || '');
       setAvisos(r.avisos || []);
       setBase(ajustesActuales);
@@ -140,7 +142,7 @@ export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRec
   const faltan = [
     !modelo && [1, 'Elige un modelo.'],
     modelo?.pideImagen && !imagen && [3, 'Sube la foto del producto: este modelo la necesita.'],
-    !prompt.trim() && [4, usaIa ? 'Falta la descripción: deja que la IA la escriba o escríbela tú.' : `Escribe qué quieres ver en ${elTipo}.`],
+    !prompt.trim() && [4, modoPrompt === 'dictar' ? 'Dicta la descripción y elige cómo usarla.' : usaIa ? 'Falta la descripción: deja que la IA la escriba o escríbela tú.' : `Escribe qué quieres ver en ${elTipo}.`],
     sinSaldo && [5, `No te alcanza el saldo: tienes ${cred(saldo)} créditos y esto usa ${cred(costo.creditos)}.`],
   ].filter(Boolean);
 
@@ -379,12 +381,42 @@ export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRec
             Se escribirá para {tipo === 'video' ? <>un video <strong>{nombreFormato(aspecto)}</strong> de <strong>{duracion} s</strong> {conAudio ? 'con sonido' : 'sin sonido'}</> : <>una foto <strong>{nombreFormato(aspecto)}</strong></>}.
             <button className="linklike" style={{ marginLeft: 8 }} onClick={() => ir(2)}>Cambiar esto</button>
           </p>
-          {modelo?.aceptaImagen && (
-            <div className="seg seg-sm">
-              <button className={usaIa ? 'on' : ''} onClick={() => setModoPrompt('auto')}><span>✨</span>Que la IA la escriba desde mi foto</button>
-              <button className={!usaIa ? 'on' : ''} onClick={() => setModoPrompt('manual')}><span>✍️</span>La escribo yo</button>
+          <div className="seg seg-sm">
+            {modelo?.aceptaImagen && <button className={modoPrompt === 'auto' ? 'on' : ''} onClick={() => setModoPrompt('auto')}><span>✨</span>La IA la escribe desde mi foto</button>}
+            <button className={modoPrompt === 'dictar' ? 'on' : ''} onClick={() => setModoPrompt('dictar')}><span>🎙</span>La dicto</button>
+            <button className={modoPrompt === 'manual' || (modoPrompt === 'auto' && !modelo?.aceptaImagen) ? 'on' : ''} onClick={() => setModoPrompt('manual')}><span>✍️</span>La escribo</button>
+          </div>
+
+          {modoPrompt === 'dictar' && (
+            <div className="lb-dictado">
+              <textarea className="ms-textarea lb-textarea" maxLength={2000} value={dictado} onChange={(e) => setDictado(e.target.value)}
+                placeholder={tipo === 'video'
+                  ? 'Toca 🎙 Dictar y cuenta qué quieres ver: la escena, el fondo, qué se mueve, cómo se mueve la cámara, el ambiente, qué destacar del producto…'
+                  : 'Toca 🎙 Dictar y cuenta cómo quieres la foto: el fondo, la luz, el ángulo, el ambiente, qué destacar del producto…'} />
+              <Dictar grande valor={dictado} onCambiar={setDictado} />
+              {dictado.trim() && (
+                <div className="lb-usar">
+                  <div className="lb-lbl">¿Cómo uso lo que dictaste?</div>
+                  <div className="lb-usar-ops">
+                    <button className="lb-usar-op" disabled={!modelo?.aceptaImagen || generandoPrompt} onClick={() => {
+                      setIndicaciones(dictado); setModoPrompt('auto');
+                      if (imagen) generarPrompt(dictado);
+                    }}>
+                      <strong>✨ Como base para la IA <span className="modo-tag">Recomendado</span></strong>
+                      <span>{modelo?.aceptaImagen
+                        ? 'La IA escribe la descripción profesional con tu foto y lo que dijiste: respeta tu idea (acción, escena, manos, lo que destacas) y agrega lo técnico (conteos, marcas, luz, cámara, tramos).'
+                        : 'No disponible: este modelo no usa foto y la IA necesita la foto para escribir.'}</span>
+                    </button>
+                    <button className="lb-usar-op" onClick={() => { setPrompt(dictado); setAvisos([]); setModoPrompt('manual'); }}>
+                      <strong>📝 Tal cual, como descripción completa</strong>
+                      <span>El modelo recibe exactamente lo que dictaste. Sirve si ya describiste todo con detalle; si no, el resultado puede alejarse de tu producto.</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+
           {usaIa && (
             <div className="lb-ia">
               {!imagen && (
@@ -393,31 +425,33 @@ export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRec
                   <button className="linklike" onClick={() => ir(3)}>Subir la foto (paso 3) →</button>
                 </div>
               )}
-              <div className="lb-auto">
-                <label className="filter-field"><span>Nombre del producto (opcional)</span>
-                  <input className="ms-input" maxLength={120} placeholder="Ej.: Breaker Siemens 2P 40A" value={producto} onChange={(e) => setProducto(e.target.value)} />
-                </label>
-                <label className="filter-field"><span>¿Algo que quieras destacar? (opcional)</span>
-                  <input className="ms-input" maxLength={1000} placeholder="Ej.: fondo de obra, que se vea el amperaje, luz cálida…" value={indicaciones} onChange={(e) => setIndicaciones(e.target.value)} />
-                </label>
-              </div>
-              <button className="btn secondary" onClick={generarPrompt} disabled={!imagen || generandoPrompt}>
+              <label className="filter-field" style={{ width: '100%', maxWidth: 420 }}><span>Nombre del producto (opcional)</span>
+                <input className="ms-input" maxLength={120} placeholder="Ej.: Breaker Siemens 2P 40A" value={producto} onChange={(e) => setProducto(e.target.value)} />
+              </label>
+              <label className="filter-field" style={{ width: '100%' }}><span>Tus indicaciones para la IA (opcional): escribe o dicta qué quieres</span>
+                <textarea className="ms-textarea lb-ind" maxLength={2000} placeholder="Ej.: fondo de obra, que se vea el amperaje, una mano con guante baja la palanca, luz cálida…" value={indicaciones} onChange={(e) => setIndicaciones(e.target.value)} />
+              </label>
+              <Dictar valor={indicaciones} onCambiar={setIndicaciones} />
+              <button className="btn secondary" onClick={() => generarPrompt()} disabled={!imagen || generandoPrompt}>
                 {generandoPrompt ? 'Escribiendo… (unos 20 s)' : prompt ? '↻ Escribir otra descripción' : '✨ Escribir descripción'}
               </button>
             </div>
           )}
-          {avisos.length > 0 && (
+
+          {avisos.length > 0 && modoPrompt !== 'dictar' && (
             <div className="lb-avisos">
               <strong>Revisa esto antes de crear:</strong>
               <ul>{avisos.map((a, i) => <li key={i}>{a}</li>)}</ul>
             </div>
           )}
-          {(!usaIa || prompt) && (
+          {modoPrompt !== 'dictar' && (!usaIa || prompt || generandoPrompt) && (
             <>
-              <textarea className="ms-textarea lb-textarea" maxLength={5000} value={prompt} onChange={(e) => setPrompt(e.target.value)}
-                placeholder={tipo === 'video'
+              {usaIa && <div className="lb-lbl">Descripción que recibe el modelo</div>}
+              <textarea className="ms-textarea lb-textarea" maxLength={5000} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={generandoPrompt}
+                placeholder={generandoPrompt ? 'La IA está escribiendo la descripción…' : tipo === 'video'
                   ? 'Ej.: breaker Siemens sobre fondo negro, luz de estudio, la cámara se acerca despacio hasta la etiqueta…'
                   : 'Ej.: lámpara LED sobre mesa de madera, luz cálida, estilo catálogo…'} />
+              {!usaIa && <Dictar valor={prompt} onCambiar={setPrompt} max={5000} />}
               {usaIa && prompt && <div className="lb-nota">Está en inglés porque así la entiende mejor el modelo. Puedes editarla.</div>}
             </>
           )}

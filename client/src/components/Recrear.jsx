@@ -3,6 +3,7 @@ import { crearGeneracion, subirImagen } from '../api';
 import { TIPOS, TIPOS_VIDEO, entradasDe, faltantes, formatoDe, creditosDe } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import Avatares from './Avatares';
+import Dictar from './Dictar';
 import { precioDe, usd, cred, creditos as nCred } from '../precio';
 
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
@@ -175,6 +176,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                 <textarea className="ms-textarea" maxLength={5000} value={prompt} disabled={!!enviada}
                   placeholder="Ej.: fondo azul, texto “Oferta de temporada”, tono profesional…"
                   onChange={(e) => setPrompt(e.target.value)} />
+                {!enviada && <div style={{ marginTop: 6 }}><Dictar valor={prompt} onCambiar={setPrompt} max={5000} /></div>}
               </div>
 
               {error && <div className="ms-errors">{error}</div>}

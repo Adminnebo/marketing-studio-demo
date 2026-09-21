@@ -24,7 +24,7 @@ const TUTORIAL = [
   ['Elige video o foto', 'Y el modelo de IA: si no sabes cuál, deja el recomendado.'],
   ['Formato, duración y calidad', 'Va antes de la descripción a propósito: la descripción que escribe la IA se arma para esa duración (reparte la escena en tres tramos), ese formato y el sonido. Si después cambias algo, el panel te avisa y te ofrece reescribirla.'],
   ['Sube la foto de tu producto', 'La IA copia el producto tal como se ve. Sin foto no puede escribir la descripción por ti y el producto saldría inventado.'],
-  ['La descripción', 'Deja que la IA la escriba desde tu foto (unos 20 segundos) o escríbela tú. Puedes editarla siempre, y revisa los avisos si aparecen.'],
+  ['La descripción', 'Tres formas: la IA la escribe desde tu foto (unos 20 segundos), la dictas con 🎙 o la escribes. Si la dictas, eliges cómo usarla: como base para que la IA escriba la versión profesional (recomendado) o tal cual como descripción completa. Puedes editarla siempre, y revisa los avisos si aparecen.'],
   ['Revisar y crear', 'Repasa todo en una sola pantalla, con un botón Editar en cada línea, y crea cuando esté bien. Ahí ves cuántos créditos usa.'],
 ];
 
@@ -34,6 +34,7 @@ const PREGUNTAS = [
   ['¿Cuánto tarda?', 'Las fotos, menos de un minuto. Los videos, de 2 a 10 minutos según la duración y la calidad. No hace falta esperar en la página: todo queda en Mis creaciones y se actualiza solo.'],
   ['¿Qué es un crédito?', 'La unidad con la que se paga cada creación. Antes de generar ves cuántos créditos usa y cuánto cuesta en dólares. Una foto de producto usa 1 o 2 créditos y un anuncio o póster unos 7; un video de 5 segundos, de 8 a 35 según el modelo, y un video con persona hablando (UGC) bastante más. Más duración o más calidad, más créditos.'],
   ['¿Y si sale mal?', 'Si la creación falla, los créditos se devuelven solos a tu saldo. Si salió pero no te gusta, usa "Usar de nuevo" para repetirla cambiando la foto o la descripción.'],
+  ['¿Cómo dicto?', 'Toca 🎙 Dictar, permite el micrófono y habla normal: el texto se va escribiendo mientras hablas y después lo corriges. Funciona en Chrome, Edge y Safari (también en el celular); Firefox y algunos navegadores sin servicios de Google no lo permiten.'],
   ['¿Dónde descargo?', 'En Mis creaciones, con el botón Descargar de cada resultado.'],
 ];
 
