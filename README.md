@@ -140,12 +140,13 @@ alojado por [Zernio](https://docs.zernio.com) y publica o programa cualquier res
 
 El equipo le pide un producto a Camila en lenguaje natural (botón **Camila · Buscar producto** en la barra de pestañas, en el paso "Tu foto" y en la plantilla abierta). Ella busca en el catálogo de JH, dice si tiene foto y ficha técnica, y con **Usar para crear** la foto queda puesta en el paso a paso o en la plantilla.
 
-- Catálogo: `dbo.List_ProductosIA` (el SQL Server de JH, el mismo de la Camila de WhatsApp y de Jarvis). La IA solo da las palabras clave con las reglas de normalización de la Camila de WhatsApp (toma+cte, porta+lampara, raíz singular, reintentos); la consulta se arma con parámetros (`server/lib/jh-catalogo.js`).
-- Fotos y fichas: buckets públicos `Lucas_imagenes` y `Lucas_fichas_tecnicas` (archivo = código). El índice se arma listando los buckets con la service key y se refresca cada 6 h.
-- "Usar para crear" importa la foto al generador (`media_import_url`); no se cobra nada hasta crear.
-- No pasa por WhatsApp, el CRM ni Sword. Queda guardado por usuario: `camila_conversaciones`, `camila_mensajes` (con las búsquedas, tokens y tiempo) y `camila_usos`.
-- IA: `gpt-4.1-mini` (cambiable con `CAMILA_MODELO`), con la misma `OPENAI_API_KEY`. Tope de 40 mensajes cada 10 min por usuario.
-- Se activa con `JH_CATALOGO` en el servicio `panel`: JSON `{ host, puerto, instancia, base, usuario, password }`, el mismo formato de la fuente "Base JH" de Jarvis. Sin esa variable Camila igual se ve (botón, chat y ejemplos), avisa que todavía no está conectada al catálogo y no busca nada.
+- Quien responde es la **Camila paralela de n8n** (`n8n.lmconsultingai.com`, flujo "Agente JH Electro Alambres", webhook `agente-jh-electro`) con `canal: "marketing_request"` y la clave en el encabezado `x-panel-token`. En ese canal no pide RNC, no cotiza, no envía nada a clientes y no transfiere; solo usa `buscar_productos` (el normalizador de Nebo). Devuelve `{ texto, productos, sugerencias, execution_id }`.
+- El flujo de n8n está en `docs/n8n-camila-marketing.json` (lo genera `scripts/n8n-camila-marketing.py`). Guarda cada mensaje en `mensajes_chat` con canal `marketing_request` y le pasa la ejecución al flujo **"Camila Paralela - Costos"** (`docs/n8n-camila-marketing-costo.json`), que lee los tokens reales, aplica precios y porcentaje del agente `camila` de `/api/porcentaje` y lo registra en Sword como `Camila Marketing` / `marketing-camila-request`.
+- La memoria de n8n va por conversación del panel (`contact_id = mkt-<id>-<fecha>`).
+- Fotos y fichas: buckets públicos `Lucas_imagenes` y `Lucas_fichas_tecnicas` (archivo = código); el panel arma el índice al arrancar (service key) y lo refresca cada 6 h.
+- "Usar para crear" solo vale para productos que Camila le mostró a ese usuario; importa la foto al generador (`media_import_url`) y no cobra nada hasta crear.
+- Queda guardado por usuario: `camila_conversaciones`, `camila_mensajes` (con `n8n_ejecucion`) y `camila_usos`.
+- Variables en `panel`: `CAMILA_N8N_URL` y `CAMILA_N8N_TOKEN`. Sin ellas Camila igual se ve, avisa que no está conectada y no busca nada. Las respuestas tardan 10-25 s (DeepSeek con razonamiento).
 
 ## Desarrollo local
 
@@ -171,7 +172,7 @@ borrar.
 
 ## Pendiente (detalles y correcciones finales)
 
-- **Conectar Camila al catálogo real**: cargar `JH_CATALOGO` en `panel` (copiada de la fuente "Base JH" de Jarvis) y probar con productos reales: búsquedas, fotos y "Usar para crear". Probado con la IA real y un catálogo simulado.
+- **Camila**: el tono de la Camila paralela es rioplatense ("usás", "Sos…"); cambiarlo a tuteo dominicano si JH lo prefiere. Cada búsqueda cuesta ~US$0.005 y en Sword se cobra ~US$0.05 (regla del agente `camila`, redondeo a 2 decimales).
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
 - **Idempotencia en el descuento**: pedir al equipo de pagos que `/api/credits/adjust` acepte una referencia única y rechace repetidos; hoy un corte a mitad requiere revisión manual.
 - **Política de saldo negativo**: JH está en -$1,018 en la plataforma; con el ajuste en $0 no pueden crear hasta pagar. Definir si se permite un margen.

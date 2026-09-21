@@ -410,6 +410,7 @@ app.get(/^(?!\/api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html')
 async function arrancar() {
   await migrar();
   await require('./lib/camila').migrar();
+  require('./lib/jh-catalogo').calentar();
   if (await hf.sembrarToken()) console.log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   // Webhook de Zernio: se registra solo en cuanto hay clave y secreto.
   if (zernio.webhookListo() && process.env.PANEL_URL) {

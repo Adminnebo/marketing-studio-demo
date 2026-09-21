@@ -5,7 +5,7 @@ import './camila.css';
 
 const EJEMPLOS = ['Breaker Square D de 20 amperios', 'Tomacorriente doble blanco', 'Lámpara LED panel 60x60', 'Cable THHN #12 rojo'];
 // Lo que se ve mientras Camila busca (la busqueda con reintentos tarda unos segundos).
-const ESTADOS = ['Entendiendo lo que buscas…', 'Buscando en el catálogo de JH…', 'Revisando cuáles tienen foto…', 'Eligiendo las mejores opciones…'];
+const ESTADOS = ['Entendiendo lo que buscas…', 'Buscando en el catálogo de JH…', 'Comparando marcas y medidas…', 'Revisando cuáles tienen foto…', 'Eligiendo las mejores opciones…', 'Ya casi…'];
 
 const rd = (n) => `RD$ ${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const unidad = (u) => (u ? String(u).toLowerCase() : 'und');
@@ -17,10 +17,11 @@ function Avatar({ chico = false }) {
 // Tarjeta de un producto: foto (o aviso de que no tiene), datos y "Usar para crear".
 function Producto({ p, usando, usado, onUsar, onVer }) {
   const listo = usado === p.codigo;
+  const hayFoto = !!(p.foto || p.tiene_imagen); // tiene_imagen: la busqueda la ve aunque el indice aun no
   return (
-    <div className={`cm-prod ${listo ? 'listo' : ''} ${p.foto ? '' : 'sin-foto'}`}>
+    <div className={`cm-prod ${listo ? 'listo' : ''} ${hayFoto ? '' : 'sin-foto'}`}>
       <button type="button" className="cm-prod-foto" onClick={() => p.foto && onVer(p)} disabled={!p.foto} title={p.foto ? 'Ver la foto en grande' : 'Este producto no tiene foto'}>
-        {p.foto ? <img src={p.foto} alt={p.descripcion} loading="lazy" /> : <span className="cm-sinfoto"><span>📷</span>Sin foto</span>}
+        {p.foto ? <img src={p.foto} alt={p.descripcion} loading="lazy" /> : <span className="cm-sinfoto"><span>📷</span>{hayFoto ? 'Foto disponible' : 'Sin foto'}</span>}
       </button>
       <div className="cm-prod-info">
         <div className="cm-prod-nom">{p.descripcion}</div>
@@ -36,8 +37,8 @@ function Producto({ p, usando, usado, onUsar, onVer }) {
           {listo ? (
             <span className="cm-listo">✓ Listo para crear</span>
           ) : (
-            <button className="btn cm-usar" disabled={!p.foto || !!usando} onClick={() => onUsar(p)}>
-              {usando === p.codigo ? 'Preparando…' : p.foto ? 'Usar para crear' : 'Sin foto para usar'}
+            <button className="btn cm-usar" disabled={!hayFoto || !!usando} onClick={() => onUsar(p)}>
+              {usando === p.codigo ? 'Preparando…' : hayFoto ? 'Usar para crear' : 'Sin foto para usar'}
             </button>
           )}
           {p.ficha && <a className="linklike" href={p.ficha} target="_blank" rel="noreferrer">📄 Ficha técnica</a>}
@@ -83,7 +84,7 @@ export default function Camila({ abierta, destino, usado, conectada = true, onCe
   useEffect(() => {
     if (!enviando) return undefined;
     setEstado(0);
-    const id = setInterval(() => setEstado((e) => Math.min(e + 1, ESTADOS.length - 1)), 1800);
+    const id = setInterval(() => setEstado((e) => Math.min(e + 1, ESTADOS.length - 1)), 3500);
     return () => clearInterval(id);
   }, [enviando]);
 

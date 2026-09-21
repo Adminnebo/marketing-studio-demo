@@ -45,7 +45,7 @@ router.post('/camila/mensaje', async (req, res) => {
   const b = req.body || {};
   const texto = String(b.texto || '').trim().slice(0, 600);
   if (!texto) return res.status(400).json({ error: 'Escribe qué producto buscas.' });
-  if (!camila.configurado()) return res.status(503).json({ error: 'Camila todavía no está conectada al catálogo. Avísale al administrador.' });
+  if (!camila.configurado()) return res.status(503).json({ error: 'Camila todavía no está conectada. Avísale al administrador.' });
   if (!dentroDelTope(req.user.email)) return res.status(429).json({ error: 'Vas muy rápido: espera unos minutos y sigue.' });
   try {
     const conversacionId = Number(b.conversacionId) > 0 ? Number(b.conversacionId) : null;
@@ -54,23 +54,24 @@ router.post('/camila/mensaje', async (req, res) => {
 });
 
 // "Usar para crear": importa la foto del producto al generador y la devuelve lista
-// ({ media_id, url, nombre }), igual que una subida desde la computadora.
+// ({ media_id, url, nombre }), igual que una subida desde la computadora. Solo vale
+// para productos que Camila le mostro a este usuario.
 router.post('/camila/usar', async (req, res) => {
   const b = req.body || {};
   const codigo = String(b.codigo || '').trim().slice(0, 30);
   if (!codigo) return res.status(400).json({ error: 'Falta el producto.' });
   try {
-    const { productos: [p] } = await catalogo.buscar({ codigo });
-    if (!p) return res.status(404).json({ error: 'Ese producto ya no aparece en el catálogo.' });
-    const foto = p.foto || (await catalogo.archivosDe(p.codigo, { relistar: true })).imagen;
+    const p = await camila.productoMostrado(req.user.email, codigo);
+    if (!p) return res.status(404).json({ error: 'Ese producto no aparece en tus búsquedas con Camila. Búscalo de nuevo.' });
+    const foto = (await catalogo.archivosDe(codigo, { relistar: true })).imagen;
     if (!foto) return res.status(404).json({ error: 'Ese producto no tiene foto cargada. Sube una foto propia en el paso "Tu foto".' });
     const imp = await hf.llamar('media_import_url', { url: foto, type: 'image' });
     if (!imp?.media_id) throw new hf.HiggsfieldError('media_import_url sin media_id: ' + JSON.stringify(imp).slice(0, 200));
-    await camila.registrarUso({ email: req.user.email, conversacionId: Number(b.conversacionId) || null, codigo: p.codigo, descripcion: p.descripcion, mediaId: imp.media_id })
+    await camila.registrarUso({ email: req.user.email, conversacionId: Number(b.conversacionId) || null, codigo, descripcion: p.descripcion, mediaId: imp.media_id })
       .catch((e) => console.error('[camila usar] registro', e.message));
     res.json({
-      media_id: imp.media_id, url: foto, nombre: p.descripcion || p.codigo,
-      producto: { codigo: p.codigo, descripcion: p.descripcion, marca: p.marca, ficha: p.ficha },
+      media_id: imp.media_id, url: foto, nombre: p.descripcion || codigo,
+      producto: { codigo, descripcion: p.descripcion, marca: p.marca || null, ficha: p.ficha || null },
     });
   } catch (e) { errorDe(res, e); }
 });
