@@ -1,0 +1,119 @@
+/* Rediseño 2026-09 (optimizar lo actual): encabezado en una linea, accesos a plataformas abajo a
+   la izquierda, Crear mas limpio, filtros compactos, tamaño de vistas previas y burbuja de Camila.
+   Usa los tokens de styles.css; va despues para ganar la cascada. */
+
+.app { padding-top: 0; }
+@media (min-width: 1000px) { .app { padding-left: 84px; } }
+
+/* ── Encabezado: Marketing + usuario | pestañas | saldo + tema ── */
+.hd { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; display: flex; align-items: center; gap: 16px; height: 58px; margin: 0 0 16px;
+  background: color-mix(in srgb, var(--page) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--grid); }
+.hd-marca { display: flex; align-items: baseline; gap: 8px; flex: none; }
+.hd-marca > b { font-size: 1.12rem; font-weight: 750; letter-spacing: -0.02em; }
+.hd-user { position: relative; }
+.hd-user-b { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; font: inherit; font-size: 0.84rem; font-weight: 600; color: var(--text-muted); padding: 4px 7px; border-radius: 7px; cursor: pointer; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hd-user-b:hover { background: var(--surface-2); color: var(--text-primary); }
+.hd-menu { position: absolute; left: 0; top: calc(100% + 6px); z-index: 60; min-width: 240px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18); padding: 5px; }
+.hd-menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }
+.hd-menu-lbl { font-size: 0.7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); padding: 7px 9px 3px; }
+.hd-menu-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 5px 9px; font-size: 0.82rem; font-weight: 600; }
+.hd-menu-sub { color: var(--text-muted); font-weight: 500; }
+.hd-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+.hd-dot.off { background: var(--critical); }
+.hd-menu > button { display: block; width: 100%; text-align: left; border: 0; background: none; font: inherit; font-size: 0.84rem; font-weight: 600; color: var(--text-primary); padding: 7px 9px; border-radius: 7px; cursor: pointer; }
+.hd-menu > button:hover { background: var(--surface-2); }
+.hd-menu-vc { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 9px 7px; font-size: 0.82rem; color: var(--text-secondary); }
+.hd-menu-vc select { font: inherit; font-size: 0.8rem; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); border-radius: 7px; padding: 4px 6px; }
+
+.hd-tabs { display: flex; gap: 2px; align-self: stretch; margin-left: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.hd-tab { position: relative; display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; font: inherit; font-size: 0.92rem; font-weight: 620; color: var(--text-secondary); padding: 0 12px; cursor: pointer; white-space: nowrap; }
+.hd-tab:hover { color: var(--text-primary); }
+.hd-tab.on { color: var(--text-primary); }
+.hd-tab.on::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--series-1); }
+.hd-n { font-size: 0.68rem; font-weight: 700; line-height: 17px; padding: 0 6px; border-radius: 999px; background: var(--series-1); color: #fff; }
+.hd-n.gris { background: var(--surface-2); color: var(--text-muted); }
+.hd-r { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+.hd-saldo { display: inline-flex; align-items: center; gap: 8px; font: inherit; cursor: pointer; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); border-radius: 10px; padding: 5px 6px 5px 11px; }
+.hd-saldo:hover { border-color: color-mix(in srgb, var(--series-1) 45%, var(--border)); }
+.hd-saldo-l { font-size: 0.74rem; font-weight: 600; color: var(--text-muted); }
+.hd-saldo b { font-size: 0.92rem; font-weight: 760; }
+.hd-saldo-usd { font-size: 0.8rem; font-weight: 650; color: var(--text-secondary); padding-left: 8px; border-left: 1px solid var(--grid); }
+.hd-saldo-r { font-size: 0.76rem; font-weight: 700; color: var(--series-1); background: color-mix(in srgb, var(--series-1) 12%, transparent); border-radius: 7px; padding: 3px 8px; }
+.hd-saldo.neg { border-color: color-mix(in srgb, var(--critical) 40%, transparent); }
+.hd-saldo.neg b { color: var(--critical); }
+.hd-ib { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid transparent; background: none; color: var(--text-secondary); border-radius: 9px; cursor: pointer; }
+.hd-ib:hover { background: var(--surface-2); color: var(--text-primary); }
+.num { font-variant-numeric: tabular-nums; }
+@media (max-width: 860px) {
+  .hd { height: auto; flex-wrap: wrap; padding: 8px 0 0; row-gap: 2px; }
+  .hd-tabs { order: 3; width: 100%; margin-left: -6px; height: 38px; }
+}
+@media (max-width: 560px) { .hd-saldo-usd, .hd-saldo-l { display: none; } .hd-user-b { max-width: 150px; } }
+
+/* ── Accesos a plataformas: vertical, abajo a la izquierda ── */
+.riel { position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 45; display: flex; flex-direction: column; gap: 4px; padding: 5px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+.riel-it { position: relative; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; color: var(--text-secondary); text-decoration: none; }
+a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
+.riel-it.on { background: var(--series-1); color: #fff; }
+.riel-lb { position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); white-space: nowrap; font-size: 0.8rem; font-weight: 650; background: var(--text-primary); color: var(--page); padding: 5px 9px; border-radius: 7px; opacity: 0; pointer-events: none; transition: opacity .12s; }
+.riel-it:hover .riel-lb, .riel-it:focus-visible .riel-lb { opacity: 1; }
+@media (max-width: 999px) { .riel { flex-direction: row; } .riel-it { width: 38px; height: 38px; } .riel-lb { display: none; } }
+
+/* ── Crear: selector de modo bien diferenciado + Ayuda ── */
+.cr-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.cr-modos { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.cr-modo { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 0.9rem; font-weight: 650; cursor: pointer; padding: 8px 15px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--surface-1); color: var(--text-secondary); }
+.cr-modo:hover { border-color: color-mix(in srgb, var(--series-1) 55%, var(--border)); color: var(--text-primary); }
+.cr-modo.on { background: var(--series-1); border-color: var(--series-1); color: #fff; box-shadow: 0 4px 14px color-mix(in srgb, var(--series-1) 35%, transparent); }
+.cr-rec { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 999px; background: var(--series-2); color: #fff; }
+.cr-modo.on .cr-rec { background: rgba(255, 255, 255, 0.22); }
+.cr-ayuda { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); padding: 6px 9px; border-radius: 8px; cursor: pointer; }
+.cr-ayuda:hover { background: var(--surface-2); color: var(--text-primary); }
+
+/* franja de Camila / producto listo: mas compacta */
+.app .cm-listo-bar { padding: 8px 10px 8px 14px; margin-bottom: 14px; gap: 10px; }
+.app .cm-listo-bar img { width: 34px; height: 34px; }
+.app .cm-listo-bar-t { flex-direction: row; flex-wrap: wrap; gap: 0 6px; align-items: baseline; font-size: 0.84rem; }
+.app .cm-listo-bar-t span { white-space: normal; font-size: 0.84rem; }
+
+/* ── Barra de busqueda y filtros compacta (plantillas y mis creaciones) ── */
+.pl-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
+.pl-buscar { display: flex; align-items: center; gap: 6px; height: 32px; width: 220px; max-width: 100%; padding: 0 10px; border: 1px solid var(--border); background: var(--surface-1); border-radius: 9px; color: var(--text-muted); }
+.pl-buscar input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 0.84rem; color: var(--text-primary); }
+.pl-buscar input:focus { outline: none; }
+.pl-buscar:focus-within { border-color: var(--series-1); }
+.pl-cats { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.pl-cat { height: 30px; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 0 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); }
+.pl-cat:hover { color: var(--text-primary); }
+.pl-cat.on { background: var(--text-primary); color: var(--surface-1); border-color: transparent; }
+.pl-cat-n { font-size: 0.72rem; opacity: .6; }
+.pl-filtros { padding: 0; margin: 0 0 6px; background: none; border: 0; gap: 6px; }
+.pl-filtros .mini-btn { font-size: 0.76rem; padding: 4px 9px; }
+.pl-filtros .filter-lbl { font-size: 0.74rem; }
+.pl-cuenta { font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 10px; }
+.tamano { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; color: var(--text-muted); }
+.tamano input { width: 104px; accent-color: var(--series-1); }
+@media (max-width: 640px) { .pl-buscar { width: 100%; } .tamano { margin-left: 0; } }
+
+/* galerias con tamaño elegible */
+.ms-grid { columns: auto var(--tam, 210px); }
+.ms-gens { grid-template-columns: repeat(auto-fill, minmax(min(var(--tam, 250px), 100%), 1fr)); }
+@media (max-width: 640px) { .ms-grid { columns: auto min(var(--tam, 210px), 44vw); } }
+
+/* ── Desde cero: menos texto y barra de pasos mas liviana ── */
+.lb-pasoN { display: none; }
+.lb-barra { padding: 2px 0 10px; margin-bottom: 14px; }
+.lb-tab { font-size: 0.8rem; padding: 5px 11px; }
+.lb-h { font-size: 1.05rem; }
+.lb-porque { font-size: 0.8rem; color: var(--text-muted); margin-top: -8px; }
+
+/* ── Burbuja de Camila, siempre presente ── */
+.cm-flota { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 45; display: flex; align-items: flex-end; gap: 8px; }
+.cm-flota-t { position: relative; background: var(--surface-1); border: 1px solid var(--border); border-radius: 13px 13px 4px 13px; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.16); padding: 8px 12px; max-width: 230px; cursor: pointer; }
+.cm-flota-t b { display: block; font-size: 0.84rem; }
+.cm-flota-t span { font-size: 0.78rem; color: var(--text-muted); }
+.cm-flota-x { position: absolute; top: -8px; left: -8px; width: 19px; height: 19px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-muted); font-size: 10px; line-height: 17px; cursor: pointer; }
+.cm-flota-b { position: relative; width: 48px; height: 48px; border: 0; border-radius: 50%; cursor: pointer; font: inherit; font-weight: 800; font-size: 1.05rem; color: #fff; background: linear-gradient(135deg, var(--series-1), var(--series-5)); box-shadow: 0 8px 22px color-mix(in srgb, var(--series-5) 45%, transparent); }
+.cm-flota-b::after { content: ''; position: absolute; right: 2px; bottom: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--good); border: 2px solid var(--surface-1); }
+@media (max-width: 560px) { .cm-flota-t { display: none; } }

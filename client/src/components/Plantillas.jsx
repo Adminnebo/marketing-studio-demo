@@ -3,6 +3,7 @@ import { fetchPlantillas } from '../api';
 import { TIPOS, CATEGORIAS_ES } from '@shared/reglas.mjs';
 import { PRODUCTOS, ESTILOS, ORIENTACIONES, SIRVE_PARA, RECOMENDADA } from '@shared/filtros.mjs';
 import Portada, { esVideo } from './Portada';
+import Tamano, { useTamano } from './Tamano';
 
 const FORMATOS_ES = {
   'talking-head': 'Talking head', 'with-model': 'Con modelo', standalone: 'Solo producto',
@@ -35,6 +36,7 @@ export default function Plantillas({ categorias, onElegir }) {
   const [qTexto, setQTexto] = useState(f.q);
   const [datos, setDatos] = useState({ items: [], total: 0, cursor: null, facetas: null, cargando: true, error: null });
   const [abiertos, setAbiertos] = useState(false);
+  const [tam, setTam] = useTamano('ms_tam_plantillas', 210);
   const fin = useRef(null);
   const peticion = useRef(0);
 
@@ -80,24 +82,22 @@ export default function Plantillas({ categorias, onElegir }) {
 
   return (
     <>
-      <div className="pl-intro">
-        <div>
-          <div className="pl-intro-t">Elige una plantilla</div>
-          <div className="pl-intro-s">Toca una para usarla con la foto de tu producto. Las marcadas con <span className="ms-reco-inline">⭐ JH</span> son las que mejor van con los productos de JH.</div>
-        </div>
-      </div>
-      <div className="ms-bar">
-        <div className="ms-chips">
+      <div className="pl-barra">
+        <label className="pl-buscar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></svg>
+          <input placeholder="Buscar plantilla" value={qTexto} onChange={(e) => setQTexto(e.target.value)} aria-label="Buscar plantilla por nombre" />
+        </label>
+        <div className="pl-cats">
           {categorias.map((c) => (
-            <button key={c.slug} className={`dr-preset ${f.categoria === c.slug ? 'active' : ''}`} onClick={() => cambiar({ categoria: c.slug, formato: '' })}>
+            <button key={c.slug} className={`pl-cat ${f.categoria === c.slug ? 'on' : ''}`} onClick={() => cambiar({ categoria: c.slug, formato: '' })}>
               {CATEGORIAS_ES[c.slug] || c.name}
             </button>
           ))}
         </div>
-        <input className="search" placeholder="🔍 Buscar por nombre…" value={qTexto} onChange={(e) => setQTexto(e.target.value)} />
+        <Tamano valor={tam} onCambio={setTam} />
       </div>
 
-      <div className="pl-filtros card">
+      <div className="pl-filtros">
         <div className="pl-fila">
           <span className="filter-lbl">Para tu producto:</span>
           <Chips opciones={Object.fromEntries(Object.entries(SIRVE_PARA).map(([k, v]) => [k, v.label]))} valores={f.sirve} conteos={fc?.sirve} onCambio={(v) => cambiar({ sirve: v })} />
@@ -156,7 +156,7 @@ export default function Plantillas({ categorias, onElegir }) {
         )}
       </div>
 
-      <div className="ms-count" style={{ margin: '0 0 10px' }}>{datos.total ? `${datos.total} plantillas${activos || f.q || f.categoria !== 'all' ? ' con estos filtros' : ''}` : ''}</div>
+      <div className="pl-cuenta">{datos.total ? <>{datos.total} plantillas{activos || f.q || f.categoria !== 'all' ? ' con estos filtros' : ''} · <span className="ms-reco-inline">⭐ JH</span> = las que mejor van con productos de JH</> : ''}</div>
 
       {datos.error && !datos.items.length ? (
         <div className="empty-state">No se pudieron cargar las plantillas: {datos.error}<br />
@@ -169,7 +169,7 @@ export default function Plantillas({ categorias, onElegir }) {
           <button className="btn secondary" style={{ marginTop: 12 }} onClick={() => { setQTexto(''); setF({ ...VACIO, orden: f.orden }); }}>Quitar filtros y búsqueda</button>
         </div>
       ) : (
-        <div className="ms-grid">
+        <div className="ms-grid" style={{ '--tam': `${tam}px` }}>
           {datos.items.map((p) => (
             <button key={p.id} className="ms-card" onClick={() => onElegir(p, f.categoria)} title={p.name}>
               <div className="ms-cover">

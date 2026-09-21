@@ -3,6 +3,7 @@ import { TIPOS, TIPOS_VIDEO } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import { descargar } from '../api';
 import { usd } from '../precio';
+import Tamano, { useTamano } from './Tamano';
 
 const ESTADOS = {
   pendiente: 'En cola', enviando: 'Enviando', en_proceso: 'Creando', completado: 'Lista', fallido: 'No salió',
@@ -77,16 +78,18 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
 
 export default function Generaciones({ items, cargando, error, hayMas, onMas, onRepetir, onPublicar, rol, onCrear }) {
   const [filtro, setFiltro] = useState('');
+  const [tam, setTam] = useTamano('ms_tam_creaciones', 250);
   const visibles = items.filter((g) => !filtro || (filtro === 'curso' ? EN_CURSO.has(g.estado) : g.estado === filtro));
   return (
     <>
-      <div className="ms-bar">
-        <div className="ms-chips">
-          {FILTROS.map(([k, l]) => (
-            <button key={k} className={`dr-preset ${filtro === k ? 'active' : ''}`} onClick={() => setFiltro(k)}>{l}</button>
-          ))}
+      <div className="pl-barra">
+        <div className="pl-cats">
+          {FILTROS.map(([k, l]) => {
+            const n = items.filter((g) => !k || (k === 'curso' ? EN_CURSO.has(g.estado) : g.estado === k)).length;
+            return <button key={k} className={`pl-cat ${filtro === k ? 'on' : ''}`} onClick={() => setFiltro(k)}>{l} <span className="pl-cat-n">{n}</span></button>;
+          })}
         </div>
-        <span className="ms-count">Se actualiza sola mientras algo se está creando</span>
+        <Tamano valor={tam} onCambio={setTam} min={180} max={400} />
       </div>
       {error && <div className="banner-off">{error}</div>}
       {!items.length && cargando ? (
@@ -102,7 +105,7 @@ export default function Generaciones({ items, cargando, error, hayMas, onMas, on
           )}
         </div>
       ) : (
-        <div className="ms-gens">
+        <div className="ms-gens" style={{ '--tam': `${tam}px` }}>
           {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} onRepetir={onRepetir} onPublicar={onPublicar} />)}
         </div>
       )}

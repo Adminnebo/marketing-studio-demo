@@ -11,7 +11,8 @@ import Libre from './components/Libre';
 import { cred, usd } from './precio';
 import Publicar from './components/Publicar';
 import Camila from './components/Camila';
-import { Pasos, Ayuda } from './components/Guia';
+import { Ayuda } from './components/Guia';
+import { MenuUsuario, RielPlataformas, IconoLuna, IconoSol, IconoAyuda } from './components/Encabezado';
 import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
 
 const TABS = [
@@ -237,45 +238,37 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <div>
-          <h1>Marketing</h1>
-          <div className="sub">Fotos y videos de tus productos, hechos con IA</div>
+      <header className="hd">
+        <div className="hd-marca">
+          <b>Marketing</b>
+          <MenuUsuario me={me} estado={estado} saldoGenerador={saldo} onSalir={salir} onSuperAdmin={() => setTab('superadmin')} />
         </div>
-        <nav className="platsw" aria-label="Cambiar de plataforma">
-          {PLATS.map((p) => (
-            p.key === 'marketing'
-              ? <span key={p.key} className="platsw__it platsw__it--on" title="Estás aquí"><span className="platsw__ic">{p.icon}</span>{p.label}</span>
-              : <a key={p.key} className="platsw__it" href={p.url} title={`Ir a ${p.label}`}><span className="platsw__ic">{p.icon}</span>{p.label}</a>
+        <nav className="hd-tabs" aria-label="Secciones">
+          {tabs.map((t) => (
+            <button key={t.id} className={`hd-tab ${tab === t.id ? 'on' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
+              {t.label}
+              {t.id === 'generaciones' && enCurso > 0 && <span className="hd-n">{enCurso}</span>}
+              {t.id === 'redes' && cuentas?.length > 0 && <span className="hd-n gris">{cuentas.length}</span>}
+            </button>
           ))}
         </nav>
-        <div className="badges">
-          {estado && (desconectado || me.rol === 'super_admin') && (
-            <span className={`badge ${desconectado ? 'hf-off' : 'live'}`}>
-              <span className={`dot ${desconectado ? '' : 'pulse'}`} />
-              {desconectado ? 'Generador desconectado' : 'Generador conectado'}
-            </span>
-          )}
-          <button className="badge" onClick={() => setAyuda(true)} title="Cómo usar el panel">❔ Ayuda</button>
-          {me.rol === 'super_admin' && saldo && (
-            <span className="badge" title={`Cuenta del proveedor · plan ${saldo.subscription_plan_type} · solo lo ven los super admin`}>
-              🪙 Cuenta del generador: {Number(saldo.credits).toLocaleString('es-MX', { maximumFractionDigits: 1 })}
-            </span>
-          )}
-          <button className="btn secondary icon-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'} aria-label="Cambiar tema">
-            {theme === 'dark' ? '☀️' : '🌙'}
+        <div className="hd-r">
+          <button className={`hd-saldo ${saldoValor != null && saldoValor < 0 ? 'neg' : ''}`} onClick={() => setTab('creditos')}
+            title={externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
+            <span className="hd-saldo-l">Saldo</span>
+            {externo ? (
+              <b className="num">{me.saldoDisponibleUsd != null ? usd(me.saldoDisponibleUsd) : '—'}</b>
+            ) : (
+              <>
+                <b className="num">{cred(me.saldo)} cr</b>
+                {me.precios?.precioCredito != null && <span className="hd-saldo-usd num">≈ {usd(Number(me.saldo) * me.precios.precioCredito)}</span>}
+              </>
+            )}
+            {tab !== 'creditos' && <span className="hd-saldo-r">Recargar</span>}
           </button>
-          {me.rolReal === 'super_admin' && (
-            <select className="badge vc-select" value={me.verComo || ''} onChange={(e) => cambiarVerComo(e.target.value)} title="Ver el panel como otro rol">
-              <option value="">👁️ Ver como: Super admin</option>
-              <option value="admin">👁️ Ver como: Admin</option>
-              <option value="usuario">👁️ Ver como: Usuario</option>
-            </select>
-          )}
-          <span className="badge user-badge" title={`${me.email} · ${ROL_ES[me.rol]}`}>
-            <span className="ub-mail">{me.nombre || me.email}</span>
-            <button className="logout-btn" onClick={salir} title="Cerrar sesión">Salir</button>
-          </span>
+          <button className="hd-ib" onClick={toggleTheme} title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'} aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}>
+            {theme === 'dark' ? <IconoSol /> : <IconoLuna />}
+          </button>
         </div>
       </header>
 
@@ -310,32 +303,6 @@ export default function App() {
       )}
       {externo && me.errorSaldo && <div className="banner-off">{me.errorSaldo}</div>}
 
-      <div className="tabs-bar">
-      <nav className="tabs">
-        {tabs.map((t) => (
-          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
-            <span className="tab-ic">{t.icon}</span>{t.label}
-            {t.id === 'generaciones' && enCurso > 0 && <span className="tab-count">{enCurso}</span>}
-            {t.id === 'redes' && cuentas?.length > 0 && <span className="tab-count">{cuentas.length}</span>}
-          </button>
-        ))}
-      </nav>
-        {/* Camila siempre a mano: busca productos de JH y deja la foto lista para crear. */}
-        <button className="cm-tab-btn" onClick={() => abrirCamila()} title="Pídele un producto a Camila">
-          <span className="cm-av">C</span>
-          <span><span className="cm-tab-l">Camila</span><br /><span className="cm-tab-v">Buscar producto</span></span>
-        </button>
-        {/* Saldo siempre a la vista (la barra queda fija arriba al bajar). */}
-        <button className={`saldo-chip ${saldoValor != null && saldoValor < 0 ? 'neg' : ''}`} onClick={() => setTab('creditos')}
-          title={externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
-          <span>
-            <span className="saldo-chip-l">{externo ? 'Saldo disponible' : 'Saldo'}</span><br />
-            <span className="saldo-chip-v">{externo ? (me.saldoDisponibleUsd != null ? usd(me.saldoDisponibleUsd) : '—') : `${cred(me.saldo)} cr`}</span>
-          </span>
-          {tab !== 'creditos' && <span className="saldo-chip-r">Recargar →</span>}
-        </button>
-      </div>
-
       {tab === 'plantillas' && (
         errorCat ? (
           <div className="empty-state">No se pudo cargar el catálogo: {errorCat}<br />
@@ -345,7 +312,17 @@ export default function App() {
           <div className="loading"><div className="spinner" />Cargando catálogo…</div>
         ) : (
           <>
-            <Pasos onAyuda={() => setAyuda(true)} />
+            <div className="cr-cab">
+              <div className="cr-modos" role="tablist" aria-label="Cómo quieres crear">
+                <button role="tab" aria-selected={modoCrear === 'plantilla'} className={`cr-modo ${modoCrear === 'plantilla' ? 'on' : ''}`} onClick={() => setModoCrear('plantilla')}>
+                  <span aria-hidden="true">🧩</span>Con una plantilla<span className="cr-rec">Recomendado</span>
+                </button>
+                <button role="tab" aria-selected={modoCrear === 'cero'} className={`cr-modo ${modoCrear === 'cero' ? 'on' : ''}`} onClick={() => setModoCrear('cero')}>
+                  <span aria-hidden="true">✨</span>Desde cero
+                </button>
+              </div>
+              <button className="cr-ayuda" onClick={() => setAyuda(true)} title="Cómo usar el panel"><IconoAyuda />Ayuda</button>
+            </div>
             {productoListo ? (
               <div className="cm-listo-bar">
                 <img src={productoListo.url} alt="" />
@@ -367,18 +344,6 @@ export default function App() {
                 <button className="cm-buscar-btn" onClick={() => abrirCamila()}><span className="cm-av">C</span>Buscar producto</button>
               </div>
             )}
-            <div className="modos" role="tablist" aria-label="Cómo quieres crear">
-              <button role="tab" aria-selected={modoCrear === 'plantilla'} className={`modo ${modoCrear === 'plantilla' ? 'on' : ''}`} onClick={() => setModoCrear('plantilla')}>
-                <span className="modo-ic">🧩</span>
-                <span><span className="modo-t">Con una plantilla <span className="modo-tag">Recomendado</span></span>
-                  <span className="modo-s">Elige un diseño que ya funciona y ponle tu producto. Lo más fácil y rápido.</span></span>
-              </button>
-              <button role="tab" aria-selected={modoCrear === 'cero'} className={`modo ${modoCrear === 'cero' ? 'on' : ''}`} onClick={() => setModoCrear('cero')}>
-                <span className="modo-ic">✨</span>
-                <span><span className="modo-t">Desde cero</span>
-                  <span className="modo-s">Describe la escena (o deja que la IA la escriba desde tu foto) y elige duración y formato.</span></span>
-              </button>
-            </div>
             {modoCrear === 'cero' ? (
               <Libre key={libre.n} inicial={libre.inicial} {...saldoProps} rol={me.rol} rolReal={me.rolReal}
                 productoListo={productoListo} onBuscarCamila={() => abrirCamila('libre')}
@@ -439,8 +404,10 @@ export default function App() {
       {ayuda && <Ayuda onCerrar={() => setAyuda(false)} />}
 
       <Camila abierta={camila.abierta} destino={camila.destino} conectada={camila.conectada} usado={productoListo?.producto?.codigo}
-        onCerrar={cerrarCamila} onUsado={setProductoListo}
+        burbuja={!abierto && !publicando && !ayuda} onAbrir={() => abrirCamila()} onCerrar={cerrarCamila} onUsado={setProductoListo}
         onIr={(modo) => { setTab('plantillas'); setModoCrear(modo); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+
+      <RielPlataformas plataformas={PLATS} />
 
       <div className="footer">Marketing · contenido generado con IA · <button className="linklike" onClick={() => setAyuda(true)}>Guía rápida</button></div>
     </div>

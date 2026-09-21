@@ -53,7 +53,7 @@ function Producto({ p, usando, usado, onUsar, onVer }) {
  * dice si tiene foto y con "Usar para crear" la foto queda lista en el panel.
  * destino: 'libre' | 'plantilla' cuando se abrio desde un paso "Tu foto" (usar = aplicar y cerrar).
  */
-export default function Camila({ abierta, destino, usado, conectada = true, onCerrar, onUsado, onIr }) {
+export default function Camila({ abierta, destino, usado, conectada = true, burbuja = true, onAbrir, onCerrar, onUsado, onIr }) {
   const [conv, setConv] = useState({ id: null, mensajes: [] });
   const [cargada, setCargada] = useState(false);
   const [texto, setTexto] = useState('');
@@ -63,6 +63,9 @@ export default function Camila({ abierta, destino, usado, conectada = true, onCe
   const [usando, setUsando] = useState(null);
   const [recien, setRecien] = useState(null); // producto recien preparado (para ofrecer cómo crear)
   const [viendo, setViendo] = useState(null);
+  // La burbuja se puede achicar a solo el circulo (se recuerda por navegador).
+  const [chica, setChicaSt] = useState(() => { try { return localStorage.getItem('ms_camila_chica') === '1'; } catch { return false; } });
+  const setChica = (v) => { setChicaSt(v); try { localStorage.setItem('ms_camila_chica', v ? '1' : '0'); } catch { /* sin storage */ } };
   const lista = useRef(null);
   const caja = useRef(null);
 
@@ -138,7 +141,21 @@ export default function Camila({ abierta, destino, usado, conectada = true, onCe
 
   const nueva = () => { setConv({ id: null, mensajes: [] }); setError(null); setRecien(null); setTexto(''); caja.current?.focus(); };
 
-  if (!abierta) return null;
+  if (!abierta) {
+    if (!burbuja) return null;
+    return (
+      <div className={`cm-flota ${chica ? 'chica' : ''}`}>
+        {!chica && (
+          <div className="cm-flota-t" role="button" tabIndex={0} onClick={() => onAbrir()} onKeyDown={(e) => { if (e.key === 'Enter') onAbrir(); }}>
+            <button className="cm-flota-x" onClick={(e) => { e.stopPropagation(); setChica(true); }} aria-label="Achicar">✕</button>
+            <b>¿Buscas un producto?</b>
+            <span>Dime cuál y te busco la foto</span>
+          </div>
+        )}
+        <button className="cm-flota-b" onClick={() => onAbrir()} aria-label="Abrir Camila" title="Camila · buscar productos de JH">C</button>
+      </div>
+    );
+  }
 
   const ultima = conv.mensajes.at(-1);
   const vacia = cargada && conv.mensajes.length === 0 && !enviando;
