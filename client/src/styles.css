@@ -683,3 +683,12 @@ button.badge:hover { background: var(--surface-2); color: var(--text-primary); }
 @media (max-width: 640px) { .lb-usar-ops { grid-template-columns: 1fr; } }
 .lb-ia, .lb-dictado { align-self: stretch; }
 .lb-ind { width: 100%; }
+
+/* Recarga desde el saldo general */
+.cr-general { display: flex; align-items: center; gap: 18px 28px; flex-wrap: wrap; }
+.cr-general-v { font-size: 1.6rem; font-weight: 760; margin-top: 2px; }
+.cr-general-flecha { font-size: 1.4rem; color: var(--text-muted); }
+.cr-otro { width: 130px; min-width: 0; }
+@media (max-width: 640px) { .cr-general-flecha { display: none; } }
+.sa-pagos-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.sa-pagos-fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.8rem; padding: 7px 10px; border-radius: 9px; background: var(--surface-2); }

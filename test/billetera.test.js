@@ -15,7 +15,7 @@ if (!process.env.TEST_DATABASE_URL) {
     catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
   };
 
-  test.before(async () => { await migrar(); await pool.query('TRUNCATE billetera, publicaciones, generaciones RESTART IDENTITY'); });
+  test.before(async () => { await migrar(); await pool.query('TRUNCATE pagos_eventos, billetera, publicaciones, generaciones RESTART IDENTITY'); });
   test.after(() => pool.end());
 
   test('sin saldo no cobra', async () => {

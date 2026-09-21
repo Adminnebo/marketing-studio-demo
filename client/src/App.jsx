@@ -342,7 +342,7 @@ export default function App() {
           onPublicar={NIVEL[me.rol] >= NIVEL.admin ? (g, indice) => setPublicando({ g, indice }) : null} />
       )}
 
-      {tab === 'creditos' && <Creditos recarga={me.saldo} />}
+      {tab === 'creditos' && <Creditos recarga={me.saldo} onRecargada={() => fetchMe().then(setMe).catch(() => {})} />}
 
       {tab === 'superadmin' && me.rol === 'super_admin' && <SuperAdmin yo={me.email} onAjustes={() => fetchMe().then(setMe).catch(() => {})} />}
 

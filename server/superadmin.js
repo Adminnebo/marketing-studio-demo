@@ -18,6 +18,7 @@ const catalogo = require('./lib/catalogo');
 const clasificar = require('./lib/clasificar');
 const promptAuto = require('./lib/prompt-auto');
 const hfCli = require('./lib/hf-cli');
+const pagos = require('./lib/pagos');
 
 const router = express.Router();
 router.use('/superadmin', auth.requireRol('super_admin'));
@@ -83,6 +84,40 @@ router.post('/superadmin/cli/sesion', ruta(async (req, res) => {
   try { c = await hfCli.cuenta(); } catch (e) { throw errPublico('Se guardó, pero no funciona: ' + e.message.slice(0, 200), 502); }
   console.log(`[cli] ${req.user.email} cargo la sesion de la CLI (${c.email})`);
   res.json({ ok: true, ...c });
+}));
+
+// ── Plataforma central de pagos (recargas desde el saldo general y consumos informados) ──
+router.get('/superadmin/pagos', ruta(async (req, res) => {
+  const [{ rows: cola }, { rows: errores }, { rows: recargas }, { rows: [resumen] }] = await Promise.all([
+    pool.query(`SELECT estado, COUNT(*)::int AS n FROM pagos_eventos GROUP BY estado`),
+    pool.query(`SELECT e.id, e.generacion_id, e.intentos, e.ultimo_error, e.creado, g.preset_nombre, g.precio_usd
+                FROM pagos_eventos e JOIN generaciones g ON g.id = e.generacion_id WHERE e.estado = 'error' ORDER BY e.id DESC LIMIT 30`),
+    pool.query(`SELECT referencia, monto_usd, creditos, estado, por, motivo, intentos, creado FROM recargas_central ORDER BY creado DESC LIMIT 15`),
+    pool.query(`SELECT COALESCE(SUM((cuerpo->>'monto_usd')::numeric) FILTER (WHERE estado = 'hecho'), 0) AS informado,
+                       COUNT(*) FILTER (WHERE estado = 'hecho')::int AS n,
+                       (SELECT COALESCE(SUM(monto_usd), 0) FROM recargas_central WHERE estado = 'aplicada' AND creado > now() - interval '30 days') AS recargado
+                FROM pagos_eventos WHERE creado > now() - interval '30 days'`),
+  ]);
+  let host = null;
+  try { host = process.env.PAGOS_URL ? new URL(process.env.PAGOS_URL).host : null; } catch { /* url rota */ }
+  res.json({
+    configurado: pagos.configurado(), host, cliente: process.env.PAGOS_CLIENTE || null,
+    cola: Object.fromEntries(cola.map((r) => [r.estado, r.n])), errores,
+    recargas: recargas.map((r) => ({ ...r, monto_usd: Number(r.monto_usd), creditos: Number(r.creditos) })),
+    ultimos30: { informadoUsd: Number(resumen.informado), consumos: resumen.n, recargadoUsd: Number(resumen.recargado) },
+  });
+}));
+
+router.post('/superadmin/pagos/probar', ruta(async (req, res) => {
+  try { res.json({ ok: true, ...(await pagos.saldoGeneral()) }); } catch (e) {
+    throw errPublico(e.codigo === 'sin_configurar' ? 'Faltan las variables de la plataforma de pagos (PAGOS_URL, PAGOS_API_KEY, PAGOS_SECRETO, PAGOS_CLIENTE).' : `La plataforma no respondió bien: ${e.message.slice(0, 200)}`, 502);
+  }
+}));
+
+router.post('/superadmin/pagos/eventos/:id/reintentar', ruta(async (req, res) => {
+  if (!(await pagos.reintentar(Number(req.params.id) || 0))) throw errPublico('Ese envío no está en error.');
+  console.log(`[pagos] ${req.user.email} reintenta el consumo ${req.params.id}`);
+  res.json({ ok: true });
 }));
 
 // Clasificar ya las plantillas nuevas (en segundo plano; el worker tambien lo hace cada 12 h).

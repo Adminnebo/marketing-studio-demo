@@ -20,6 +20,7 @@ const catalogo = require('./lib/catalogo');
 const clasificar = require('./lib/clasificar');
 const costo = require('./lib/costo');
 const hfCli = require('./lib/hf-cli');
+const pagos = require('./lib/pagos');
 
 const redesP = import('../shared/redes.mjs');
 
@@ -138,6 +139,8 @@ async function revisarEnProceso() {
       if (ok.length) {
         await pool.query(`UPDATE generaciones SET estado = 'completado', resultados = $2, terminado = now(), revisado = now() WHERE id = $1`, [g.id, JSON.stringify(resultados)]);
         log(`#${g.id} completada (${ok.length} resultado/s)`);
+        // Lo cobrado se informa a la plataforma central con el detalle completo (va por la cola).
+        if (await pagos.informarConsumo(g.id).catch((e) => { log(`#${g.id} no se pudo encolar el consumo: ${e.message}`); return false; })) log(`#${g.id} consumo encolado para la plataforma de pagos`);
       } else {
         const motivo = st.includes('nsfw') ? 'El contenido fue rechazado por el filtro de seguridad. Prueba con otra imagen o descripción.' : 'La generación falló. Intenta de nuevo o prueba otra plantilla.';
         await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, error_detalle = $4, terminado = now(), revisado = now() WHERE id = $1`,
@@ -242,6 +245,15 @@ async function ciclo() {
     await clasificarPlantillas();
   } catch (e) {
     log('No se pudieron clasificar plantillas:', e.message);
+  }
+  // Plataforma central de pagos: consumos por informar y recargas que quedaron sin respuesta.
+  try {
+    const r = await pagos.procesarCola();
+    if (r.hechos) log(`pagos: ${r.hechos} consumo/s informado/s`);
+    const rc = await pagos.repetirRecargasPendientes();
+    if (rc) log(`pagos: ${rc} recarga/s pendiente/s resuelta/s`);
+  } catch (e) {
+    log('Error con la plataforma de pagos:', e.message);
   }
   try {
     await mantenerCli();

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, clasificarPlantillas, registrarWebhookRedes } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, clasificarPlantillas, registrarWebhookRedes } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, cred } from '../precio';
 
@@ -43,6 +43,65 @@ function SesionCli({ cli, onCambio }) {
       )}
       {msg?.ok && <div className="ms-cost" style={{ color: 'var(--good-ink)' }}>{msg.ok}</div>}
       {msg?.error && <div className="ms-cost" style={{ color: 'var(--critical)' }}>{msg.error}</div>}
+    </div>
+  );
+}
+
+// Plataforma central de pagos de Nebo: recargas desde el saldo general y consumos informados.
+const fechaCorta = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+function PagosCentral() {
+  const [d, setD] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const cargar = () => fetchPagosAdmin().then(setD).catch((e) => setMsg({ error: e.message }));
+  useEffect(() => { cargar(); }, []);
+  if (!d) return <div className="card"><h3>Plataforma de pagos</h3>{msg?.error ? <div className="ms-errors">{msg.error}</div> : <div className="spinner" />}</div>;
+  const pendientes = d.cola.pendiente || 0;
+  const conError = d.cola.error || 0;
+  return (
+    <div className="card">
+      <h3>Plataforma de pagos (saldo general)</h3>
+      <div className="card-sub">
+        {d.configurado
+          ? <>Conectada a <strong>{d.host}</strong> como cliente <strong>{d.cliente}</strong>. Los admins de Marketing recargan desde el saldo general y cada creación cobrada se informa con su detalle.</>
+          : 'Sin configurar: faltan PAGOS_URL, PAGOS_API_KEY, PAGOS_SECRETO y PAGOS_CLIENTE (en panel y worker). Mientras tanto se recarga a mano abajo.'}
+      </div>
+      {d.configurado && (
+        <>
+          <div className="sa-ejemplos" style={{ marginTop: 0 }}>
+            <span className="pill">Últimos 30 días: recargado <strong>{usd(d.ultimos30.recargadoUsd)}</strong></span>
+            <span className="pill">Informado <strong>{usd(d.ultimos30.informadoUsd)}</strong> en {num(d.ultimos30.consumos, 0)} creaciones</span>
+            <span className={`pill ${conError ? 'st-fallido' : pendientes ? 'st-en_proceso' : 'st-completado'}`}>{conError ? `${conError} con error` : pendientes ? `${pendientes} por informar` : 'Todo informado'}</span>
+          </div>
+          {d.errores.length > 0 && (
+            <div className="sa-pagos-lista">
+              <div className="lb-lbl">No se pudieron informar</div>
+              {d.errores.map((e) => (
+                <div key={e.id} className="sa-pagos-fila">
+                  <span>#{e.generacion_id} {e.preset_nombre} · {e.precio_usd != null ? usd(e.precio_usd) : ''}<br /><span className="ms-cost">{e.ultimo_error}</span></span>
+                  <button className="mini-btn" onClick={async () => { try { await reintentarConsumo(e.id); setMsg({ ok: 'Se reintentará en el próximo ciclo.' }); cargar(); } catch (x) { setMsg({ error: x.message }); } }}>↻ Reintentar</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {d.recargas.length > 0 && (
+            <div className="sa-pagos-lista">
+              <div className="lb-lbl">Últimas recargas desde el saldo general</div>
+              {d.recargas.slice(0, 6).map((r) => (
+                <div key={r.referencia} className="sa-pagos-fila">
+                  <span>{fechaCorta(r.creado)} · {usd(r.monto_usd)} → {num(r.creditos)} cr · {r.por}</span>
+                  <span className={`pill ${r.estado === 'aplicada' ? 'st-completado' : r.estado === 'rechazada' ? 'st-fallido' : 'st-en_proceso'}`} title={r.motivo || ''}>{r.estado}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <div className="ms-submit">
+        <span className="ms-cost">{msg?.ok && <span style={{ color: 'var(--good-ink)' }}>{msg.ok}</span>}{msg?.error && <span style={{ color: 'var(--critical)' }}>{msg.error}</span>}</span>
+        <button className="mini-btn" disabled={!d.configurado} onClick={async () => {
+          try { const r = await probarPagos(); setMsg({ ok: `Conexión OK: saldo general ${usd(r.saldoUsd)}.` }); } catch (e) { setMsg({ error: e.message }); }
+        }}>🔌 Probar conexión</button>
+      </div>
     </div>
   );
 }
@@ -190,6 +249,8 @@ function Ajustes({ onGuardado }) {
           </div>
         </div>
         {acc?.error && <div className="ms-errors">{acc.error}</div>}
+
+        <PagosCentral />
 
         <div className="card">
           <h3>Recarga manual a JH</h3>

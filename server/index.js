@@ -17,6 +17,8 @@ const modelos = require('./lib/modelos');
 const promptAuto = require('./lib/prompt-auto');
 const hfOauth = require('./lib/hf-oauth');
 const hfCli = require('./lib/hf-cli');
+const pagos = require('./lib/pagos');
+const encolarLib = require('./lib/encolar');
 const zernio = require('./lib/zernio');
 
 const reglasP = import('../shared/reglas.mjs');
@@ -181,65 +183,8 @@ app.post('/api/medios', express.raw({ type: Object.keys(EXT), limit: '20mb' }), 
 const COLS = `id, creado_por, estado, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
   precio_usd, resultados, error, creado, enviado, terminado`;
 
-// Encola una generacion: tope diario, precio y cobro a la billetera de JH (los
-// super_admin no pagan). Devuelve { g } o { status, error } para responder.
-// Creditos de la cuenta del generador (cache 30 s). null si no se pudo leer: no se bloquea por eso.
-let _saldoProv = { v: null, exp: 0 };
-async function saldoProveedor() {
-  if (_saldoProv.exp > Date.now()) return _saldoProv.v;
-  const v = await hf.llamar('balance', {}).then((d) => (d?.credits != null ? Number(d.credits) : null)).catch(() => null);
-  _saldoProv = { v, exp: Date.now() + 30e3 };
-  return v;
-}
-
-async function encolar(req, { presetId, presetNombre, presetTipo, portada, entrada, creditos }) {
-  // Si la cuenta del generador no alcanza, se avisa ya y no se encola (fallaria al enviarse).
-  const prov = await saldoProveedor();
-  if (prov != null && Number(creditos) > 0 && prov < Number(creditos)) {
-    console.log(`[encolar] cuenta del generador sin creditos: ${prov} < ${creditos} (${req.user.email})`);
-    return { status: 503, error: { sinCreditosProveedor: true, error: req.user.rolReal === 'super_admin'
-      ? `La cuenta del generador tiene ${prov} créditos y esto usa ${creditos}. Recarga la cuenta del proveedor.`
-      : 'El servicio de generación se quedó sin créditos por ahora. Avísale al administrador; no se te cobró nada.' } };
-  }
-  const a = await ajustes.leer();
-  if (a.limite_diario_creditos > 0 && req.user.rolReal !== 'super_admin') {
-    const { rows: [u] } = await pool.query(
-      `SELECT COALESCE(SUM(creditos_estimados), 0) AS usados FROM generaciones
-       WHERE user_id = $1 AND estado <> 'fallido'
-         AND (creado AT TIME ZONE 'America/Santo_Domingo')::date = (now() AT TIME ZONE 'America/Santo_Domingo')::date`,
-      [req.user.id]
-    );
-    if (Number(u.usados) + (Number(creditos) || 0) > a.limite_diario_creditos) {
-      return { status: 429, error: { error: 'Llegaste al límite de uso de hoy. Pídele a un super admin que lo amplíe.' } };
-    }
-  }
-  const pr = ajustes.precioDe(a, presetTipo, creditos);
-  // En "ver como" el super_admin prueba con permisos de usuario, pero no gasta la billetera de JH.
-  const cobra = req.user.rolReal !== 'super_admin';
-  if (cobra && !(Number(creditos) > 0)) {
-    return { status: 400, error: { error: 'No se pudo calcular el costo. Espera a que cargue e intenta de nuevo.' } };
-  }
-  const cli = await pool.connect();
-  try {
-    await cli.query('BEGIN');
-    const { rows: [g] } = await cli.query(
-      `INSERT INTO generaciones (creado_por, user_id, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-         usd_por_credito, margen_pct, costo_usd, precio_usd)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING ${COLS}`,
-      [req.user.email, req.user.id, presetId, presetNombre, presetTipo, portada, entrada, creditos,
-        a.usd_por_credito || null, pr.margen, pr.costo, pr.precio]
-    );
-    if (cobra) await billetera.cobrar(cli, { generacionId: g.id, creditos: Number(creditos), usd: pr.precio, por: req.user.email });
-    await cli.query('COMMIT');
-    return { g };
-  } catch (e) {
-    await cli.query('ROLLBACK').catch(() => {});
-    if (e.saldo) return { status: 402, error: { error: e.message + ' Recarga créditos para continuar.', sinSaldo: true } };
-    throw e;
-  } finally {
-    cli.release();
-  }
-}
+// Encolar (tope diario, precio, cobro local o en la plataforma central): lib/encolar.js
+const encolar = (req, datos) => encolarLib.encolar(req.user, datos);
 
 app.post('/api/generaciones', ruta(async (req, res) => {
   const { entradasDe, faltantes, formatoDe, creditosDe } = await reglasP;
@@ -282,6 +227,8 @@ app.post('/api/generaciones', ruta(async (req, res) => {
       ...(preset.required_inputs !== undefined ? { required_inputs: preset.required_inputs } : {}),
     },
     producto: producto ? { url: producto.url || null, nombre: producto.nombre || null } : null,
+    // Para el detalle del cobro: la duracion viene de la portada de la plantilla; UGC se genera a 720p.
+    detalle: { duracion_s: Number(b.duracion) || null, resolucion: preset.type === 'ugc' ? '720p' : null },
     avatar: avatar ? { id: avatar.id, type: avatar.type, name: avatar.name || null, preview_url: avatar.preview_url || null } : null,
   };
   let creditos = null;
@@ -405,10 +352,38 @@ app.get('/api/creditos', ruta(async (req, res) => {
   res.json({
     saldo: await billetera.saldo(),
     precioCredito: pc,
+    // Recargar desde el saldo general de la plataforma central (admin de Marketing en adelante).
+    central: { configurado: pagos.configurado(), puedeRecargar: pagos.configurado() && auth.NIVEL[req.user.rol] >= auth.NIVEL.admin },
     paquetes: (paquetes.length ? paquetes : [500, 1000, 2000, 4000]).map((cr) => ({ creditos: cr, usd: pc != null ? Math.round(cr * pc * 100) / 100 : null })),
     pagoEnLinea: false, // en standby: por ahora las recargas las carga un super admin
     movimientos: (await billetera.movimientos(40)).map((m) => ({ ...m, creditos: Number(m.creditos), usd: m.usd != null ? Number(m.usd) : null })),
   });
+}));
+
+// Saldo general del cliente en la plataforma central y recarga de Marketing desde ahi.
+app.get('/api/creditos/saldo-general', auth.requireRol('admin'), ruta(async (req, res) => {
+  if (!pagos.configurado()) return res.status(503).json({ error: 'La conexión con la plataforma de pagos todavía no está configurada.' });
+  try { res.json(await pagos.saldoGeneral()); } catch (e) {
+    console.error('[pagos] saldo general:', e.message);
+    res.status(502).json({ error: 'No se pudo leer tu saldo general. Intenta de nuevo en un momento.' });
+  }
+}));
+
+app.post('/api/creditos/recargar', auth.requireRol('admin'), ruta(async (req, res) => {
+  if (!pagos.configurado()) return res.status(503).json({ error: 'La conexión con la plataforma de pagos todavía no está configurada.' });
+  const a = await ajustes.leer();
+  const pc = ajustes.precioCredito(a);
+  const monto = Number(req.body?.monto_usd);
+  if (!(monto >= 1) || monto > 10000) return res.status(400).json({ error: 'Elige un monto entre $1 y $10,000.' });
+  if (!pc) return res.status(400).json({ error: 'Todavía no hay precio por crédito configurado. Avísale al administrador.' });
+  const r = await pagos.recargar({ montoUsd: monto, precioCredito: pc, usuario: { id: req.user.id, email: req.user.email, nombre: req.user.nombre || null } });
+  console.log(`[pagos] recarga ${r.referencia} de ${req.user.email}: $${monto} -> ${r.creditos} cr (${r.estado})`);
+  if (r.estado === 'aplicada') return res.json({ ok: true, creditos: Number(r.creditos), montoUsd: Number(r.monto_usd), saldo: await billetera.saldo(), saldoGeneralUsd: r.saldoGeneralUsd });
+  if (r.estado === 'rechazada') {
+    const sinSaldo = r.motivo === 'saldo_insuficiente';
+    return res.status(sinSaldo ? 402 : 400).json({ error: sinSaldo ? `Tu saldo general no alcanza para recargar $${monto.toFixed(2)}.` : 'La plataforma de pagos rechazó la recarga.' });
+  }
+  res.status(202).json({ pendiente: true, error: 'La plataforma de pagos no confirmó todavía. Se reintenta sola en unos minutos; no se te va a descontar dos veces.' });
 }));
 
 // Redes sociales (conectar cuentas y publicar): admin de Marketing en adelante.

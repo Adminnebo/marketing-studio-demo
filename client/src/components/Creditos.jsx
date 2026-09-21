@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchCreditos } from '../api';
+import { fetchCreditos, fetchSaldoGeneral, recargarDesdeGeneral } from '../api';
 import { usd, cred } from '../precio';
 
 const TIPOS = { recarga: 'Recarga', consumo: 'Generación', reembolso: 'Devolución', ajuste: 'Ajuste' };
@@ -10,8 +10,64 @@ const EJEMPLOS = [
 ];
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+const MONTOS = [10, 25, 50, 100];
+
+// Pasar saldo del balance general (plataforma central de pagos de Nebo) a Marketing.
+function RecargaGeneral({ precioCredito, onRecargada }) {
+  const [general, setGeneral] = useState(null); // { saldoUsd } | { error }
+  const [monto, setMonto] = useState(25);
+  const [otro, setOtro] = useState('');
+  const [estado, setEstado] = useState(null);
+  const leer = () => fetchSaldoGeneral().then(setGeneral).catch((e) => setGeneral({ error: e.message }));
+  useEffect(() => { leer(); }, []);
+  const valor = otro !== '' ? Number(otro) : monto;
+  const creditos = precioCredito && valor > 0 ? Math.floor((valor / precioCredito) * 10) / 10 : null;
+  const alcanza = general?.saldoUsd == null || valor <= general.saldoUsd;
+  const valido = valor >= 1 && valor <= 10000 && alcanza && creditos != null;
+  const recargar = async () => {
+    if (!valido || estado?.cargando) return;
+    if (!window.confirm(`Se pasarán ${usd(valor)} de tu saldo general a Marketing (${cred(creditos)} créditos). ¿Continuar?`)) return;
+    setEstado({ cargando: true });
+    try {
+      const r = await recargarDesdeGeneral(valor);
+      if (r.pendiente) setEstado({ aviso: r.error });
+      else setEstado({ ok: `Listo: se sumaron ${cred(r.creditos)} créditos. Saldo de Marketing: ${cred(r.saldo)} créditos.` });
+      setOtro(''); leer(); onRecargada?.();
+    } catch (e) { setEstado({ error: e.message }); }
+  };
+  return (
+    <div className="card">
+      <div className="cr-general">
+        <div>
+          <div className="kpi-label">Tu saldo general en Nebo</div>
+          <div className="cr-general-v">{general == null ? '…' : general.error ? '—' : usd(general.saldoUsd)}</div>
+          {general?.error && <div className="ms-cost" style={{ color: 'var(--critical)' }}>{general.error}</div>}
+        </div>
+        <div className="cr-general-flecha">→</div>
+        <div>
+          <div className="kpi-label">Pasar a Marketing</div>
+          <div className="ms-chips" style={{ marginTop: 6 }}>
+            {MONTOS.map((m) => <button key={m} className={`dr-preset ${otro === '' && monto === m ? 'active' : ''}`} onClick={() => { setMonto(m); setOtro(''); }}>{usd(m)}</button>)}
+            <input className="search cr-otro" type="number" min="1" max="10000" step="1" placeholder="Otro monto" value={otro} onChange={(e) => setOtro(e.target.value)} />
+          </div>
+        </div>
+      </div>
+      <div className="ms-submit">
+        <span className="ms-cost">
+          {creditos != null && valor > 0 ? <>Recibes <strong>{cred(creditos)} créditos</strong> por {usd(valor)} ({usd(precioCredito)} por crédito).</> : 'Elige cuánto pasar.'}
+          {!alcanza && <><br /><span style={{ color: 'var(--critical)' }}>Tu saldo general no alcanza para ese monto.</span></>}
+        </span>
+        <button className="btn" onClick={recargar} disabled={!valido || estado?.cargando}>{estado?.cargando ? 'Recargando…' : `💳 Pasar ${valor > 0 ? usd(valor) : ''} a Marketing`}</button>
+      </div>
+      {estado?.ok && <div className="ms-ok" style={{ marginTop: 10 }}>✅ {estado.ok}</div>}
+      {estado?.aviso && <div className="lb-avisos" style={{ marginTop: 10 }}>{estado.aviso}</div>}
+      {estado?.error && <div className="ms-errors" style={{ marginTop: 10 }}>{estado.error}</div>}
+    </div>
+  );
+}
+
 // Billetera de JH: saldo, precio por credito, paquetes para recargar (pago en linea en standby) y movimientos.
-export default function Creditos({ recarga }) {
+export default function Creditos({ recarga, onRecargada }) {
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
   const [elegido, setElegido] = useState(null);
@@ -51,6 +107,11 @@ export default function Creditos({ recarga }) {
       <div className="ms-cost" style={{ margin: '8px 2px 0' }}>Son referencias: antes de crear siempre ves el costo exacto. Si una creación falla, los créditos se devuelven solos.</div>
 
       <div className="section-title">Recargar créditos</div>
+      {d.central?.puedeRecargar ? (
+        <RecargaGeneral precioCredito={d.precioCredito} onRecargada={() => { cargar(); onRecargada?.(); }} />
+      ) : d.central?.configurado ? (
+        <div className="card"><div className="card-sub" style={{ margin: 0 }}>Las recargas se hacen desde el saldo general de tu cuenta Nebo. Pídele a un administrador de Marketing que pase saldo.</div></div>
+      ) : (
       <div className="card">
         <div className="card-sub">Elige un paquete. Mientras llega el pago en línea, escríbele a Nebo con el paquete que quieres y lo cargamos a tu saldo.</div>
         <div className="cr-paquetes">
@@ -69,6 +130,7 @@ export default function Creditos({ recarga }) {
           <button className="btn" disabled={!d.pagoEnLinea || !elegido} title={d.pagoEnLinea ? '' : 'Próximamente'}>{d.pagoEnLinea ? '💳 Pagar y recargar' : '💳 Pago en línea (próximamente)'}</button>
         </div>
       </div>
+      )}
 
       <div className="section-title">Historial de movimientos</div>
       <div className="card" style={{ padding: 0 }}>

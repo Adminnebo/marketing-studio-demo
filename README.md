@@ -104,6 +104,19 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
 - **Recargas**: la pestaña Créditos muestra los paquetes con el precio para JH. El pago en línea está en pausa
   (`pagoEnLinea: false`); mientras tanto un super_admin suma créditos a mano desde Super Admin.
 
+## Pagos: saldo general de Nebo
+
+- La billetera de Marketing (créditos) se recarga desde el **saldo general** del cliente en la plataforma central de
+  pagos: un admin de Marketing elige el monto en Créditos y la plataforma lo descuenta allá (`POST /recargas`); acá se
+  suman los créditos al precio del momento. Generar nunca depende de la plataforma, solo recargar.
+- Cada creación cobrada que sale bien se **informa** con su detalle completo (medio, plantilla o modelo, duración,
+  calidad, formato, audio, descripción, resultados, créditos, precio; y costo/margen como datos internos) en
+  `POST /consumos`. Es informativo: no mueve dinero. Lo fallido (devuelto) y lo de super admin no se informa.
+- Todo firmado (HMAC con timestamp) e idempotente por referencia (`mkt-rec-<uuid>`, `mkt-gen-<id>`). Las recargas sin
+  respuesta quedan pendientes y el worker repite la misma referencia; los consumos van por una cola con reintentos
+  (1, 2, 4… min, hasta 12) y los que fallan se ven y se reintentan en Super Admin → Plataforma de pagos.
+- Contrato: `docs/pagos-contrato.md`. Plataforma simulada para probar: `node test/mock-pagos.js 4600`.
+
 ## Redes sociales (Zernio)
 
 La pestaña **Redes** conecta cuentas (Instagram, Facebook, TikTok, YouTube, LinkedIn, Threads, X) con el OAuth
@@ -146,7 +159,7 @@ borrar.
 ## Pendiente (detalles y correcciones finales)
 
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
-- **Pago en línea de recargas** (Stripe/Whop o solicitud + aprobación): en pausa por decisión del cliente.
+- **Plataforma central de pagos**: el lado de Marketing está listo y probado contra una plataforma simulada (`docs/pagos-contrato.md`, `test/mock-pagos.js`). Falta que el equipo de pagos publique `GET /saldo`, `POST /recargas` y `POST /consumos`, y cargar `PAGOS_URL`, `PAGOS_API_KEY`, `PAGOS_SECRETO` y `PAGOS_CLIENTE` en panel y worker. Hasta entonces, recarga manual del super admin.
 - **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
 - **Primer usuario de JH**: cargar saldo en la billetera (recarga manual) y darle acceso desde Super Admin.

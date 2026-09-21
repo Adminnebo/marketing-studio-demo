@@ -133,6 +133,42 @@ const MIGRACIONES = [
      ultimo_uso TIMESTAMPTZ,
      ultimo_error TEXT
    )`,
+  // Plataforma central de pagos (lib/pagos.js). Recargas desde el saldo general del cliente
+  // (se registran antes de pedirlas: si no hay respuesta, el worker repite la misma referencia).
+  `CREATE TABLE IF NOT EXISTS recargas_central (
+     referencia TEXT PRIMARY KEY,
+     monto_usd NUMERIC NOT NULL,
+     creditos NUMERIC NOT NULL,
+     precio_credito NUMERIC NOT NULL,
+     estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aplicada', 'rechazada')),
+     por TEXT NOT NULL,
+     usuario JSONB,
+     recarga_id TEXT,
+     motivo TEXT,
+     respuesta TEXT,
+     intentos INT NOT NULL DEFAULT 0,
+     creado TIMESTAMPTZ NOT NULL DEFAULT now(),
+     actualizado TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  // Una recarga desde el saldo general entra UNA sola vez a la billetera (defensa extra a la idempotencia).
+  `ALTER TABLE billetera ADD COLUMN IF NOT EXISTS referencia TEXT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS billetera_referencia_idx ON billetera (referencia) WHERE referencia IS NOT NULL`,
+  // Consumos informados a la plataforma (uno por generacion cobrada), con reintentos.
+  `CREATE TABLE IF NOT EXISTS pagos_eventos (
+     id BIGSERIAL PRIMARY KEY,
+     generacion_id BIGINT NOT NULL REFERENCES generaciones(id),
+     referencia TEXT NOT NULL,
+     tipo TEXT NOT NULL CHECK (tipo IN ('consumo')),
+     cuerpo JSONB NOT NULL,
+     estado TEXT NOT NULL DEFAULT 'pendiente',
+     intentos INT NOT NULL DEFAULT 0,
+     proximo TIMESTAMPTZ NOT NULL DEFAULT now(),
+     ultimo_error TEXT,
+     respuesta TEXT,
+     creado TIMESTAMPTZ NOT NULL DEFAULT now(),
+     hecho TIMESTAMPTZ,
+     UNIQUE (generacion_id, tipo)
+   )`,
   `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,

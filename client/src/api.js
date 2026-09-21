@@ -143,6 +143,12 @@ export const costoLibre = (datos) => api('/libre/costo', { method: 'POST', body:
 export const crearLibre = (datos) => api('/libre', { method: 'POST', body: JSON.stringify(datos) });
 export const autoPrompt = (datos) => api('/libre/autoprompt', { method: 'POST', body: JSON.stringify(datos) });
 export const reconectarGenerador = () => api('/superadmin/generador/conectar', { method: 'POST' });
+// Plataforma central de pagos: saldo general, recarga de Marketing desde ahi y estado (super admin).
+export const fetchSaldoGeneral = () => api('/creditos/saldo-general');
+export const recargarDesdeGeneral = (montoUsd) => api('/creditos/recargar', { method: 'POST', body: JSON.stringify({ monto_usd: montoUsd }) });
+export const fetchPagosAdmin = () => api('/superadmin/pagos');
+export const probarPagos = () => api('/superadmin/pagos/probar', { method: 'POST' });
+export const reintentarConsumo = (id) => api(`/superadmin/pagos/eventos/${id}/reintentar`, { method: 'POST' });
 export const verificarCli = () => api('/superadmin/cli/verificar', { method: 'POST' });
 export const cargarSesionCli = (paquete) => api('/superadmin/cli/sesion', { method: 'POST', body: JSON.stringify({ paquete }) });
 export const clasificarPlantillas = () => api('/superadmin/plantillas/clasificar', { method: 'POST' });
