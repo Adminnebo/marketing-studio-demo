@@ -136,6 +136,17 @@ alojado por [Zernio](https://docs.zernio.com) y publica o programa cualquier res
 - Variables: `ZERNIO_API_KEY` en `panel` y `worker` (el secreto del webhook ya está puesto). Las 2 primeras cuentas
   conectadas son gratis; X exige tarjeta.
 
+## Camila: buscar productos de JH
+
+El equipo le pide un producto a Camila en lenguaje natural (botón **Camila · Buscar producto** en la barra de pestañas, en el paso "Tu foto" y en la plantilla abierta). Ella busca en el catálogo de JH, dice si tiene foto y ficha técnica, y con **Usar para crear** la foto queda puesta en el paso a paso o en la plantilla.
+
+- Catálogo: `dbo.List_ProductosIA` (el SQL Server de JH, el mismo de la Camila de WhatsApp y de Jarvis). La IA solo da las palabras clave con las reglas de normalización de la Camila de WhatsApp (toma+cte, porta+lampara, raíz singular, reintentos); la consulta se arma con parámetros (`server/lib/jh-catalogo.js`).
+- Fotos y fichas: buckets públicos `Lucas_imagenes` y `Lucas_fichas_tecnicas` (archivo = código). El índice se arma listando los buckets con la service key y se refresca cada 6 h.
+- "Usar para crear" importa la foto al generador (`media_import_url`); no se cobra nada hasta crear.
+- No pasa por WhatsApp, el CRM ni Sword. Queda guardado por usuario: `camila_conversaciones`, `camila_mensajes` (con las búsquedas, tokens y tiempo) y `camila_usos`.
+- IA: `gpt-4.1-mini` (cambiable con `CAMILA_MODELO`), con la misma `OPENAI_API_KEY`. Tope de 40 mensajes cada 10 min por usuario.
+- Se activa con `JH_CATALOGO` en el servicio `panel`: JSON `{ host, puerto, instancia, base, usuario, password }`, el mismo formato de la fuente "Base JH" de Jarvis. Sin esa variable el botón no aparece.
+
 ## Desarrollo local
 
 ```bash
@@ -160,6 +171,7 @@ borrar.
 
 ## Pendiente (detalles y correcciones finales)
 
+- **Conectar Camila al catálogo real**: cargar `JH_CATALOGO` en `panel` (copiada de la fuente "Base JH" de Jarvis) y probar con productos reales: búsquedas, fotos y "Usar para crear". Probado con la IA real y un catálogo simulado.
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
 - **Idempotencia en el descuento**: pedir al equipo de pagos que `/api/credits/adjust` acepte una referencia única y rechace repetidos; hoy un corte a mitad requiere revisión manual.
 - **Política de saldo negativo**: JH está en -$1,018 en la plataforma; con el ajuste en $0 no pueden crear hasta pagar. Definir si se permite un margen.

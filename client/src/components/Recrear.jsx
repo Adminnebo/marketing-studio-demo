@@ -9,11 +9,18 @@ import { precioDe, usd, cred, creditos as nCred } from '../precio';
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
 
 // Modal para recrear una plantilla con el producto (y avatar) del usuario.
-export default function Recrear({ preset, categoria, categorias, costos, precios, saldo, saldoUsd = null, negativoUsd = 0, rol, rolReal, inicial, onCerrar, onEnviada, onRecargar }) {
+export default function Recrear({ preset, categoria, categorias, costos, precios, saldo, saldoUsd = null, negativoUsd = 0, rol, rolReal, inicial, productoListo, onBuscarCamila, onCerrar, onEnviada, onRecargar }) {
   const { formatSlug, formato } = useMemo(() => formatoDe(preset, categorias, categoria), [preset, categorias, categoria]);
   const req = useMemo(() => entradasDe(preset, { formatSlug, formato }), [preset, formatSlug, formato]);
 
-  const [producto, setProducto] = useState(inicial?.producto || null); // { media_id, url, nombre, local }
+  const [producto, setProducto] = useState(inicial?.producto || (productoListo && { media_id: productoListo.media_id, url: productoListo.url, nombre: productoListo.nombre }) || null); // { media_id, url, nombre, local }
+  // Producto elegido con Camila con la plantilla ya abierta: su foto entra sola.
+  const productoAntes = useRef(productoListo?.media_id);
+  useEffect(() => {
+    if (!productoListo || productoListo.media_id === productoAntes.current) return;
+    productoAntes.current = productoListo.media_id;
+    setProducto({ media_id: productoListo.media_id, url: productoListo.url, nombre: productoListo.nombre });
+  }, [productoListo?.media_id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [subida, setSubida] = useState(null); // { progreso, nombre, error }
   const [avatar, setAvatar] = useState(inicial?.avatar || null);
   const [eligiendoAvatar, setEligiendoAvatar] = useState(false);
@@ -135,6 +142,9 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                       </button>
                       <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden
                         onChange={(e) => { elegirArchivo(e.target.files?.[0]); e.target.value = ''; }} />
+                      {onBuscarCamila && !enviada && (
+                        <button type="button" className="cm-buscar-btn rc-camila" onClick={onBuscarCamila} disabled={ocupado}><span className="cm-av">C</span>Buscar con Camila</button>
+                      )}
                       {subida?.error && <div className="ms-gen-err" style={{ marginTop: 6 }}>{subida.error}</div>}
                     </div>
                   )}

@@ -390,6 +390,9 @@ app.get('/api/creditos', ruta(async (req, res) => {
   });
 }));
 
+// Camila: busca productos de JH y deja la foto lista para crear (server/camila.js).
+app.use('/api', require('./camila').router);
+
 // Redes sociales (conectar cuentas y publicar): admin de Marketing en adelante.
 app.use(['/api/redes', '/api/publicaciones'], auth.requireRol('admin'));
 app.use('/api', require('./redes').router);
@@ -406,6 +409,7 @@ app.get(/^(?!\/api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html')
 
 async function arrancar() {
   await migrar();
+  await require('./lib/camila').migrar();
   if (await hf.sembrarToken()) console.log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   // Webhook de Zernio: se registra solo en cuanto hay clave y secreto.
   if (zernio.webhookListo() && process.env.PANEL_URL) {

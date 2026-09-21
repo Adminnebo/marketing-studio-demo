@@ -152,3 +152,9 @@ export const verificarCli = () => api('/superadmin/cli/verificar', { method: 'PO
 export const cargarSesionCli = (paquete) => api('/superadmin/cli/sesion', { method: 'POST', body: JSON.stringify({ paquete }) });
 export const clasificarPlantillas = () => api('/superadmin/plantillas/clasificar', { method: 'POST' });
 export const registrarWebhookRedes = () => api('/superadmin/zernio/webhook', { method: 'POST' });
+
+// Camila: buscar productos de JH y dejarlos listos para crear.
+export const fetchCamilaEstado = () => api('/camila/estado');
+export const fetchCamilaConversacion = () => api('/camila/conversacion');
+export const mensajeCamila = (datos) => api('/camila/mensaje', { method: 'POST', body: JSON.stringify(datos) });
+export const usarProductoCamila = (datos) => api('/camila/usar', { method: 'POST', body: JSON.stringify(datos) });

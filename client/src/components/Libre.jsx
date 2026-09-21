@@ -29,7 +29,7 @@ const pasosDe = (tipo) => [
 // Crear desde cero, paso a paso. El orden importa: el formato y la duracion van ANTES de la
 // descripcion, porque la que escribe la IA se arma para esa duracion (tramos y ritmo), ese
 // formato y el sonido. Si despues se cambia alguno, se avisa y se ofrece reescribirla.
-export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal, inicial, onEnviada, onVer, onRecargar }) {
+export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal, inicial, productoListo, onBuscarCamila, onEnviada, onVer, onRecargar }) {
   const [modelos, setModelos] = useState(null);
   const [error, setError] = useState(null);
   const [paso, setPaso] = useState(inicial ? 5 : 1); // 'Usar de nuevo' trae todo lleno: se abre en Revisar
@@ -59,6 +59,17 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
   const caja = useRef(null);
 
   useEffect(() => { fetchModelos().then((d) => setModelos(d.modelos)).catch((e) => setError(e.message)); }, []);
+
+  // Producto elegido con Camila: su foto y su nombre entran solos ('Usar de nuevo' trae los suyos y manda).
+  const primeraVez = useRef(true);
+  useEffect(() => {
+    const saltar = primeraVez.current && inicial?.imagen;
+    primeraVez.current = false;
+    if (!productoListo || saltar) return;
+    setImagen({ media_id: productoListo.media_id, url: productoListo.url, nombre: productoListo.nombre });
+    setProducto(productoListo.nombre || '');
+    setSubida(null);
+  }, [productoListo?.media_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deTipo = useMemo(() => (modelos || []).filter((m) => m.tipo === tipo), [modelos, tipo]);
   const modelo = (modelos || []).find((m) => m.id === modeloId) || deTipo[0] || null;
@@ -373,6 +384,12 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
               <li>❌ Fotos borrosas, cortadas o con marcas de agua</li>
             </ul>
           </div>
+          {onBuscarCamila && modelo?.aceptaImagen && (
+            <div className="lb-camila">
+              <span>¿No tienes la foto a mano?</span>
+              <button className="cm-buscar-btn" onClick={onBuscarCamila}><span className="cm-av">C</span>Buscar en el catálogo de JH con Camila</button>
+            </div>
+          )}
           {subida?.error && <div className="ms-gen-err">{subida.error}</div>}
         </section>
       )}
