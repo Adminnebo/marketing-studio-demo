@@ -150,7 +150,10 @@ export default function App() {
     cargarCatalogo();
     setGens((g) => ({ ...g, cargando: true }));
     recargarGens();
-    const id = setInterval(() => fetchEstado().then(setEstado).catch(() => {}), 60000);
+    const id = setInterval(() => {
+      fetchEstado().then(setEstado).catch(() => {});
+      fetchMe().then(setMe).catch(() => {}); // saldo al dia (JH tambien gasta desde sus otros servicios)
+    }, 60000);
     return () => clearInterval(id);
   }, [s, cargarCatalogo, recargarGens, cargarRedes]);
 
@@ -197,6 +200,7 @@ export default function App() {
   const sinSaldo = me.rolReal !== 'super_admin' && (externo
     ? me.saldoDisponibleUsd != null && me.saldoDisponibleUsd <= -(me.saldoNegativoPermitidoUsd || 0)
     : Number(me.saldo) <= 0);
+  const saldoValor = externo ? me.saldoDisponibleUsd : Number(me.saldo);
   const saldoProps = { saldo: me.saldo, saldoUsd: externo ? me.saldoDisponibleUsd : null, negativoUsd: me.saldoNegativoPermitidoUsd || 0 };
   const desconectado = estado && !estado.conectado;
 
@@ -245,10 +249,6 @@ export default function App() {
               {desconectado ? 'Generador desconectado' : 'Generador conectado'}
             </span>
           )}
-          <button className="badge cr-badge" onClick={() => setTab('creditos')}
-            title={externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
-            💳 Saldo: <strong>{externo ? (me.saldoDisponibleUsd != null ? usd(me.saldoDisponibleUsd) : '—') : `${cred(me.saldo)} créditos`}</strong>
-          </button>
           <button className="badge" onClick={() => setAyuda(true)} title="Cómo usar el panel">❔ Ayuda</button>
           {me.rol === 'super_admin' && saldo && (
             <span className="badge" title={`Cuenta del proveedor · plan ${saldo.subscription_plan_type} · solo lo ven los super admin`}>
@@ -303,6 +303,7 @@ export default function App() {
       )}
       {externo && me.errorSaldo && <div className="banner-off">{me.errorSaldo}</div>}
 
+      <div className="tabs-bar">
       <nav className="tabs">
         {tabs.map((t) => (
           <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
@@ -312,6 +313,16 @@ export default function App() {
           </button>
         ))}
       </nav>
+        {/* Saldo siempre a la vista (la barra queda fija arriba al bajar). */}
+        <button className={`saldo-chip ${saldoValor != null && saldoValor < 0 ? 'neg' : ''}`} onClick={() => setTab('creditos')}
+          title={externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
+          <span>
+            <span className="saldo-chip-l">{externo ? 'Saldo disponible' : 'Saldo'}</span><br />
+            <span className="saldo-chip-v">{externo ? (me.saldoDisponibleUsd != null ? usd(me.saldoDisponibleUsd) : '—') : `${cred(me.saldo)} cr`}</span>
+          </span>
+          {tab !== 'creditos' && <span className="saldo-chip-r">Recargar →</span>}
+        </button>
+      </div>
 
       {tab === 'plantillas' && (
         errorCat ? (

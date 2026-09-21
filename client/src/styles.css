@@ -695,7 +695,23 @@ button.badge:hover { background: var(--surface-2); color: var(--text-primary); }
 
 /* Créditos con saldo externo */
 .cr-kpis { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-.cr-pago { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
-.cr-pago-frame { width: 100%; max-width: 520px; height: 620px; border: 0; border-radius: 10px; background: #fff; flex: 1 1 320px; }
+.cr-pago { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; padding: 20px; }
+.cr-pago-txt { padding-top: 12px; }
+/* La pagina de pago pinta un fondo gris claro detras de su tarjeta (max 512 px, esquinas de 16 px):
+   el marco se ajusta a la tarjeta para que ese fondo no se vea. Si la tarjeta crece, el marco hace scroll. */
+.cr-pago-frame { width: 100%; max-width: 512px; height: 584px; border: 0; border-radius: 16px; background: transparent; flex: 1 1 320px; display: block; }
+@media (max-width: 560px) { .cr-pago-frame { height: 600px; } }
 .cr-pago-txt { flex: 1 1 240px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .cr-pago-txt p { margin: 0; font-size: 0.86rem; color: var(--text-secondary); line-height: 1.55; }
+
+/* Barra de pestañas fija arriba, con el saldo siempre a la vista */
+.tabs-bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: var(--page); display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--grid); margin-bottom: 8px; }
+.tabs-bar .tabs { border-bottom: 0; margin-bottom: 0; flex: 1 1 auto; min-width: 0; }
+.saldo-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 10px; font: inherit; cursor: pointer; padding: 6px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
+.saldo-chip:hover { border-color: color-mix(in srgb, var(--series-1) 50%, transparent); }
+.saldo-chip-l { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); line-height: 1.1; text-align: left; }
+.saldo-chip-v { font-size: 1.05rem; font-weight: 760; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.saldo-chip.neg { border-color: color-mix(in srgb, var(--critical) 40%, transparent); background: color-mix(in srgb, var(--critical) 7%, var(--surface-1)); }
+.saldo-chip.neg .saldo-chip-v { color: var(--critical); }
+.saldo-chip-r { font-size: 0.76rem; font-weight: 700; color: var(--series-1); }
+@media (max-width: 640px) { .saldo-chip-l, .saldo-chip-r { display: none; } .saldo-chip { padding: 5px 10px; } .saldo-chip-v { font-size: 0.92rem; } }
