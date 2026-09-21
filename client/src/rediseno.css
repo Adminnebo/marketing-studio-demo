@@ -181,3 +181,9 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .mp-top { padding-right: 28px; }
 .mp-check { position: absolute; top: 12px; right: 12px; margin-left: 0; }
 .mp-card.chica .mp-check { top: 9px; right: 10px; }
+
+/* ── Foto de perfil de Camila en todos lados (reemplaza la "C") ── */
+.app .cm-av, .app .cm-flota-b { background: url('./assets/camila.jpg') center / cover no-repeat, var(--surface-2); color: transparent; font-size: 0 !important; overflow: hidden; }
+.app .cm-av { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--series-5) 35%, transparent); }
+.app .cm-flota-b { box-shadow: 0 0 0 2px var(--surface-1), 0 8px 22px color-mix(in srgb, var(--series-5) 40%, transparent); overflow: visible; }
+.cm-flota-b::after { z-index: 1; }
