@@ -493,13 +493,16 @@ nodes = [
         "name": "Responder al Panel", "id": "9d3f6b20-8e71-4c5a-b2d4-0a6e1f7c3b85",
     },
     {
-        # Se completa cuando llegue el endpoint de Sword; no frena nada si falla.
+        # Registro en Sword con el mismo formato que los demas agentes. El tipo de gasto va en
+        # agentName/agentId. cost: 0 hasta definir de donde sale el costo (Sword cobra exactamente lo que se manda).
         "parameters": {
-            "method": "POST", "url": "<PONER-ENDPOINT-SWORD>", "sendBody": True, "specifyBody": "json",
-            "jsonBody": "={{ JSON.stringify({\n  tipo_gasto: 'marketing-camila-request',\n  canal: $('Set Variables').first().json.canal,\n  contact_id: $('Set Variables').first().json.contact_id,\n  usuario: $('Set Variables').first().json.usuario_panel,\n  input: $('Set Variables').first().json.mensaje,\n  output: $('Agente').first().json.output,\n  productos: ($('Armar Respuesta Panel').first().json.productos || []).map(p => p.codigo),\n  execution_id: $execution.id\n}) }}",
-            "options": {"timeout": 10000},
+            "method": "POST", "url": "https://app.swordaisolutions.com/api/messages/log",
+            "sendHeaders": True, "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+            "sendBody": True, "specifyBody": "json",
+            "jsonBody": "={{ JSON.stringify({\n  clientId: 16,\n  apiKey: \"d1c383c4-60b3-4250-abc3-c5a04043b7cd\",\n  input: $('Set Variables').first().json.mensaje || '[mensaje sin texto]',\n  output: $('Agente').first().json.output,\n  agentName: \"Camila Marketing\",\n  agentId: \"marketing-camila-request\",\n  sessionId: $('Set Variables').first().json.contact_id,\n  contactId: $('Set Variables').first().json.contact_id,\n  contactName: $('Set Variables').first().json.usuario_panel,\n  cost: 0\n}) }}",
+            "options": {"response": {"response": {"neverError": True}}},
         },
-        "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [1040, 336],
+        "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1040, 336],
         "name": "Log Sword (marketing)", "id": "2c8e5f19-4a7d-4b36-9e02-c5f1a8d7b643",
         "alwaysOutputData": True, "retryOnFail": False, "onError": "continueRegularOutput",
     },
