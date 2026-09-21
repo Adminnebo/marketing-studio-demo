@@ -117,3 +117,25 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .cm-flota-b { position: relative; width: 48px; height: 48px; border: 0; border-radius: 50%; cursor: pointer; font: inherit; font-weight: 800; font-size: 1.05rem; color: #fff; background: linear-gradient(135deg, var(--series-1), var(--series-5)); box-shadow: 0 8px 22px color-mix(in srgb, var(--series-5) 45%, transparent); }
 .cm-flota-b::after { content: ''; position: absolute; right: 2px; bottom: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--good); border: 2px solid var(--surface-1); }
 @media (max-width: 560px) { .cm-flota-t { display: none; } }
+
+/* ── Datos de la ficha tecnica (en las cajas de descripcion) ── */
+.ft-fila { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ft-btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 0.82rem; font-weight: 650; cursor: pointer; padding: 6px 12px; border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--series-1) 35%, var(--border)); background: color-mix(in srgb, var(--series-1) 7%, var(--surface-1)); color: var(--series-1); }
+.ft-btn:hover:not(:disabled) { border-color: var(--series-1); }
+.ft-btn:disabled { opacity: .6; cursor: default; }
+.ft-caja { border: 1px solid color-mix(in srgb, var(--series-1) 30%, var(--border)); background: color-mix(in srgb, var(--series-1) 5%, var(--surface-1)); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.ft-cab { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; }
+.ft-cab b { flex: 1; min-width: 0; }
+.ft-x { border: 0; background: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 6px; }
+.ft-x:hover { background: var(--surface-2); }
+.ft-datos { display: flex; flex-wrap: wrap; gap: 5px; }
+.ft-datos span { font-size: 0.76rem; background: var(--surface-1); border: 1px solid var(--border); border-radius: 7px; padding: 3px 8px; color: var(--text-primary); }
+.ft-datos em { font-style: normal; color: var(--text-muted); }
+.ft-vis { font-size: 0.78rem; color: var(--text-secondary); }
+.ft-texto { margin: 0; font-size: 0.84rem; line-height: 1.5; color: var(--text-primary); }
+.ft-acc { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ft-ok { font-size: 0.82rem; font-weight: 700; color: var(--good-ink); }
+.ft-nota { font-size: 0.76rem; color: var(--text-muted); }
+.ft-err { font-size: 0.8rem; color: var(--critical); }
+.ft-nada { margin: 0; font-size: 0.82rem; color: var(--text-muted); }

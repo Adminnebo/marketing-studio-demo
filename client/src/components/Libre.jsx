@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchModelos, costoLibre, crearLibre, autoPrompt, subirImagen } from '../api';
 import { usd, cred, creditos as nCred } from '../precio';
 import Dictar from './Dictar';
+import FichaTecnica, { sumarTexto } from './FichaTecnica';
 
 // Formatos con nombre y para que sirve cada uno (los demas se muestran tal cual).
 const FORMATOS = {
@@ -407,6 +408,16 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
             <button className={modoPrompt === 'dictar' ? 'on' : ''} onClick={() => setModoPrompt('dictar')}><span>🎙</span>La dicto</button>
             <button className={modoPrompt === 'manual' || (modoPrompt === 'auto' && !modelo?.aceptaImagen) ? 'on' : ''} onClick={() => setModoPrompt('manual')}><span>✍️</span>La escribo</button>
           </div>
+
+          {/* Producto elegido con Camila: datos de su ficha tecnica para la descripcion. */}
+          {productoListo?.producto?.codigo && imagen?.media_id === productoListo.media_id && (
+            <FichaTecnica key={productoListo.producto.codigo} codigo={productoListo.producto.codigo} tieneFicha={productoListo.producto.ficha ? true : undefined}
+              onAnadir={(t) => {
+                if (modoPrompt === 'dictar') setDictado((x) => sumarTexto(x, t, 2000));
+                else if (usaIa) setIndicaciones((x) => sumarTexto(x, t, 2000));
+                else setPrompt((x) => sumarTexto(x, t, 5000));
+              }} />
+          )}
 
           {modoPrompt === 'dictar' && (
             <div className="lb-dictado">

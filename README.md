@@ -146,6 +146,7 @@ El equipo le pide un producto a Camila en lenguaje natural (botón **Camila · B
 - Fotos y fichas: buckets públicos `Lucas_imagenes` y `Lucas_fichas_tecnicas` (archivo = código); el panel arma el índice al arrancar (service key) y lo refresca cada 6 h.
 - "Usar para crear" solo vale para productos que Camila le mostró a ese usuario; importa la foto al generador (`media_import_url`) y no cobra nada hasta crear.
 - Queda guardado por usuario: `camila_conversaciones`, `camila_mensajes` (con `n8n_ejecucion`) y `camila_usos`.
+- **Datos de la ficha técnica**: con un producto elegido con Camila, el paso "Descripción" (Desde cero) y el cuadro "¿Quieres cambiar algo?" (plantillas) muestran "📄 Datos de la ficha técnica". La IA (`gpt-4.1-mini`, misma `OPENAI_API_KEY`) lee el PDF del bucket de fichas y devuelve solo lo pertinente (identidad, lo que se ve, 2-3 datos para destacar); se revisa y se añade con un toque. Cada ficha se lee una vez y queda en `camila_fichas` (~US$0.002 la primera vez). Ruta `POST /api/camila/ficha` (`server/lib/fichas.js`).
 - Variables en `panel`: `CAMILA_N8N_URL` y `CAMILA_N8N_TOKEN`. Sin ellas Camila igual se ve, avisa que no está conectada y no busca nada. Las respuestas tardan 10-25 s (DeepSeek con razonamiento).
 
 ## Desarrollo local

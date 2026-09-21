@@ -6,6 +6,7 @@ const express = require('express');
 const camila = require('./lib/camila');
 const catalogo = require('./lib/jh-catalogo');
 const hf = require('./lib/higgsfield');
+const fichas = require('./lib/fichas');
 
 const router = express.Router();
 
@@ -25,6 +26,10 @@ const errorDe = (res, e) => {
   if (e instanceof camila.ErrorDeCamila) {
     console.error('[camila]', e.message, e.detalle || '');
     return res.status(e.status).json({ error: e.message, conversacionId: e.conversacionId || null });
+  }
+  if (e instanceof fichas.ErrorDeFicha) {
+    console.error('[fichas]', e.message, e.detalle || '');
+    return res.status(e.status).json({ error: e.message });
   }
   if (e instanceof hf.HiggsfieldError) {
     console.error('[camila usar]', e.message);
@@ -73,6 +78,18 @@ router.post('/camila/usar', async (req, res) => {
       media_id: imp.media_id, url: foto, nombre: p.descripcion || codigo,
       producto: { codigo, descripcion: p.descripcion, marca: p.marca || null, ficha: p.ficha || null },
     });
+  } catch (e) { errorDe(res, e); }
+});
+
+// Datos de la ficha tecnica para la descripcion (solo de productos que Camila le mostro a este usuario).
+router.post('/camila/ficha', async (req, res) => {
+  const codigo = String((req.body || {}).codigo || '').trim().slice(0, 30);
+  if (!codigo) return res.status(400).json({ error: 'Falta el producto.' });
+  try {
+    if (!(await camila.productoMostrado(req.user.email, codigo))) return res.status(404).json({ error: 'Ese producto no aparece en tus búsquedas con Camila.' });
+    const r = await fichas.extraer(codigo);
+    if (r.sinFicha) return res.json({ sinFicha: true });
+    res.json(r);
   } catch (e) { errorDe(res, e); }
 });
 

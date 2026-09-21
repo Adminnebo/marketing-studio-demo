@@ -4,6 +4,7 @@ import { TIPOS, TIPOS_VIDEO, entradasDe, faltantes, formatoDe, creditosDe } from
 import Portada from './Portada';
 import Avatares from './Avatares';
 import Dictar from './Dictar';
+import FichaTecnica, { sumarTexto } from './FichaTecnica';
 import { precioDe, usd, cred, creditos as nCred } from '../precio';
 
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
@@ -191,6 +192,12 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                   placeholder="Ej.: fondo azul, texto “Oferta de temporada”, tono profesional…"
                   onChange={(e) => setPrompt(e.target.value)} />
                 {!enviada && <div style={{ marginTop: 6 }}><Dictar valor={prompt} onCambiar={setPrompt} max={5000} /></div>}
+                {!enviada && productoListo?.producto?.codigo && producto?.media_id === productoListo.media_id && (
+                  <div style={{ marginTop: 8 }}>
+                    <FichaTecnica key={productoListo.producto.codigo} codigo={productoListo.producto.codigo} tieneFicha={productoListo.producto.ficha ? true : undefined}
+                      onAnadir={(t) => setPrompt((x) => sumarTexto(x, t, 5000))} />
+                  </div>
+                )}
               </div>
 
               {error && <div className="ms-errors">{error}</div>}

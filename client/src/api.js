@@ -158,3 +158,4 @@ export const fetchCamilaEstado = () => api('/camila/estado');
 export const fetchCamilaConversacion = () => api('/camila/conversacion');
 export const mensajeCamila = (datos) => api('/camila/mensaje', { method: 'POST', body: JSON.stringify(datos) });
 export const usarProductoCamila = (datos) => api('/camila/usar', { method: 'POST', body: JSON.stringify(datos) });
+export const fichaCamila = (codigo) => api('/camila/ficha', { method: 'POST', body: JSON.stringify({ codigo }) });
