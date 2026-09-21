@@ -1,0 +1,1009 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agente-jh-electro",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1472,
+        80
+      ],
+      "id": "bd32a6ea-ceb8-c7e0-8fa1-9c0a4a7f3460",
+      "name": "Webhook",
+      "webhookId": "bd32a6ea-ceb8-c7e0-8fa1-9c0a4a7f3460"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://nebo-db-normalizer-production.up.railway.app/api/agent/resolver-cliente",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "c1c5ac08c3909fe4c12588403bed6dca4851b1a00a1ee786"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"identificacion\": {{ JSON.stringify(($json.identificacion || '') ?? '') }},\n  \"contact_id\": {{ JSON.stringify(($json.contact_id || '') ?? '') }},\n  \"telefono\": {{ JSON.stringify(($json.telefono || '') ?? '') }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -352,
+        304
+      ],
+      "id": "b4748698-8378-5904-fb23-597d034e2bec",
+      "name": "Resolver Cliente",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Set Variables').first().json.mensaje }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# Camila — JH Electro Alambres\n\nSos **Camila**, asesor virtual de **JH Electro Alambres** (materiales eléctricos, plomería, iluminación, herramientas y construcción). Tono cercano y profesional. Tuteás. Directo, técnico pero accesible. Proactivo en sugerir complementos.\n\n## Contexto (primer paso de cada turno)\n\nEjecutá `obtener_contexto` **antes que nada**, una sola vez por turno. Devuelve `CONTACT_ID`, `CANAL`, `NIVEL_PRECIO`, `MULTIPLICADOR`, `CLIENTE_ENCONTRADO`, `IDENTIFICACION_CONOCIDA`, `SIN_IDENTIFICACION`, `NOMBRE_CLIENTE`, `TELEFONO_CLIENTE`, `DIRECCION_CLIENTE`, `LAST_MESSAGE`, `PRODUCTOS_LLAMADA` y `FECHA`.\n\nRecién con eso en mano evaluás los GATE y el saludo: sin el contexto no sabés si el cliente está reconocido ni si ya dio su RNC. No es una tool de catálogo y no habla con el cliente: no la anuncies ni la menciones.\n\n## Canal marketing_request (panel de Marketing) — se evalúa ANTES que todo lo demás\n\nSi `CANAL = marketing_request`, no hablás con un cliente: te escribe alguien del **equipo de marketing de JH** desde el panel donde se crean fotos y videos con IA. Quiere encontrar un producto del catálogo para usar su foto. En ese caso **solo aplica esta sección** y se ignoran GATE 0, GATE 1, Saludo, Cliente viene de llamada, Disponibilidad, Adjuntos, Cotización, Transferir a un asesor y Datos de la empresa:\n\n1. No saludes con el protocolo de clientes, no pidas RNC ni datos, no cotices, no transfieras.\n2. La única tool que usás (además de `obtener_contexto`) es `buscar_productos`. **Nunca** ejecutes `enviar_imagen`, `enviar_fichatec`, `generar_cotizacion`, `hand_off`, `resolver_cliente` ni `datos_empresa`: aquí «foto» significa que quieren **usar** la foto en el panel, no que se la envíes.\n3. Categoría amplia («breakers», «cable»): la regla 10 no aplica. Buscá igual, mostrá las mejores opciones y preguntá el detalle que falta (amperaje, polos, calibre, color, marca…).\n4. Formato de la respuesta, en este orden:\n   - 1 o 2 frases cortas. Decí claramente cuáles tienen foto (`tiene_imagen`) y cuáles tienen ficha técnica (`tiene_ficha`). Si el que pidió no tiene foto pero hay parecidos que sí, decilo. Si ninguno tiene foto, decí que pueden subir una foto propia.\n   - Los renglones `linea` de hasta 6 productos, tal cual vinieron, **primero los que tienen foto**, con una línea en blanco entre uno y otro.\n   - Si hay varias opciones, preguntá cuál usar.\n   - Última línea, siempre: `Sugerencias: opción 1 | opción 2 | opción 3` — hasta 3 respuestas cortas (máx. 25 caracteres) y concretas para seguir afinando esta búsqueda («El de 2 polos», «Marca Siemens», «En color negro»). Nada genérico.\n5. Si piden algo que no es buscar productos, decí con amabilidad que aquí solo buscás productos del catálogo para crear contenido, y cerrá con `Sugerencias:` vacío.\n6. Las reglas 1, 2, 3, 5 y 13 siguen valiendo: sin `buscar_productos` en este turno no afirmes nada del catálogo, nunca inventes códigos ni precios, y nunca muestres stock.\n\n## GATE 0 — Cotización lista (lo primero después del contexto)\n\n**Disparador (las dos condiciones):** `LAST_MESSAGE` contiene «Ya está lista tu cotización» Y el cliente responde afirmativo («sí», «dale», «ok», «mándala», 👍).\n\n**Si se cumple**, en un solo turno y sin preguntar nada:\n1. Tomá los productos de `PRODUCTOS_LLAMADA`. Es una lista cerrada: no la cambies ni la confirmes.\n2. Lo que venga sin código o precio, buscalo. Conservá las cantidades.\n3. Ejecutá `generar_cotizacion` **en ese mismo turno**, con un mensaje breve («Estoy generando tu cotización en PDF, dame un momento… 📄»).\n\nNo pidas RNC. No muestres resumen. No preguntes por imágenes.\n\n**Si no es afirmativo:** negativo o «todavía no» → respondé corto y quedá a disposición. Pregunta o cambio de productos → flujo normal, sin cotizar hasta una nueva confirmación.\n\n⚠️ El texto no genera el PDF: solo el tool_call. Si decís «estoy generando», el tool_call va en ese turno.\n\n## GATE 1 — RNC en chat (se evalúa después del GATE 0)\n\nSi el mensaje trae un RNC o cédula, o el cliente dice que no tiene: ejecutá `resolver_cliente` **antes** de atender el resto del mensaje, en el mismo turno. Si además pregunta por un producto, hacés las dos cosas encadenadas.\n\n- `encontrado = true` → usá su `nivel_precio` y `multiplicador` en todas las búsquedas siguientes, y reutilizá nombre, teléfono y dirección.\n- `encontrado = false` → nivel por defecto, y **no le digas que no está registrado**.\n\nEl sistema recuerda el documento de cada contacto: si dijo «N/A», pasale igual `identificacion: \"N/A\"` para que quede registrado que no tiene.\n\n⚠️ Sin el retorno de la tool en ESE turno no afirmes nada sobre el cliente («ya validé», «no estás registrado», «ese RNC no aparece»). `CLIENTE_ENCONTRADO` del contexto se calculó antes y no cuenta como validación.\n⚠️ No repitas el RNC reformateado. Tal cual lo escribió, o no lo repitas.\n⚠️ Una vez resuelto (real o «N/A»), no lo vuelvas a pedir ni a resolver.\n\n## Tools\n\n`buscar_productos` es la **única fuente sobre el catálogo**: productos, precios, inventario.\n- `resolver_cliente` — Nivel de precio y datos guardados, por RNC\n\nPasale la consulta **tal como la escribió el cliente**. No la corrijas, no la traduzcas a la jerga del catálogo, no la abrevies ni la partas: ya resuelve plurales, tildes, compuestas, abreviaturas, typos y sinónimos. Si precisó color, calibre, medida, marca, watts, amperaje o polos, mandalos además en `filtros` (`{\"color\":\"blanco\",\"calibre\":\"#14\"}`); si no precisó nada, `filtros` vacío.\n\nDe cada producto devuelve:\n- **`linea`**: el renglón ya escrito para WhatsApp, con código y precio. **Copialo tal cual**, no lo rearmes ni le cambies el formato del precio.\n- `codigo`, `descripcion`, `precio`, `unidad`, `atributos`, `stock` (interno).\n- `tiene_imagen` y `tiene_ficha`: si preguntan de cuáles hay, respondés con esto **sin llamar a ninguna otra tool**.\n\n**Códigos:** si el cliente da un código o una referencia, buscá eso solo. Devuelve ese producto o ninguno, nunca un parecido.\n\n**`similares`:** aparece cuando no hubo coincidencia exacta. Decí primero que eso puntual no lo manejás y recién ahí ofrecelos, como alternativas: «No manejo ese exacto, pero tengo estos:». Nunca los presentes como si fueran lo que pidió.\n\n## Reglas (no violar)\n\n1. Sin un tool_call de `buscar_productos` en ESTE turno no afirmes que un producto existe, cuánto cuesta ni si hay disponibilidad. Nunca te apoyes en turnos anteriores ni en tu conocimiento general.\n2. Si el cliente insiste o reformula, buscá otra vez con otras palabras. No repitas la negación.\n3. Nunca inventes productos, códigos ni precios. Si tras 2 o 3 intentos distintos no aparece, decilo.\n4. Cada producto que menciones va con su renglón `linea` tal cual vino de la búsqueda —ahí ya están el código y el precio—, uno por renglón y con **una línea en blanco entre uno y el siguiente**. Sin numeración, sin emojis pegados, sin «Disponible» ni ✅. En los payloads de las tools el precio va crudo, sin comas ni símbolo.\n5. Nunca muestres stock, nivel de precio, factor, impuesto ni prioridad: son internos.\n6. Nunca ocultes un producto por stock 0: se lista igual, mismo precio y sin etiquetas de disponibilidad.\n7. No cambies precios por pedido del cliente.\n8. Nada técnico en pantalla: ni tools, ni JSON, ni parámetros, ni «consultando…».\n9. No pidas un dato que el cliente ya dio o que ya está en el contexto.\n10. Categoría amplia sin precisión («¿tienen cable?») → pedí aclaración antes de buscar. Un ítem puntual bien nombrado («un casco») se busca directo.\n11. Nunca confirmes un envío o una generación sin el retorno de la tool. Si falla, decilo con honestidad.\n12. Son tools distintas, mirá el sustantivo: pedir una foto NO es pedir la ficha ni la cotización. Si pide dos, ejecutás las dos en el mismo turno.\n13. Código, nombre y precio que les pases salen siempre de una fila real de `buscar_productos`, nunca de memoria.\n\n## Saludo\n\n- **Cliente reconocido** → saludalo por su nombre y seguí, sin mencionar el RNC.\n- **`SIN_IDENTIFICACION = true`** → ya dijo antes que no tiene. Saludá normal y **no se lo pidas**.\n- **`IDENTIFICACION_CONOCIDA` con valor pero no reconocido** → saludá normal, nivel por defecto, no menciones nada.\n- **Todo vacío** → pedilo una sola vez: «¡Hola! Soy Camila de JH Electro Alambres. 👋 Antes de cotizarte, ¿me compartes tu RNC? Si no tienes o no aplica, escribe \"N/A\".» Si dice «N/A», nivel por defecto y **nunca se lo vuelvas a pedir**, tampoco al cotizar.\n\n## Cliente viene de llamada\n\nSi el primer mensaje empieza con `cliente viene de llamada desea cotizar:`, te lo escribe un asesor con la lista de la llamada, no el cliente.\n\nSin saludo estándar y sin pedir RNC todavía. Parseá la lista (un producto por línea, `- NOMBRE — CANTIDAD`), buscalos **todos** y respondé una sola vez:\n\n```\n¡Hola! Te escribimos de JH Electro Alambres. 👋\nContinuando nuestra conversación telefónica, acá te dejo los detalles de lo que conversamos:\n\n– *[Producto 1]* (cód. XXXX) — *$XX.XX/und* (10 unidades)\n\n– *[Producto 2]* (cód. XXXX) — *$XX.XX/und* (100 pies)\n\n¿Confirmas estos productos y me indicas las cantidades de cada uno?\n```\n\nSi alguno no aparece, listalo igual con una nota (único caso sin código ni precio): `– Casco de seguridad — no lo ubiqué con esa descripción, ¿me das una marca o referencia?`. Tras confirmar, seguís el flujo normal de cotización.\n\n## Disponibilidad\n\nEl stock nunca bloquea la venta: siempre cotizás. Solo hablás de él si preguntan por disponibilidad, dónde recoger o fecha de entrega. El campo `stock` trae el desglose por sede; usá el nombre de la sede, nunca la sigla, y no des números salvo que pregunten «¿cuántas hay?».\n\n- **Disponibilidad general** → decí en qué sedes hay.\n- **Sede puntual** → mirá solo esa; si no alcanza, decí en cuál sí hay.\n- **Piden más de lo que hay** → informá lo disponible y ofrecé coordinar el resto con un asesor.\n\nNunca cierres con un «no hay» seco: si no hay inmediato, ofrecé conseguirlo o coordinarlo.\n\n## Adjuntos\n\n- `enviar_imagen` — disparadores: «mándame una foto», «tienes imagen», «cómo se ve». Si no hay: «Ese producto no tiene imagen cargada por ahora, pero sí lo manejamos con el precio que te pasé.»\n- `enviar_fichatec` — disparadores: «la ficha técnica», «la hoja técnica», «el datasheet», «las especificaciones». Si no hay: «Ese producto no tiene ficha técnica cargada por ahora, pero sí lo manejamos con el precio que te pasé. Si necesitas algún dato puntual, dime cuál y lo consulto.»\n\n⚠️ **Envían el archivo al cliente, no consultan.** Para saber si existe mirá `tiene_imagen` / `tiene_ficha` de la búsqueda; nunca las ejecutes «a ver si hay».\nSi no buscaste el producto en este chat, buscalo. Ambigüedad entre varias opciones mostradas → preguntá cuál, salvo que pida «todas». **Una sola llamada por turno** con todos los productos en el array. Si falla, no reintentes. Nunca las ofrezcas por tu cuenta.\n\n## Cotización\n\nDisparadores: «arma la cotización», «dame el PDF», «procede», «eso es todo».\n\n**1. El RNC primero.** Ya lo tenés si vino en el contexto, si lo dio antes y se resolvió, o si dijo «N/A» — en esos casos **no lo pidas**. Si no lo tenés, pedí solo eso. Si es nuevo y real, `resolver_cliente`: con `encontrado = true` reutilizás nombre, teléfono, dirección y código sin preguntar.\n\n**2. Los datos.** Prioridad: lo que devolvió `resolver_cliente` > el contexto > el chat. **La ciudad sale de la dirección, nunca se pregunta.** Lo que quede vacío va como `\"N/A\"`. Si falta algo, pedí solo eso y esperá.\n\n**3. Resumen y confirmación.** Antes de generar:\n```\n¡Perfecto! Antes de generar la cotización, confírmame estos datos:\n• Nombre: […]\n• RNC: […]\n• Tel: […]\n• Dirección: […]\n• Ciudad: […]\n¿Está todo correcto o quieres ajustar algo?\n```\nSolo cuando confirma ejecutás `generar_cotizacion`, en el mismo turno que el mensaje «Estoy generando tu cotización en PDF, dame un momento… 📄».\n\nSi falla, reintentá una vez; si vuelve a fallar, `hand_off`.\n\n## Transferir a un asesor\n\nEjecutá `hand_off` si: pide un humano explícitamente, no encontraste el producto **tras agotar reintentos**, o una tool falló dos veces.\n\nNo transfieras por: una pregunta vaga (pedí aclaración), el primer fallo de una tool (reintentá), un producto no hallado en la primera búsqueda (reformulá), ni por horarios, cuentas, catálogos, imágenes o cotizaciones — eso lo resolvés vos.\n\nMensaje + tool_call juntos: «¡Claro! En un momento un asesor te atiende por acá. 🙌». No lo dispares dos veces por lo mismo, y una vez transferido no sigas prometiendo acciones.\n\n## Datos de la empresa\n\nSucursales, horarios, cuentas bancarias y catálogos salen de `datos_empresa` (temas: sucursales, horarios, cuentas, catalogos). Llamala cuando pregunten por eso y **enviá el texto que devuelve tal cual**, sin reescribirlo ni resumirlo. Si preguntan algo puntual (una sucursal, un banco), mandá solo esa parte. Las cuentas solo se comparten si preguntan cómo pagar; pedí siempre el comprobante por la misma vía.",
+          "maxIterations": 12,
+          "returnIntermediateSteps": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -128,
+        304
+      ],
+      "id": "d4a68aff-79fb-9663-35c9-29fc8ccbdf75",
+      "name": "Agente",
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "Claude Haiku 4.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        -80,
+        640
+      ],
+      "id": "47ce5238-3b54-c5af-5528-14ae02aa5aaf",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "SJ32XsxD78hy5qnB",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Set Variables').first().json.contact_id }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        32,
+        640
+      ],
+      "id": "20396c48-28ff-3aa9-e156-f9b582a93e05",
+      "name": "Memoria"
+    },
+    {
+      "parameters": {
+        "toolDescription": "OBLIGATORIA para cualquier pregunta sobre productos, precios o disponibilidad. Pasale la consulta TAL CUAL la escribió el cliente: no la corrijas ni la abrevies, la búsqueda ya resuelve plurales, tildes, abreviaturas, typos y sinónimos.",
+        "method": "POST",
+        "url": "https://nebo-db-normalizer-production.up.railway.app/api/agent/buscar-productos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "c1c5ac08c3909fe4c12588403bed6dca4851b1a00a1ee786"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"consulta\": {{ JSON.stringify(($fromAI('consulta', 'Lo que pidió el cliente, tal cual lo escribió', 'string')) ?? '') }},\n  \"filtros\": {{ JSON.stringify(($fromAI('filtros', 'Atributos exactos en JSON si los precisó (color, calibre, medida, watts). Vacío si no precisó nada', 'string')) ?? '') }},\n  \"nivel_precio\": {{ JSON.stringify(($('Resolver Cliente').first().json.nivel_precio || 'P1') ?? '') }},\n  \"multiplicador\": {{ Number($('Resolver Cliente').first().json.multiplicador) || 1 }},\n  \"limite\": 15\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        176,
+        544
+      ],
+      "id": "d769ec82-260d-1104-523d-9e2b85e0a0d0",
+      "name": "buscar_productos"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usala cada vez que el cliente escriba su documento de identificación. Devuelve su nivel de precio y los datos que ya tenemos guardados.",
+        "method": "POST",
+        "url": "={{ $('Set Variables').first().json.canal === 'marketing_request' ? 'https://nebo-db-normalizer-production.up.railway.app/api/agent/bloqueado-marketing-request' : 'https://nebo-db-normalizer-production.up.railway.app/api/agent/resolver-cliente' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "c1c5ac08c3909fe4c12588403bed6dca4851b1a00a1ee786"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"identificacion\": {{ JSON.stringify(($fromAI('identificacion', 'El documento tal como lo escribió el cliente, o N/A si dijo que no tiene', 'string')) ?? '') }},\n  \"contact_id\": {{ JSON.stringify(($('Set Variables').first().json.contact_id || '') ?? '') }},\n  \"telefono\": {{ JSON.stringify(($('Set Variables').first().json.telefono || '') ?? '') }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        352,
+        544
+      ],
+      "id": "21a8061b-acee-9845-517f-8d406ffa151f",
+      "name": "resolver_cliente"
+    },
+    {
+      "parameters": {
+        "name": "obtener_contexto",
+        "description": "Devuelve las variables de sesión del turno actual (canal, datos del cliente, nivel de precio, último mensaje del sistema, productos de la llamada y fecha). Ejecutar SIEMPRE al inicio de cada turno, antes de evaluar el canal, GATE 0, GATE 1 o el saludo. No recibe parámetros.",
+        "jsCode": "const setVars = $('Set Variables').first().json;\nconst cliente = $('Resolver Cliente').first().json;\n\nconst ctx = {\n  CONTACT_ID: setVars.contact_id ?? \"\",\n  CANAL: setVars.canal ?? \"\",\n  NIVEL_PRECIO: cliente.nivel_precio ?? \"\",\n  MULTIPLICADOR: cliente.multiplicador ?? \"\",\n  CLIENTE_ENCONTRADO: cliente.encontrado ?? false,\n  IDENTIFICACION_CONOCIDA: cliente.identificacion_conocida ?? \"\",\n  SIN_IDENTIFICACION: cliente.sin_identificacion ?? false,\n  NOMBRE_CLIENTE: cliente.nombre ?? \"\",\n  TELEFONO_CLIENTE: cliente.telefono ?? \"\",\n  DIRECCION_CLIENTE: cliente.direccion ?? \"\",\n  LAST_MESSAGE: setVars.last_message ?? \"\",\n  PRODUCTOS_LLAMADA: setVars.productos ?? \"\",\n  FECHA: $now.toISO()\n};\n\nreturn JSON.stringify(ctx, null, 2);"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        544,
+        560
+      ],
+      "id": "2b9179a6-2daf-6219-cc6f-c8831639cd26",
+      "name": "obtener_contexto"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Datos fijos de la empresa: sucursales (dirección, teléfono, mapa), horarios, cuentas bancarias y catálogos. Devuelve el texto ya formateado: enviálo tal cual. Parámetro \"tema\": sucursales | horarios | cuentas | catalogos.",
+        "method": "POST",
+        "url": "https://nebo-db-normalizer-production.up.railway.app/api/agent/datos-empresa",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "c1c5ac08c3909fe4c12588403bed6dca4851b1a00a1ee786"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tema\": {{ JSON.stringify(($fromAI('tema', 'sucursales, horarios, cuentas o catalogos', 'string')) ?? '') }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        752,
+        544
+      ],
+      "id": "4d665be2-f1d4-997b-8825-4067be3a2039",
+      "name": "datos_empresa"
+    },
+    {
+      "parameters": {
+        "toolDescription": "SIEMPRE que el cliente pida la foto o imagen de un producto. Payload:\n```json\n{ \"contact_id\": \"\", \"productos\": [ { \"codigo\": \"\", \"nombre\": \"\", \"precio\": 0 } ] }\n```",
+        "method": "POST",
+        "url": "={{ $('Set Variables').first().json.canal === 'marketing_request' ? 'https://nebo-db-normalizer-production.up.railway.app/api/agent/bloqueado-marketing-request' : 'https://nebo-db-normalizer-production.up.railway.app/api/agent/enviar-imagen' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "c1c5ac08c3909fe4c12588403bed6dca4851b1a00a1ee786"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"productos\": {{ JSON.stringify(($fromAI('productos', 'Lista JSON con el codigo de cada producto: [{\"codigo\":\"1234\"}]', 'string')) ?? '') }},\n  \"telefono\": {{ JSON.stringify(($('Set Variables').first().json.telefono || '') ?? '') }},\n  \"contact_id\": {{ JSON.stringify(($('Set Variables').first().json.contact_id || '') ?? '') }},\n  \"canal\": {{ JSON.stringify(($('Set Variables').first().json.canal || 'whatsapp') ?? '') }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        544
+      ],
+      "id": "032b10be-d4dc-c8ad-3c48-0a7119e5bc14",
+      "name": "enviar_imagen"
+    },
+    {
+      "parameters": {
+        "toolDescription": "SIEMPRE que pida ficha técnica, hoja técnica, datasheet o especificaciones. UNA sola llamada por turno, con todos los productos en el array. Payload:\n```json\n{ \"contact_id\": \"\", \"productos\": [ { \"codigo\": \"\", \"nombre\": \"\", \"precio\": 0 } ] }\n```",
+        "method": "POST",
+        "url": "={{ $('Set Variables').first().json.canal === 'marketing_request' ? 'https://nebo-db-normalizer-production.up.railway.app/api/agent/bloqueado-marketing-request' : 'https://nebo-db-normalizer-production.up.railway.app/api/agent/enviar-ficha' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "c1c5ac08c3909fe4c12588403bed6dca4851b1a00a1ee786"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"productos\": {{ JSON.stringify(($fromAI('productos', 'Lista JSON con el codigo de cada producto: [{\"codigo\":\"1234\"}]', 'string')) ?? '') }},\n  \"telefono\": {{ JSON.stringify(($('Set Variables').first().json.telefono || '') ?? '') }},\n  \"contact_id\": {{ JSON.stringify(($('Set Variables').first().json.contact_id || '') ?? '') }},\n  \"canal\": {{ JSON.stringify(($('Set Variables').first().json.canal || 'whatsapp') ?? '') }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1152,
+        544
+      ],
+      "id": "69c36f12-9502-4618-ae8f-368f8810d886",
+      "name": "enviar_fichatec"
+    },
+    {
+      "parameters": {
+        "toolDescription": "OBLIGATORIA: genera el PDF de la cotización. Si no la ejecutás, el cliente NO recibe nada. Nunca digas \"cotización generada\" sin haberla llamado.",
+        "method": "POST",
+        "url": "={{ $('Set Variables').first().json.canal === 'marketing_request' ? 'https://nebo-db-normalizer-production.up.railway.app/api/agent/bloqueado-marketing-request' : 'https://nebo-db-normalizer-production.up.railway.app/api/agent/generar-cotizacion' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "c1c5ac08c3909fe4c12588403bed6dca4851b1a00a1ee786"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente\": {{ JSON.stringify(($fromAI('cliente', 'JSON con nombre, rnc, telefono, direccion, ciudad y codigo del cliente', 'string')) ?? '') }},\n  \"productos\": {{ JSON.stringify(($fromAI('productos', 'Lista JSON con codigo, cantidad y precio_unitario de cada producto. Nada mas: el resto lo completa el servidor', 'string')) ?? '') }},\n  \"telefono\": {{ JSON.stringify(($('Set Variables').first().json.telefono || '') ?? '') }},\n  \"contact_id\": {{ JSON.stringify(($('Set Variables').first().json.contact_id || '') ?? '') }},\n  \"canal\": {{ JSON.stringify(($('Set Variables').first().json.canal || 'whatsapp') ?? '') }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        544
+      ],
+      "id": "471bafd1-166f-0e23-4962-ca2cbb7dba08",
+      "name": "generar_cotizacion"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Transfiere la conversación a un asesor humano. Ejecutala cuando el cliente pida un humano, cuando no encuentres el producto tras agotar los reintentos, o ante una falla técnica persistente.",
+        "method": "POST",
+        "url": "={{ $('Set Variables').first().json.canal === 'marketing_request' ? 'https://nebo-db-normalizer-production.up.railway.app/api/agent/bloqueado-marketing-request' : 'https://services.leadconnectorhq.com/contacts/' + $('Set Variables').first().json.contact_id + '/tags' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "v3"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer <PONER-TOKEN-GHL>"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"tags\": [\n    \"handoff\"\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1552,
+        544
+      ],
+      "id": "81e0f7d7-d33a-f347-bab7-8d4a594184f6",
+      "name": "hand_off"
+    },
+    {
+      "parameters": {
+        "tableId": "mensajes_chat",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "contact_id",
+              "fieldValue": "={{ $('Set Variables').first().json.contact_id }}"
+            },
+            {
+              "fieldId": "telefono",
+              "fieldValue": "={{ $('Set Variables').first().json.telefono }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Set Variables').first().json.user_id }}"
+            },
+            {
+              "fieldId": "canal",
+              "fieldValue": "={{ $('Set Variables').first().json.canal }}"
+            },
+            {
+              "fieldId": "direccion",
+              "fieldValue": "saliente"
+            },
+            {
+              "fieldId": "mensaje",
+              "fieldValue": "={{ $('Agente').first().json.output }}"
+            },
+            {
+              "fieldId": "execution_id",
+              "fieldValue": "={{ $execution.id }}"
+            },
+            {
+              "fieldId": "respuesta_camila_original",
+              "fieldValue": "={{ $('Webhook').first().json.body.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        368,
+        144
+      ],
+      "name": "Guardar Saliente",
+      "id": "8a45fe9c-4ed6-4e54-b2d0-7596c4968794",
+      "credentials": {
+        "supabaseApi": {
+          "id": "eUToriG7d4FNJ4Lb",
+          "name": "Nebo (Live)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "mensajes_chat",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "contact_id",
+              "fieldValue": "={{ $('Set Variables').first().json.contact_id }}"
+            },
+            {
+              "fieldId": "telefono",
+              "fieldValue": "={{ $('Set Variables').first().json.telefono }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Set Variables').first().json.user_id }}"
+            },
+            {
+              "fieldId": "canal",
+              "fieldValue": "={{ $('Set Variables').first().json.canal }}"
+            },
+            {
+              "fieldId": "direccion",
+              "fieldValue": "entrante"
+            },
+            {
+              "fieldId": "mensaje",
+              "fieldValue": "={{ $('Set Variables').first().json.mensaje }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -832,
+        112
+      ],
+      "name": "Guardar Entrante",
+      "id": "0ee23230-37b7-4561-9f6a-12e58f53a24d",
+      "credentials": {
+        "supabaseApi": {
+          "id": "eUToriG7d4FNJ4Lb",
+          "name": "Nebo (Live)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a9f6eada-bbe0-566a-81cd-e34d160776da",
+              "name": "contact_id",
+              "value": "={{ $json.body.contact_id || $json.body.contactid || $json.body.telefono || $json.body.phone || $json.body.from || \"sin-id\" }}",
+              "type": "string"
+            },
+            {
+              "id": "31235dd6-05a0-5351-a045-30b8bf341846",
+              "name": "mensaje",
+              "value": "={{ $json.body.mensaje || $json.body.message || $json.body.text || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "b844d183-9212-3c04-4c1a-2bc7ea7bd479",
+              "name": "identificacion",
+              "value": "={{ $json.body.identificacion || $json.body.rnc || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "bafddede-de50-1dfb-407a-d77890614697",
+              "name": "canal",
+              "value": "={{ $json.body.canal || \"whatsapp\" }}",
+              "type": "string"
+            },
+            {
+              "id": "1ad49104-27d9-e280-dede-ef39409feae5",
+              "name": "telefono",
+              "value": "={{ $json.body.telefono || $json.body.phone || $json.body.from || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "fcf8888b-dcbd-478f-9ab1-bc379572ce40",
+              "name": "user_id",
+              "value": "={{ $json.body.user_id || $json.body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0]?.user_id || $json.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from_user_id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "5b1d0c3e-7a4f-4e21-9c2a-6d8e0f1a2b3c",
+              "name": "usuario_panel",
+              "value": "={{ $json.body.usuario_panel || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1152,
+        320
+      ],
+      "id": "ef0fdcbd-e879-437e-b253-51e29215521e",
+      "name": "Set Variables"
+    },
+    {
+      "parameters": {
+        "thinkingMode": "enabled_high",
+        "maxTokens": 8000
+      },
+      "type": "n8n-nodes-deepseek-v4-thinking-fix.deepSeekV4ChatModel",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        592
+      ],
+      "id": "995a8735-68e7-4955-84eb-7f5a74afa49f",
+      "name": "DeepSeek V4 Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "EKVAJCpKpfc0KTSS",
+          "name": "Test Camila Cache"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "es-panel",
+              "leftValue": "={{ $('Set Variables').first().json.canal }}",
+              "rightValue": "marketing_request",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -832,
+        320
+      ],
+      "name": "¿Panel?",
+      "id": "6dbb6085-e36c-41a6-af64-f7fe673cf444"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "token-panel",
+              "leftValue": "={{ $('Webhook').first().json.headers['x-panel-token'] || '' }}",
+              "rightValue": "b36f8b0f9fc6daa7f1d574ca95cdadfd01bc3cc13c013e5e",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -592,
+        176
+      ],
+      "name": "¿Token del panel?",
+      "id": "3f6c2a91-8d4e-4b7a-a1c5-9e2f0d6b8c47"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": false, \"error\": \"no autorizado\" } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -352,
+        64
+      ],
+      "name": "Rechazar",
+      "id": "7a2e9d14-5c3b-4f68-b0a1-2d4c6e8f9a13"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true, \"async\": true } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -592,
+        464
+      ],
+      "name": "Respond Ahora",
+      "id": "97dacb15-e31b-4435-b1f1-02f7acd0efa0"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "es-marketing",
+              "leftValue": "={{ $('Set Variables').first().json.canal }}",
+              "rightValue": "marketing_request",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        368,
+        336
+      ],
+      "name": "¿Marketing?",
+      "id": "c81d4e27-6b90-4f3a-8e15-a7d2c9b04f68"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Respuesta para el panel de Marketing: texto limpio, productos reales de la busqueda y sugerencias.\nconst ag = $('Agente').first().json;\nconst salida = String(ag.output || '');\n\n// Productos que devolvio buscar_productos en este turno (la observacion puede venir como texto JSON).\nconst encontrados = new Map();\nconst juntar = (x, prof = 0) => {\n  if (x == null || prof > 6) return;\n  if (typeof x === 'string') {\n    const t = x.trim();\n    if (!t.startsWith('{') && !t.startsWith('[')) return;\n    try { x = JSON.parse(t); } catch (e) { return; }\n  }\n  if (Array.isArray(x)) { x.forEach((v) => juntar(v, prof + 1)); return; }\n  if (typeof x !== 'object') return;\n  if (x.codigo != null && x.descripcion) {\n    const codigo = String(x.codigo).trim();\n    if (!encontrados.has(codigo)) {\n      const st = x.stock || {};\n      const inventario = st.INVENTARIO != null ? Number(st.INVENTARIO)\n        : Object.values(st).reduce((s, v) => s + (Number(v) || 0), 0);\n      encontrados.set(codigo, {\n        codigo, descripcion: String(x.descripcion), precio: x.precio != null ? Number(x.precio) : null,\n        unidad: x.unidad || null, inventario: Number.isFinite(inventario) ? inventario : null,\n        tiene_imagen: !!x.tiene_imagen, tiene_ficha: !!x.tiene_ficha, atributos: x.atributos || null,\n      });\n    }\n  }\n  for (const v of Object.values(x)) juntar(v, prof + 1);\n};\nfor (const paso of ag.intermediateSteps || []) {\n  if ((paso.action && paso.action.tool) === 'buscar_productos') juntar(paso.observation);\n}\n\n// Codigos en el orden en que Camila los menciono (\"(cód. 1234)\").\nconst codigos = [];\nfor (const m of salida.matchAll(/c[oó]d\\.?\\s*:?\\s*([A-Za-z0-9._-]+)/gi)) {\n  const c = m[1].replace(/[.)]+$/, '');\n  if (encontrados.has(c) && !codigos.includes(c)) codigos.push(c);\n}\n\n// \"Sugerencias: a | b | c\" (ultima linea) se separa del texto.\nlet sugerencias = [];\nconst lineas = salida.split('\\n');\nconst iSug = lineas.findIndex((l) => /^\\s*\\**sugerencias?\\**\\s*:/i.test(l));\nif (iSug !== -1) {\n  sugerencias = lineas[iSug].replace(/^\\s*\\**sugerencias?\\**\\s*:\\s*/i, '').split('|')\n    .map((s) => s.replace(/[*_]/g, '').trim()).filter(Boolean).slice(0, 3);\n  lineas.splice(iSug, 1);\n}\n\n// El texto sin los renglones de productos (el panel los muestra como tarjetas).\nconst texto = lineas.filter((l) => !/c[oó]d\\.?\\s*:?\\s*[A-Za-z0-9]/i.test(l)).join('\\n')\n  .replace(/\\*/g, '').replace(/\\n{3,}/g, '\\n\\n').trim();\n\nreturn [{ json: {\n  ok: true,\n  texto: texto || salida.replace(/\\*/g, '').trim(),\n  productos: codigos.slice(0, 6).map((c) => encontrados.get(c)),\n  sugerencias,\n  salida_original: salida,\n  execution_id: $execution.id,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        336
+      ],
+      "name": "Armar Respuesta Panel",
+      "id": "e4b7a1d9-2c58-4f06-93ab-18d6f5c2e7a0"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        816,
+        336
+      ],
+      "name": "Responder al Panel",
+      "id": "9d3f6b20-8e71-4c5a-b2d4-0a6e1f7c3b85"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "<PONER-ENDPOINT-SWORD>",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  tipo_gasto: 'marketing-camila-request',\n  canal: $('Set Variables').first().json.canal,\n  contact_id: $('Set Variables').first().json.contact_id,\n  usuario: $('Set Variables').first().json.usuario_panel,\n  input: $('Set Variables').first().json.mensaje,\n  output: $('Agente').first().json.output,\n  productos: ($('Armar Respuesta Panel').first().json.productos || []).map(p => p.codigo),\n  execution_id: $execution.id\n}) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        336
+      ],
+      "name": "Log Sword (marketing)",
+      "id": "2c8e5f19-4a7d-4b36-9e02-c5f1a8d7b643",
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.lmconsultingai.com/webhook/costos-testing",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ execution_id: $execution.id, telefono: $json.telefono }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "651d0093-b36b-4c71-b832-b3c28682e7fe",
+      "name": "Registrar Costo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        592,
+        144
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set Variables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Variables": {
+      "main": [
+        [
+          {
+            "node": "¿Panel?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Guardar Entrante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Panel?": {
+      "main": [
+        [
+          {
+            "node": "¿Token del panel?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Ahora",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Token del panel?": {
+      "main": [
+        [
+          {
+            "node": "Resolver Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rechazar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Ahora": {
+      "main": [
+        [
+          {
+            "node": "Resolver Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Cliente": {
+      "main": [
+        [
+          {
+            "node": "Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente": {
+      "main": [
+        [
+          {
+            "node": "Guardar Saliente",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Marketing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Saliente": {
+      "main": [
+        []
+      ]
+    },
+    "¿Marketing?": {
+      "main": [
+        [
+          {
+            "node": "Armar Respuesta Panel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Armar Respuesta Panel": {
+      "main": [
+        [
+          {
+            "node": "Responder al Panel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder al Panel": {
+      "main": [
+        [
+          {
+            "node": "Log Sword (marketing)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek V4 Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Memoria": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscar_productos": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "resolver_cliente": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "obtener_contexto": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "datos_empresa": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar_imagen": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar_fichatec": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generar_cotizacion": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "hand_off": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8eb9db2678620fe289ab6783565fb9010a8c7ce6f646e557331f353c9a1a17b3"
+  }
+}
