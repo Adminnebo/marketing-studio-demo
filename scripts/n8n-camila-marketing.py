@@ -4,7 +4,8 @@ Parte del flujo que paso el usuario (agente-jh-electro) y agrega, SIN duplicar e
   - canal "marketing_request" en lugar de "panel", con clave compartida en el encabezado x-panel-token;
   - una seccion de instrucciones para ese canal (solo buscar productos, sin RNC, cotizacion, envios ni handoff);
   - candado en las herramientas que le mandan algo a un cliente (con ese canal apuntan a una ruta inexistente);
-  - devolver la respuesta al panel (texto + productos de la busqueda + sugerencias) y registrar el gasto en Sword.
+  - devolver la respuesta al panel (texto + productos de la busqueda + sugerencias) y pasar la ejecucion al
+    flujo de costo, que registra en Sword el costo real por tokens.
 
 Uso: python3 scripts/n8n-camila-marketing.py > docs/n8n-camila-marketing.json
 """
@@ -493,14 +494,13 @@ nodes = [
         "name": "Responder al Panel", "id": "9d3f6b20-8e71-4c5a-b2d4-0a6e1f7c3b85",
     },
     {
-        # Registro en Sword con el mismo formato que los demas agentes. El tipo de gasto va en
-        # agentName/agentId. cost: 0 hasta definir de donde sale el costo (Sword cobra exactamente lo que se manda).
+        # Pasa la ejecucion al flujo "Camila Marketing - costo y Sword" (docs/n8n-camila-marketing-costo.json),
+        # que espera a que esta ejecucion termine, lee los tokens reales y registra en Sword el costo cobrado.
         "parameters": {
-            "method": "POST", "url": "https://app.swordaisolutions.com/api/messages/log",
-            "sendHeaders": True, "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+            "method": "POST", "url": "https://n8n.lmconsultingai.com/webhook/camila-marketing-costo",
             "sendBody": True, "specifyBody": "json",
-            "jsonBody": "={{ JSON.stringify({\n  clientId: 16,\n  apiKey: \"d1c383c4-60b3-4250-abc3-c5a04043b7cd\",\n  input: $('Set Variables').first().json.mensaje || '[mensaje sin texto]',\n  output: $('Agente').first().json.output,\n  agentName: \"Camila Marketing\",\n  agentId: \"marketing-camila-request\",\n  sessionId: $('Set Variables').first().json.contact_id,\n  contactId: $('Set Variables').first().json.contact_id,\n  contactName: $('Set Variables').first().json.usuario_panel,\n  cost: 0\n}) }}",
-            "options": {"response": {"response": {"neverError": True}}},
+            "jsonBody": "={{ JSON.stringify({\n  execution_id: $execution.id,\n  contact_id: $('Set Variables').first().json.contact_id,\n  usuario_panel: $('Set Variables').first().json.usuario_panel,\n  mensaje: $('Set Variables').first().json.mensaje,\n  output: $('Agente').first().json.output,\n  enviado: $now.toISO()\n}) }}",
+            "options": {"timeout": 10000, "response": {"response": {"neverError": True}}},
         },
         "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1040, 336],
         "name": "Log Sword (marketing)", "id": "2c8e5f19-4a7d-4b36-9e02-c5f1a8d7b643",

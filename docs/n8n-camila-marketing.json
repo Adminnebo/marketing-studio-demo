@@ -694,20 +694,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://app.swordaisolutions.com/api/messages/log",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "https://n8n.lmconsultingai.com/webhook/camila-marketing-costo",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  clientId: 16,\n  apiKey: \"d1c383c4-60b3-4250-abc3-c5a04043b7cd\",\n  input: $('Set Variables').first().json.mensaje || '[mensaje sin texto]',\n  output: $('Agente').first().json.output,\n  agentName: \"Camila Marketing\",\n  agentId: \"marketing-camila-request\",\n  sessionId: $('Set Variables').first().json.contact_id,\n  contactId: $('Set Variables').first().json.contact_id,\n  contactName: $('Set Variables').first().json.usuario_panel,\n  cost: 0\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  execution_id: $execution.id,\n  contact_id: $('Set Variables').first().json.contact_id,\n  usuario_panel: $('Set Variables').first().json.usuario_panel,\n  mensaje: $('Set Variables').first().json.mensaje,\n  output: $('Agente').first().json.output,\n  enviado: $now.toISO()\n}) }}",
         "options": {
+          "timeout": 10000,
           "response": {
             "response": {
               "neverError": true

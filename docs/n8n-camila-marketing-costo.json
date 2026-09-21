@@ -1,0 +1,193 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "camila-marketing-costo",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a1c7e3f0-5b2d-4e8a-9f16-3d0b7c4e2a91",
+      "name": "Webhook",
+      "webhookId": "a1c7e3f0-5b2d-4e8a-9f16-3d0b7c4e2a91"
+    },
+    {
+      "parameters": {
+        "amount": 8
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "id": "b2d8f4a1-6c3e-4f9b-8a27-4e1c8d5f3b02",
+      "name": "Esperar",
+      "webhookId": "b2d8f4a1-6c3e-4f9b-8a27-4e1c8d5f3b02"
+    },
+    {
+      "parameters": {
+        "url": "=https://n8n.lmconsultingai.com/api/v1/executions/{{ $('Webhook').first().json.body.execution_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "includeData",
+              "value": "true"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "<PONER-API-KEY-DE-ESTE-N8N>"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "c3e9a5b2-7d4f-4a0c-9b38-5f2d9e6a4c13",
+      "name": "Leer Ejecucion",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "https://panelcotizaciones.neboaiconsulting.com/api/porcentaje",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "d4f0b6c3-8e5a-4b1d-8c49-6a3e0f7b5d24",
+      "name": "Porcentajes",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Costo real de la solicitud de Camila Marketing: tokens de cada modelo x precio vigente del panel.\n// Misma logica que \"Log Outbound with cost WhatsApp\" (Camila de produccion).\nconst AGENT_SLUG = 'camila';\nconst MODEL_NODES = { 'DeepSeek V4 Chat Model': 'deepseek', 'Anthropic Chat Model': 'haiku' };\n// Por si el panel no responde o no tiene el modelo cargado.\nconst FALLBACK = { deepseek: { in: 0.14, out: 0.28 }, haiku: { in: 1.00, out: 5.00 } };\n\nconst pedido = $('Webhook').first().json.body;\nconst ref = new Date(pedido.enviado || Date.now());\nconst mins = ref.getUTCHours() * 60 + ref.getUTCMinutes();\nconst toMin = (hm) => { const [h, m] = String(hm).split(':').map(Number); return h * 60 + m; };\nconst inWin = (w) => { const s = toMin(w.start), e = toMin(w.end); if (s === e) return false; return s < e ? (mins >= s && mins < e) : (mins >= s || mins < e); };\nconst effPrice = (m) => {\n  for (const w of (m.priceWindows || [])) if (inWin(w)) return { in: Number(w.priceIn) || 0, out: Number(w.priceOut) || 0 };\n  return { in: Number(m.priceIn) || 0, out: Number(m.priceOut) || 0 };\n};\n\nconst agents = $('Porcentajes').first().json.agents || [];\nconst agent = agents.find((a) => a.slug === AGENT_SLUG) || { models: [] };\nconst priceBySlug = {};\nconst percentBySlug = {};\nfor (const m of agent.models) { priceBySlug[m.slug] = effPrice(m); percentBySlug[m.slug] = Number(m.percent); }\n\nfunction firstUsage(o) {\n  if (!o || typeof o !== 'object') return null;\n  if (o.tokenUsageEstimate) return o.tokenUsageEstimate;\n  if (o.tokenUsage) return o.tokenUsage;\n  for (const k of Object.keys(o)) { const u = firstUsage(o[k]); if (u) return u; }\n  return null;\n}\n\nconst exec = $('Leer Ejecucion').first().json;\nconst runData = exec?.data?.resultData?.runData || {};\nconst perModel = {};\nlet lastModel = null, lastTime = -1, costUsd = 0, anyUsage = false;\n\nfor (const [nodeName, key] of Object.entries(MODEL_NODES)) {\n  const runs = runData[nodeName];\n  if (!Array.isArray(runs)) continue;\n  let p = 0, c = 0, n = 0;\n  for (const run of runs) {\n    const u = firstUsage(run);\n    if (!u) continue;\n    p += Number(u.promptTokens ?? u.prompt_tokens ?? 0);\n    c += Number(u.completionTokens ?? u.completion_tokens ?? 0);\n    n++; anyUsage = true;\n    const t = run.startTime || 0;\n    if (t >= lastTime) { lastTime = t; lastModel = key; } // el que respondio al final\n  }\n  if (n > 0) {\n    const pr = priceBySlug[key] || FALLBACK[key] || { in: 0, out: 0 };\n    const cost = (p / 1e6) * pr.in + (c / 1e6) * pr.out;\n    perModel[key] = { promptTokens: p, completionTokens: c, calls: n, priceIn: pr.in, priceOut: pr.out, costUsd: Math.round(cost * 1e6) / 1e6 };\n    costUsd += cost;\n  }\n}\n\n// Lo cobrado, con la misma regla que la Camila de produccion (Edit Fields1):\n// deepseek -> costo x porcentaje/100 ; haiku -> costo x (1 + porcentaje/100).\nlet cobrado = 0;\nif (anyUsage && lastModel) {\n  const pct = percentBySlug[lastModel];\n  const mult = Number.isFinite(pct) ? (lastModel === 'deepseek' ? pct / 100 : 1 + pct / 100) : 1;\n  cobrado = +(costUsd * mult).toFixed(2);\n}\n\nreturn [{ json: {\n  model: lastModel,\n  costUsd: anyUsage ? Math.round(costUsd * 1e6) / 1e6 : null,\n  cobrado,\n  estado: exec?.status || null,\n  priceRefUtc: ref.toISOString(),\n  perModel,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "e5a1c7d4-9f6b-4c2e-9d5a-7b4f1a8c6e35",
+      "name": "Calcular Costo"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.swordaisolutions.com/api/messages/log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  clientId: 16,\n  apiKey: \"d1c383c4-60b3-4250-abc3-c5a04043b7cd\",\n  input: $('Webhook').first().json.body.mensaje || '[mensaje sin texto]',\n  output: $('Webhook').first().json.body.output,\n  agentName: \"Camila Marketing\",\n  agentId: \"marketing-camila-request\",\n  sessionId: $('Webhook').first().json.body.contact_id,\n  contactId: $('Webhook').first().json.body.contact_id,\n  contactName: $('Webhook').first().json.body.usuario_panel,\n  cost: $json.cobrado\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "f6b2d8e5-0a7c-4d3f-8e6b-8c5a2b9d7f46",
+      "name": "LOG Sword"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Esperar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar": {
+      "main": [
+        [
+          {
+            "node": "Leer Ejecucion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Ejecucion": {
+      "main": [
+        [
+          {
+            "node": "Porcentajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Porcentajes": {
+      "main": [
+        [
+          {
+            "node": "Calcular Costo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Costo": {
+      "main": [
+        [
+          {
+            "node": "LOG Sword",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
