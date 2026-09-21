@@ -134,7 +134,7 @@ export const guardarAjustes = (cambios) => api('/superadmin/ajustes', { method: 
 export const fetchUsuarios = () => api('/superadmin/usuarios');
 export const cambiarAcceso = (id, acceso) => api(`/superadmin/usuarios/${id}`, { method: 'PUT', body: JSON.stringify({ acceso }) });
 export const fetchConsumo = (mes) => api('/superadmin/consumo' + (mes ? `?mes=${mes}` : ''));
-export const fetchCreditos = () => api('/creditos');
+export const fetchCreditos = ({ fresco = false } = {}) => api('/creditos' + (fresco ? '?fresco=1' : ''));
 export const recargaManual = (datos) => api('/superadmin/recargas', { method: 'POST', body: JSON.stringify(datos) });
 export const actualizarCosto = () => api('/superadmin/costo/actualizar', { method: 'POST' });
 // ── Generacion libre ──
@@ -143,9 +143,7 @@ export const costoLibre = (datos) => api('/libre/costo', { method: 'POST', body:
 export const crearLibre = (datos) => api('/libre', { method: 'POST', body: JSON.stringify(datos) });
 export const autoPrompt = (datos) => api('/libre/autoprompt', { method: 'POST', body: JSON.stringify(datos) });
 export const reconectarGenerador = () => api('/superadmin/generador/conectar', { method: 'POST' });
-// Plataforma central de pagos: saldo general, recarga de Marketing desde ahi y estado (super admin).
-export const fetchSaldoGeneral = () => api('/creditos/saldo-general');
-export const recargarDesdeGeneral = (montoUsd) => api('/creditos/recargar', { method: 'POST', body: JSON.stringify({ monto_usd: montoUsd }) });
+// Plataforma de pagos: estado del saldo externo y de los gastos informados (super admin).
 export const fetchPagosAdmin = () => api('/superadmin/pagos');
 export const probarPagos = () => api('/superadmin/pagos/probar', { method: 'POST' });
 export const reintentarConsumo = (id) => api(`/superadmin/pagos/eventos/${id}/reintentar`, { method: 'POST' });

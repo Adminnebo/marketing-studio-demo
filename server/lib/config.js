@@ -5,6 +5,8 @@
  *  - costo_info: { fuente, actualizado, paquetes: [{ creditos, usd }] } ultima lectura de precios.
  *  - margen_pct: % de ganancia sobre el costo -> precio por credito para JH.
  *  - limite_diario_creditos: tope de creditos por usuario y dia (0 = sin tope). No aplica al super_admin.
+ *  - saldo_negativo_permitido: con saldo externo, hasta cuantos USD por debajo de cero se deja crear
+ *    (0 = solo con saldo positivo que cubra el costo).
  */
 const { pool } = require('./db');
 
@@ -14,8 +16,9 @@ const DEFECTOS = {
   costo_info: null,
   margen_pct: 0,
   limite_diario_creditos: 0,
+  saldo_negativo_permitido: 0,
 };
-const NUMEROS = ['costo_auto', 'usd_por_credito', 'margen_pct', 'limite_diario_creditos'];
+const NUMEROS = ['costo_auto', 'usd_por_credito', 'margen_pct', 'limite_diario_creditos', 'saldo_negativo_permitido'];
 
 let _cache = null;
 async function leer() {

@@ -104,18 +104,19 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
 - **Recargas**: la pestaña Créditos muestra los paquetes con el precio para JH. El pago en línea está en pausa
   (`pagoEnLinea: false`); mientras tanto un super_admin suma créditos a mano desde Super Admin.
 
-## Pagos: saldo general de Nebo
+## Pagos: saldo de la plataforma de pagos de Nebo
 
-- La billetera de Marketing (créditos) se recarga desde el **saldo general** del cliente en la plataforma central de
-  pagos: un admin de Marketing elige el monto en Créditos y la plataforma lo descuenta allá (`POST /recargas`); acá se
-  suman los créditos al precio del momento. Generar nunca depende de la plataforma, solo recargar.
-- Cada creación cobrada que sale bien se **informa** con su detalle completo (medio, plantilla o modelo, duración,
-  calidad, formato, audio, descripción, resultados, créditos, precio; y costo/margen como datos internos) en
-  `POST /consumos`. Es informativo: no mueve dinero. Lo fallido (devuelto) y lo de super admin no se informa.
-- Todo firmado (HMAC con timestamp) e idempotente por referencia (`mkt-rec-<uuid>`, `mkt-gen-<id>`). Las recargas sin
-  respuesta quedan pendientes y el worker repite la misma referencia; los consumos van por una cola con reintentos
-  (1, 2, 4… min, hasta 12) y los que fallan se ven y se reintentan en Super Admin → Plataforma de pagos.
-- Contrato: `docs/pagos-contrato.md`. Plataforma simulada para probar: `node test/mock-pagos.js 4600`.
+- Se crea contra el **saldo total de JH** en la plataforma de pagos (Sword AI, USD, compartido con sus otros
+  servicios), que el servidor lee con `SALDO_CLIENT_ID` / `SALDO_API_KEY` (`server/lib/saldo-externo.js`, cache 20 s).
+  La clave nunca llega al navegador. Marketing no tiene saldo propio mientras esto esté configurado.
+- Antes de cada creación: `saldo − por descontar − costo` no puede bajar de `−saldo_negativo_permitido` (ajuste de Super
+  Admin, por defecto 0). "Por descontar" = lo creado que aún no se informó a la plataforma; se chequea con un lock para
+  que dos creaciones simultáneas no gasten la misma plata. Si la plataforma no responde, no se crea (503).
+- Recarga: la página de pago de Nebo embebida en Créditos (`PAGO_URL`), con "Actualizar saldo" y refresco cada 30 s.
+- **Pendiente**: el endpoint para descontar el gasto de cada creación. La propuesta (detalle completo, firmado,
+  idempotente) está en `docs/pagos-contrato.md` y en `server/lib/pagos.js`, dormida hasta tener `PAGOS_*`. Hasta
+  entonces lo creado queda "por descontar" y no baja el saldo total.
+- Sin las variables de saldo se vuelve a la billetera local de créditos con recarga manual.
 
 ## Redes sociales (Zernio)
 
@@ -159,7 +160,8 @@ borrar.
 ## Pendiente (detalles y correcciones finales)
 
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
-- **Plataforma central de pagos**: el lado de Marketing está listo y probado contra una plataforma simulada (`docs/pagos-contrato.md`, `test/mock-pagos.js`). Falta que el equipo de pagos publique `GET /saldo`, `POST /recargas` y `POST /consumos`, y cargar `PAGOS_URL`, `PAGOS_API_KEY`, `PAGOS_SECRETO` y `PAGOS_CLIENTE` en panel y worker. Hasta entonces, recarga manual del super admin.
+- **Endpoint de gasto** (descontar cada creación del saldo de JH): lo entrega el equipo de pagos; el lado de Marketing está listo para adaptarlo (`docs/pagos-contrato.md`). Hasta entonces lo creado queda "por descontar".
+- **Política de saldo negativo**: JH está en -$1,018 en la plataforma; con el ajuste en $0 no pueden crear hasta pagar. Definir si se permite un margen.
 - **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
 - **Primer usuario de JH**: cargar saldo en la billetera (recarga manual) y darle acceso desde Super Admin.

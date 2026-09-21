@@ -1,20 +1,36 @@
 # Contrato: Marketing ↔ plataforma central de pagos de Nebo
 
-Versión 1 · 2026-09-21 · implementado en `server/lib/pagos.js`, simulado en `test/mock-pagos.js`.
+Versión 2 · 2026-09-21 · implementado en `server/lib/pagos.js`, simulado en `test/mock-pagos.js`.
 
 ## Modelo
 
-- El cliente (hoy JH) tiene un **balance general** en la plataforma central, en USD.
-- Marketing tiene su **propia billetera** en créditos. Se genera siempre contra esa billetera:
-  generar no depende de que la plataforma responda.
-- **Recarga**: un admin de Marketing pasa dinero del balance general a Marketing.
-  La plataforma lo descuenta del balance general; Marketing suma los créditos equivalentes.
-- **Consumo**: cada creación cobrada que sale bien se informa con su detalle completo.
-  Es informativo: **no mueve dinero** (ya se movió al recargar).
-- Las creaciones que fallan se devuelven solas a la billetera de Marketing y no se informan.
-  Las de los super admin de Nebo no se cobran ni se informan.
+- JH tiene un **saldo total** en la plataforma de pagos de Nebo (Sword AI), en USD, compartido con
+  sus otros servicios. **Es el saldo con el que se crea en Marketing**: Marketing no tiene saldo propio.
+- **Ver el saldo**: `GET https://app.swordaisolutions.com/api/credits/balance?clientId=<id>&apiKey=<clave>`
+  (ya existe). Lo lee el servidor de Marketing; la clave nunca llega al navegador.
+- **Recargar**: la página de pago de la plataforma, embebida en la pestaña Créditos (ya existe).
+- **Descontar lo gastado**: cada creación cobrada se informa con su detalle y su costo para que la
+  plataforma lo reste del saldo total. **Este endpoint es el que falta**; abajo va la propuesta.
+- Mientras un gasto no se informó, Marketing lo resta del saldo leído ("por descontar"), para que no se
+  pueda gastar dos veces la misma plata en ese intervalo.
+- Las creaciones que fallan no se cobran ni se informan; las de los super admin de Nebo tampoco.
 
-## Autenticación (todas las llamadas)
+## Saldo (existente)
+
+```json
+GET /api/credits/balance?clientId=16&apiKey=…
+200 { "success": true, "clientId": 16, "name": "JH Electroalambres", "email": "…", "credits": -1018.69,
+      "balance": -1018.69, "currency": "USD", "autoRechargeEnabled": false, "autoRechargeThreshold": 30 }
+```
+
+Marketing usa `balance` (o `credits` si no viene). Antes de cada creación: si
+`balance − por descontar − costo < −saldo negativo permitido` (ajuste de Super Admin, por defecto 0), no se crea.
+
+## Endpoint de gasto (propuesta: pendiente)
+
+Si el equipo de pagos lo define distinto, Marketing se adapta; lo que no puede faltar es la idempotencia.
+
+### Autenticación
 
 | Header | Valor |
 |---|---|
@@ -26,58 +42,20 @@ Versión 1 · 2026-09-21 · implementado en `server/lib/pagos.js`, simulado en `
 
 La plataforma debe rechazar con 401 una firma inválida o un timestamp a más de 5 minutos.
 
-## Idempotencia
+### Idempotencia
 
 Cada operación trae una `referencia` única generada por Marketing:
-`mkt-rec-<uuid>` (recargas) y `mkt-gen-<id>` (consumos). Si llega otra vez la misma referencia,
+`mkt-gen-<id>` (una por creación). Si llega otra vez la misma referencia,
 la plataforma **no la procesa de nuevo** y responde 200 con el mismo resultado. Marketing reintenta
-cuando no recibe respuesta; sin idempotencia eso descontaría dos veces.
+cuando no recibe respuesta; sin idempotencia descontaría dos veces.
 
-## 1. `GET /saldo?cliente=<id>`
+### `POST /consumos` — el gasto de una creación
 
-Balance general disponible para pasar a Marketing.
-
-```json
-200 { "cliente": "jh", "saldo_usd": 125.40, "moneda": "USD", "actualizado": "2026-09-21T13:00:00Z" }
-404 { "error": "cliente_desconocido" }
-```
-
-## 2. `POST /recargas` — pasar saldo del balance general a Marketing
+Se envía cuando la creación termina bien. La plataforma resta `monto_usd` del saldo total de JH.
 
 ```json
 {
-  "cliente": "jh",
-  "origen": "marketing",
-  "referencia": "mkt-rec-2f1c6c1e-9a4b-4b8e-8a57-0c1f6f2d9b11",
-  "monto_usd": 25.00,
-  "moneda": "USD",
-  "creditos": 400.6,
-  "precio_credito_usd": 0.0624,
-  "descripcion": "Recarga de Marketing: 400.6 créditos",
-  "usuario": { "id": "uuid", "email": "admin@jh.com", "nombre": "Nombre" }
-}
-```
-
-La plataforma descuenta `monto_usd` del balance general. `creditos` y `precio_credito_usd` son
-informativos (lo que recibe el cliente en Marketing).
-
-| Respuesta | Significado | Marketing hace |
-|---|---|---|
-| `201 { "recarga_id", "referencia", "estado": "aplicada", "saldo_usd" }` | descontado | suma los créditos |
-| `200` con la misma forma | referencia repetida | suma los créditos si aún no lo hizo (nunca dos veces) |
-| `402 { "error": "saldo_insuficiente", "saldo_usd" }` | no alcanza | no suma nada, avisa al usuario |
-| `400` / `409` | datos inválidos / conflicto | no suma nada |
-| `5xx` o sin respuesta | no se sabe | deja la recarga pendiente y repite la misma referencia cada ≥2 min |
-
-`saldo_usd` en las respuestas es el balance general que queda.
-
-## 3. `POST /consumos` — informar una creación cobrada
-
-Se envía cuando la creación termina bien. No mueve dinero.
-
-```json
-{
-  "cliente": "jh",
+  "cliente": "16",
   "origen": "marketing",
   "referencia": "mkt-gen-1234",
   "monto_usd": 2.184,
@@ -129,13 +107,15 @@ Se envía cuando la creación termina bien. No mueve dinero.
 
 ## Configuración en Marketing
 
-Variables en los servicios **panel** y **worker** de Railway:
-`PAGOS_URL` (base, sin barra final), `PAGOS_API_KEY`, `PAGOS_SECRETO`, `PAGOS_CLIENTE` (id de JH en la plataforma).
-Sin las cuatro, todo sigue como hoy (recarga manual del super admin) y no se informa nada.
+- Saldo: `SALDO_CLIENT_ID`, `SALDO_API_KEY` (y opcional `SALDO_API_URL`, `PAGO_URL` para la página de pago) en el panel.
+  Sin ellas se usa la billetera local de créditos con recarga manual del super admin.
+- Gasto (cuando exista): `PAGOS_URL`, `PAGOS_API_KEY`, `PAGOS_SECRETO`, `PAGOS_CLIENTE` en panel y worker.
+  Si el endpoint real tiene otra forma, se adapta `server/lib/pagos.js`.
 
 ## Probar sin la plataforma
 
 ```sh
-PAGOS_API_KEY=clave PAGOS_SECRETO=secreto node test/mock-pagos.js 4600
-# y en Marketing: PAGOS_URL=http://localhost:4600 PAGOS_API_KEY=clave PAGOS_SECRETO=secreto PAGOS_CLIENTE=jh
+SALDO_API_KEY=clave-saldo PAGOS_API_KEY=clave PAGOS_SECRETO=secreto node test/mock-pagos.js 4600
+# en Marketing: SALDO_API_URL=http://localhost:4600/api/credits/balance SALDO_CLIENT_ID=16 SALDO_API_KEY=clave-saldo
+#               PAGOS_URL=http://localhost:4600 PAGOS_API_KEY=clave PAGOS_SECRETO=secreto PAGOS_CLIENTE=16
 ```

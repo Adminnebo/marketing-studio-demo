@@ -47,59 +47,55 @@ function SesionCli({ cli, onCambio }) {
   );
 }
 
-// Plataforma central de pagos de Nebo: recargas desde el saldo general y consumos informados.
-const fechaCorta = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+// Saldo de JH en la plataforma de pagos de Nebo y gastos informados (el endpoint de gasto esta pendiente).
 function PagosCentral() {
   const [d, setD] = useState(null);
   const [msg, setMsg] = useState(null);
   const cargar = () => fetchPagosAdmin().then(setD).catch((e) => setMsg({ error: e.message }));
   useEffect(() => { cargar(); }, []);
-  if (!d) return <div className="card"><h3>Plataforma de pagos</h3>{msg?.error ? <div className="ms-errors">{msg.error}</div> : <div className="spinner" />}</div>;
-  const pendientes = d.cola.pendiente || 0;
-  const conError = d.cola.error || 0;
+  if (!d) return <div className="card"><h3>Saldo de JH (plataforma de pagos)</h3>{msg?.error ? <div className="ms-errors">{msg.error}</div> : <div className="spinner" />}</div>;
+  const s = d.saldo;
+  const pendientes = d.gasto.cola.pendiente || 0;
+  const conError = d.gasto.cola.error || 0;
   return (
     <div className="card">
-      <h3>Plataforma de pagos (saldo general)</h3>
+      <h3>Saldo de JH (plataforma de pagos)</h3>
       <div className="card-sub">
-        {d.configurado
-          ? <>Conectada a <strong>{d.host}</strong> como cliente <strong>{d.cliente}</strong>. Los admins de Marketing recargan desde el saldo general y cada creación cobrada se informa con su detalle.</>
-          : 'Sin configurar: faltan PAGOS_URL, PAGOS_API_KEY, PAGOS_SECRETO y PAGOS_CLIENTE (en panel y worker). Mientras tanto se recarga a mano abajo.'}
+        {s.configurado
+          ? <>Se crea contra el saldo de <strong>{s.nombre || 'JH'}</strong> en la plataforma de pagos. Lo creado que aún no se descontó allá se resta del saldo leído.</>
+          : 'Sin configurar: faltan SALDO_CLIENT_ID y SALDO_API_KEY (en panel y worker). Mientras tanto se usa la billetera local y la recarga manual.'}
       </div>
-      {d.configurado && (
-        <>
-          <div className="sa-ejemplos" style={{ marginTop: 0 }}>
-            <span className="pill">Últimos 30 días: recargado <strong>{usd(d.ultimos30.recargadoUsd)}</strong></span>
-            <span className="pill">Informado <strong>{usd(d.ultimos30.informadoUsd)}</strong> en {num(d.ultimos30.consumos, 0)} creaciones</span>
-            <span className={`pill ${conError ? 'st-fallido' : pendientes ? 'st-en_proceso' : 'st-completado'}`}>{conError ? `${conError} con error` : pendientes ? `${pendientes} por informar` : 'Todo informado'}</span>
-          </div>
-          {d.errores.length > 0 && (
-            <div className="sa-pagos-lista">
-              <div className="lb-lbl">No se pudieron informar</div>
-              {d.errores.map((e) => (
-                <div key={e.id} className="sa-pagos-fila">
-                  <span>#{e.generacion_id} {e.preset_nombre} · {e.precio_usd != null ? usd(e.precio_usd) : ''}<br /><span className="ms-cost">{e.ultimo_error}</span></span>
-                  <button className="mini-btn" onClick={async () => { try { await reintentarConsumo(e.id); setMsg({ ok: 'Se reintentará en el próximo ciclo.' }); cargar(); } catch (x) { setMsg({ error: x.message }); } }}>↻ Reintentar</button>
-                </div>
-              ))}
-            </div>
+      {s.configurado && (
+        <div className="sa-ejemplos" style={{ marginTop: 0 }}>
+          {s.error ? <span className="pill st-fallido">No se pudo leer: {s.error}</span> : (
+            <>
+              <span className="pill">Saldo total <strong>{usd(s.saldoUsd)}</strong></span>
+              <span className="pill">Por descontar <strong>{usd(s.pendienteUsd)}</strong> ({num(s.pendientes, 0)})</span>
+              <span className={`pill ${s.disponibleUsd < 0 ? 'st-fallido' : 'st-completado'}`}>Disponible <strong>{usd(s.disponibleUsd)}</strong></span>
+            </>
           )}
-          {d.recargas.length > 0 && (
-            <div className="sa-pagos-lista">
-              <div className="lb-lbl">Últimas recargas desde el saldo general</div>
-              {d.recargas.slice(0, 6).map((r) => (
-                <div key={r.referencia} className="sa-pagos-fila">
-                  <span>{fechaCorta(r.creado)} · {usd(r.monto_usd)} → {num(r.creditos)} cr · {r.por}</span>
-                  <span className={`pill ${r.estado === 'aplicada' ? 'st-completado' : r.estado === 'rechazada' ? 'st-fallido' : 'st-en_proceso'}`} title={r.motivo || ''}>{r.estado}</span>
-                </div>
-              ))}
+          <span className="pill">Últimos 30 días: {usd(d.ultimos30.gastadoUsd)} en {num(d.ultimos30.creaciones, 0)} creaciones</span>
+        </div>
+      )}
+      <div className="card-sub" style={{ margin: '10px 0 0' }}>
+        {d.gasto.configurado
+          ? (conError ? `${conError} gasto(s) no se pudieron informar.` : pendientes ? `${pendientes} gasto(s) por informar.` : 'Todos los gastos informados.')
+          : 'Endpoint de gasto: pendiente. Hasta tenerlo, lo creado queda "por descontar" y no se descuenta del saldo total.'}
+      </div>
+      {d.gasto.errores.length > 0 && (
+        <div className="sa-pagos-lista">
+          {d.gasto.errores.map((e) => (
+            <div key={e.id} className="sa-pagos-fila">
+              <span>#{e.generacion_id} {e.preset_nombre} · {e.precio_usd != null ? usd(e.precio_usd) : ''}<br /><span className="ms-cost">{e.ultimo_error}</span></span>
+              <button className="mini-btn" onClick={async () => { try { await reintentarConsumo(e.id); setMsg({ ok: 'Se reintentará en el próximo ciclo.' }); cargar(); } catch (x) { setMsg({ error: x.message }); } }}>↻ Reintentar</button>
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
       <div className="ms-submit">
         <span className="ms-cost">{msg?.ok && <span style={{ color: 'var(--good-ink)' }}>{msg.ok}</span>}{msg?.error && <span style={{ color: 'var(--critical)' }}>{msg.error}</span>}</span>
-        <button className="mini-btn" disabled={!d.configurado} onClick={async () => {
-          try { const r = await probarPagos(); setMsg({ ok: `Conexión OK: saldo general ${usd(r.saldoUsd)}.` }); } catch (e) { setMsg({ error: e.message }); }
+        <button className="mini-btn" disabled={!s.configurado} onClick={async () => {
+          try { const r = await probarPagos(); setMsg({ ok: `Conexión OK: saldo de ${r.nombre || 'JH'} ${usd(r.saldoUsd)}.` }); cargar(); } catch (e) { setMsg({ error: e.message }); }
         }}>🔌 Probar conexión</button>
       </div>
     </div>
@@ -161,6 +157,11 @@ function Ajustes({ onGuardado }) {
           <label className="filter-field"><span>% de ganancia</span>
             <input className="search" type="number" min="0" step="1" value={f.margen_pct} onChange={(e) => setF({ ...f, margen_pct: e.target.value })} />
           </label>
+          {datos.conexiones.saldoExterno && (
+            <label className="filter-field"><span>Saldo negativo permitido (USD, 0 = solo con saldo)</span>
+              <input className="search" type="number" min="0" step="1" value={f.saldo_negativo_permitido ?? 0} onChange={(e) => setF({ ...f, saldo_negativo_permitido: e.target.value })} />
+            </label>
+          )}
           <label className="filter-field"><span>Tope diario por usuario (créditos, 0 = sin tope)</span>
             <input className="search" type="number" min="0" step="1" value={f.limite_diario_creditos} onChange={(e) => setF({ ...f, limite_diario_creditos: e.target.value })} />
           </label>
@@ -252,7 +253,7 @@ function Ajustes({ onGuardado }) {
 
         <PagosCentral />
 
-        <div className="card">
+        {!datos.conexiones.saldoExterno && <div className="card">
           <h3>Recarga manual a JH</h3>
           <div className="card-sub">Mientras el pago en línea está en pausa: después de cobrar (transferencia, factura), suma los créditos a la billetera de JH. Un número negativo corrige el saldo.</div>
           <div className="sa-form" style={{ gridTemplateColumns: '1fr 1fr' }}>
@@ -272,7 +273,7 @@ function Ajustes({ onGuardado }) {
             <span className="ms-cost">{recEstado?.ok && <span style={{ color: 'var(--good-ink)' }}>{recEstado.ok}</span>}{recEstado?.error && <span style={{ color: 'var(--critical)' }}>{recEstado.error}</span>}</span>
             <button className="btn" onClick={recargar} disabled={!Number(rec.creditos) || recEstado?.guardando}>Sumar créditos</button>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

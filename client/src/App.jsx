@@ -8,7 +8,7 @@ import Redes from './components/Redes';
 import SuperAdmin from './components/SuperAdmin';
 import Creditos from './components/Creditos';
 import Libre from './components/Libre';
-import { cred } from './precio';
+import { cred, usd } from './precio';
 import Publicar from './components/Publicar';
 import { Pasos, Ayuda } from './components/Guia';
 import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
@@ -192,6 +192,12 @@ export default function App() {
   const tabs = TABS.filter((t) => !t.min || NIVEL[me.rol] >= NIVEL[t.min]);
 
   const enCurso = gens.items.filter((g) => EN_CURSO.has(g.estado)).length;
+  // Saldo: el de la plataforma de pagos (USD) o, si no esta configurada, la billetera local (creditos).
+  const externo = me.saldoFuente === 'externo';
+  const sinSaldo = me.rolReal !== 'super_admin' && (externo
+    ? me.saldoDisponibleUsd != null && me.saldoDisponibleUsd <= -(me.saldoNegativoPermitidoUsd || 0)
+    : Number(me.saldo) <= 0);
+  const saldoProps = { saldo: me.saldo, saldoUsd: externo ? me.saldoDisponibleUsd : null, negativoUsd: me.saldoNegativoPermitidoUsd || 0 };
   const desconectado = estado && !estado.conectado;
 
   const repetir = (g) => (g.entrada?.libre ? (() => {
@@ -239,8 +245,9 @@ export default function App() {
               {desconectado ? 'Generador desconectado' : 'Generador conectado'}
             </span>
           )}
-          <button className="badge cr-badge" onClick={() => setTab('creditos')} title="Saldo de créditos de JH">
-            💳 Saldo: <strong>{cred(me.saldo)}</strong> créditos
+          <button className="badge cr-badge" onClick={() => setTab('creditos')}
+            title={externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
+            💳 Saldo: <strong>{externo ? (me.saldoDisponibleUsd != null ? usd(me.saldoDisponibleUsd) : '—') : `${cred(me.saldo)} créditos`}</strong>
           </button>
           <button className="badge" onClick={() => setAyuda(true)} title="Cómo usar el panel">❔ Ayuda</button>
           {me.rol === 'super_admin' && saldo && (
@@ -286,12 +293,15 @@ export default function App() {
         </div>
       )}
 
-      {me.rolReal !== 'super_admin' && Number(me.saldo) <= 0 && tab !== 'creditos' && (
+      {sinSaldo && tab !== 'creditos' && (
         <div className="aviso-saldo">
-          <span>💳 <strong>Todavía no tienes créditos.</strong> Puedes explorar todo, pero para generar primero hay que recargar saldo.</span>
-          <button className="btn" onClick={() => setTab('creditos')}>Ver cómo recargar</button>
+          <span>💳 {externo
+            ? <><strong>Tu saldo está en {usd(me.saldoDisponibleUsd)}.</strong> Puedes explorar todo, pero para crear primero hay que recargar.</>
+            : <><strong>Todavía no tienes créditos.</strong> Puedes explorar todo, pero para generar primero hay que recargar saldo.</>}</span>
+          <button className="btn" onClick={() => setTab('creditos')}>Recargar</button>
         </div>
       )}
+      {externo && me.errorSaldo && <div className="banner-off">{me.errorSaldo}</div>}
 
       <nav className="tabs">
         {tabs.map((t) => (
@@ -326,7 +336,7 @@ export default function App() {
               </button>
             </div>
             {modoCrear === 'cero' ? (
-              <Libre key={libre.n} inicial={libre.inicial} saldo={me.saldo} rol={me.rol} rolReal={me.rolReal}
+              <Libre key={libre.n} inicial={libre.inicial} {...saldoProps} rol={me.rol} rolReal={me.rolReal}
                 onVer={() => setTab('generaciones')} onRecargar={() => setTab('creditos')}
                 onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }} />
             ) : (
@@ -369,7 +379,7 @@ export default function App() {
           categorias={categorias}
           costos={costos}
           precios={me.precios}
-          saldo={me.saldo}
+          {...saldoProps}
           onRecargar
           rol={me.rol}
           rolReal={me.rolReal}

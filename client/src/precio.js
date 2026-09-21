@@ -5,7 +5,7 @@ export function precioDe(precios, _tipo, creditos) {
   const costo = precios.usdPorCredito != null ? Number(creditos) * precios.usdPorCredito : null;
   return { precio, costo, margen: precios.margenPct ?? null };
 }
-export const usd = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const usd = (n) => (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const cred = (n) => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 });
 // "1 crédito" / "35 créditos".
 export const creditos = (n) => `${cred(n)} ${Number(n) === 1 ? 'crédito' : 'créditos'}`;

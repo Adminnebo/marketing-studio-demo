@@ -18,6 +18,7 @@ const promptAuto = require('./lib/prompt-auto');
 const hfOauth = require('./lib/hf-oauth');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
+const saldoExterno = require('./lib/saldo-externo');
 const encolarLib = require('./lib/encolar');
 const zernio = require('./lib/zernio');
 
@@ -121,9 +122,23 @@ app.get('/api/me', ruta(async (req, res) => {
     precios: ajustes.precioCredito(a) != null
       ? { precioCredito: ajustes.precioCredito(a), ...(req.user.rol === 'super_admin' ? { usdPorCredito: a.usd_por_credito, margenPct: a.margen_pct } : {}) }
       : null,
-    saldo: await billetera.saldo(),
+    ...(await saldoDe()),
   });
 }));
+
+// Saldo para el panel: el de la plataforma de pagos (USD) si esta configurada; si no, la billetera local (creditos).
+async function saldoDe({ fresco = false } = {}) {
+  if (!saldoExterno.configurado()) return { saldoFuente: 'local', saldo: await billetera.saldo() };
+  if (fresco) saldoExterno.olvidar();
+  try {
+    const r = await saldoExterno.resumen();
+    const a = await ajustes.leer();
+    return { saldoFuente: 'externo', saldoUsd: r.saldoUsd, saldoPendienteUsd: r.pendienteUsd, saldoDisponibleUsd: r.disponibleUsd, saldoNegativoPermitidoUsd: Number(a.saldo_negativo_permitido || 0) };
+  } catch (e) {
+    console.error('[saldo]', e.message);
+    return { saldoFuente: 'externo', saldoUsd: null, saldoDisponibleUsd: null, errorSaldo: 'No se pudo leer el saldo. Intenta de nuevo en un momento.' };
+  }
+}
 
 app.get('/api/estado', ruta(async (req, res) => res.json({ conectado: (await hf.estadoConexion()).conectado })));
 
@@ -348,42 +363,31 @@ app.post('/api/libre', ruta(async (req, res) => {
 app.get('/api/creditos', ruta(async (req, res) => {
   const a = await ajustes.leer();
   const pc = ajustes.precioCredito(a);
+  if (saldoExterno.configurado()) {
+    if (req.query.fresco) saldoExterno.olvidar();
+    let r = null; let error = null;
+    try { r = await saldoExterno.resumen(); } catch (e) { console.error('[saldo]', e.message); error = 'No se pudo leer el saldo. Intenta de nuevo en un momento.'; }
+    const { rows } = await pool.query(
+      `SELECT id, preset_nombre, preset_tipo, precio_usd, creditos_estimados, estado, creado, creado_por, gasto_informado
+       FROM generaciones WHERE cobro_externo ORDER BY id DESC LIMIT 40`
+    );
+    return res.json({
+      fuente: 'externo', error, precioCredito: pc, pagoUrl: saldoExterno.URL_PAGO(),
+      cuenta: r && { nombre: r.nombre, email: r.email }, saldoUsd: r?.saldoUsd ?? null, pendienteUsd: r?.pendienteUsd ?? null,
+      disponibleUsd: r?.disponibleUsd ?? null, autoRecarga: r?.autoRecarga || null, leido: r?.leido || null,
+      negativoPermitidoUsd: Number(a.saldo_negativo_permitido || 0),
+      consumos: rows.map((x) => ({ ...x, precio_usd: x.precio_usd != null ? Number(x.precio_usd) : null, creditos_estimados: x.creditos_estimados != null ? Number(x.creditos_estimados) : null })),
+    });
+  }
   const paquetes = (a.costo_info?.paquetes || []).map((p) => p.creditos).sort((x, y) => x - y);
   res.json({
     saldo: await billetera.saldo(),
     precioCredito: pc,
-    // Recargar desde el saldo general de la plataforma central (admin de Marketing en adelante).
-    central: { configurado: pagos.configurado(), puedeRecargar: pagos.configurado() && auth.NIVEL[req.user.rol] >= auth.NIVEL.admin },
+    fuente: 'local',
     paquetes: (paquetes.length ? paquetes : [500, 1000, 2000, 4000]).map((cr) => ({ creditos: cr, usd: pc != null ? Math.round(cr * pc * 100) / 100 : null })),
     pagoEnLinea: false, // en standby: por ahora las recargas las carga un super admin
     movimientos: (await billetera.movimientos(40)).map((m) => ({ ...m, creditos: Number(m.creditos), usd: m.usd != null ? Number(m.usd) : null })),
   });
-}));
-
-// Saldo general del cliente en la plataforma central y recarga de Marketing desde ahi.
-app.get('/api/creditos/saldo-general', auth.requireRol('admin'), ruta(async (req, res) => {
-  if (!pagos.configurado()) return res.status(503).json({ error: 'La conexión con la plataforma de pagos todavía no está configurada.' });
-  try { res.json(await pagos.saldoGeneral()); } catch (e) {
-    console.error('[pagos] saldo general:', e.message);
-    res.status(502).json({ error: 'No se pudo leer tu saldo general. Intenta de nuevo en un momento.' });
-  }
-}));
-
-app.post('/api/creditos/recargar', auth.requireRol('admin'), ruta(async (req, res) => {
-  if (!pagos.configurado()) return res.status(503).json({ error: 'La conexión con la plataforma de pagos todavía no está configurada.' });
-  const a = await ajustes.leer();
-  const pc = ajustes.precioCredito(a);
-  const monto = Number(req.body?.monto_usd);
-  if (!(monto >= 1) || monto > 10000) return res.status(400).json({ error: 'Elige un monto entre $1 y $10,000.' });
-  if (!pc) return res.status(400).json({ error: 'Todavía no hay precio por crédito configurado. Avísale al administrador.' });
-  const r = await pagos.recargar({ montoUsd: monto, precioCredito: pc, usuario: { id: req.user.id, email: req.user.email, nombre: req.user.nombre || null } });
-  console.log(`[pagos] recarga ${r.referencia} de ${req.user.email}: $${monto} -> ${r.creditos} cr (${r.estado})`);
-  if (r.estado === 'aplicada') return res.json({ ok: true, creditos: Number(r.creditos), montoUsd: Number(r.monto_usd), saldo: await billetera.saldo(), saldoGeneralUsd: r.saldoGeneralUsd });
-  if (r.estado === 'rechazada') {
-    const sinSaldo = r.motivo === 'saldo_insuficiente';
-    return res.status(sinSaldo ? 402 : 400).json({ error: sinSaldo ? `Tu saldo general no alcanza para recargar $${monto.toFixed(2)}.` : 'La plataforma de pagos rechazó la recarga.' });
-  }
-  res.status(202).json({ pendiente: true, error: 'La plataforma de pagos no confirmó todavía. Se reintenta sola en unos minutos; no se te va a descontar dos veces.' });
 }));
 
 // Redes sociales (conectar cuentas y publicar): admin de Marketing en adelante.

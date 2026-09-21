@@ -246,12 +246,10 @@ async function ciclo() {
   } catch (e) {
     log('No se pudieron clasificar plantillas:', e.message);
   }
-  // Plataforma central de pagos: consumos por informar y recargas que quedaron sin respuesta.
+  // Plataforma de pagos: gastos por informar (cuando exista el endpoint de gasto).
   try {
     const r = await pagos.procesarCola();
-    if (r.hechos) log(`pagos: ${r.hechos} consumo/s informado/s`);
-    const rc = await pagos.repetirRecargasPendientes();
-    if (rc) log(`pagos: ${rc} recarga/s pendiente/s resuelta/s`);
+    if (r.hechos) log(`pagos: ${r.hechos} gasto/s informado/s`);
   } catch (e) {
     log('Error con la plataforma de pagos:', e.message);
   }

@@ -29,7 +29,7 @@ const pasosDe = (tipo) => [
 // Crear desde cero, paso a paso. El orden importa: el formato y la duracion van ANTES de la
 // descripcion, porque la que escribe la IA se arma para esa duracion (tramos y ritmo), ese
 // formato y el sonido. Si despues se cambia alguno, se avisa y se ofrece reescribirla.
-export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRecargar }) {
+export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal, inicial, onEnviada, onVer, onRecargar }) {
   const [modelos, setModelos] = useState(null);
   const [error, setError] = useState(null);
   const [paso, setPaso] = useState(inicial ? 5 : 1); // 'Usar de nuevo' trae todo lleno: se abre en Revisar
@@ -133,7 +133,11 @@ export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRec
   };
 
   const cobra = rolReal !== 'super_admin';
-  const sinSaldo = cobra && costo.creditos != null && saldo != null && saldo < costo.creditos;
+  // Saldo externo en USD (plataforma de pagos) o billetera local en creditos.
+  const sinSaldo = cobra && (saldoUsd != null
+    ? costo.precio != null && saldoUsd - costo.precio < -negativoUsd
+    : costo.creditos != null && saldo != null && saldo < costo.creditos);
+  const textoSaldo = saldoUsd != null ? `${usd(saldoUsd)} disponibles` : `${cred(saldo)} créditos`;
   const usaIa = modoPrompt === 'auto' && modelo?.aceptaImagen;
   const nombreTipo = tipo === 'video' ? 'video' : 'foto';
   const elTipo = tipo === 'video' ? 'el video' : 'la foto';
@@ -143,7 +147,7 @@ export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRec
     !modelo && [1, 'Elige un modelo.'],
     modelo?.pideImagen && !imagen && [3, 'Sube la foto del producto: este modelo la necesita.'],
     !prompt.trim() && [4, modoPrompt === 'dictar' ? 'Dicta la descripción y elige cómo usarla.' : usaIa ? 'Falta la descripción: deja que la IA la escriba o escríbela tú.' : `Escribe qué quieres ver en ${elTipo}.`],
-    sinSaldo && [5, `No te alcanza el saldo: tienes ${cred(saldo)} créditos y esto usa ${cred(costo.creditos)}.`],
+    sinSaldo && [5, `No te alcanza el saldo: tienes ${textoSaldo} y esto cuesta ${saldoUsd != null ? usd(costo.precio) : `${cred(costo.creditos)} créditos`}.`],
   ].filter(Boolean);
 
   // Un paso esta listo cuando de verdad tiene lo que necesita (no solo por haber pasado).
@@ -495,7 +499,7 @@ export default function Libre({ saldo, rolReal, inicial, onEnviada, onVer, onRec
           {costo.cargando ? <span className="ms-cost">Calculando costo…</span> : costo.error ? <span className="ms-cost">{costo.error}</span> : costo.creditos != null && (
             <>
               <span className="lb-costo-n">{nCred(costo.creditos)}{costo.precio != null && <span> · {usd(costo.precio)}</span>}</span>
-              <span className="ms-cost">{cobra ? (saldo != null ? `Tu saldo: ${cred(saldo)} créditos` : '') : 'Super admin: no se descuenta del saldo de JH'}</span>
+              <span className="ms-cost">{cobra ? (saldoUsd != null || saldo != null ? `Tu saldo: ${textoSaldo}` : '') : 'Super admin: no se descuenta del saldo de JH'}</span>
             </>
           )}
           {paso === 5 && faltan.length > 0 && (

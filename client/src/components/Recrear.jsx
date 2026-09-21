@@ -9,7 +9,7 @@ import { precioDe, usd, cred, creditos as nCred } from '../precio';
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
 
 // Modal para recrear una plantilla con el producto (y avatar) del usuario.
-export default function Recrear({ preset, categoria, categorias, costos, precios, saldo, rol, rolReal, inicial, onCerrar, onEnviada, onRecargar }) {
+export default function Recrear({ preset, categoria, categorias, costos, precios, saldo, saldoUsd = null, negativoUsd = 0, rol, rolReal, inicial, onCerrar, onEnviada, onRecargar }) {
   const { formatSlug, formato } = useMemo(() => formatoDe(preset, categorias, categoria), [preset, categorias, categoria]);
   const req = useMemo(() => entradasDe(preset, { formatSlug, formato }), [preset, formatSlug, formato]);
 
@@ -34,8 +34,12 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
 
   const creditos = creditosDe(preset.type, costos, duracion);
   const pr = precioDe(precios, preset.type, creditos);
-  const sinSaldo = rolReal !== 'super_admin' && creditos != null && saldo != null && saldo < creditos;
-  const pendientes = [...faltantes(req, { producto, avatar, prompt, url }), ...(sinSaldo ? [`No te alcanza el saldo: tienes ${cred(saldo)} créditos y esto usa ${cred(creditos)}.`] : [])];
+  // Saldo externo en USD (plataforma de pagos) o billetera local en creditos.
+  const sinSaldo = rolReal !== 'super_admin' && (saldoUsd != null
+    ? pr?.precio != null && saldoUsd - pr.precio < -negativoUsd
+    : creditos != null && saldo != null && saldo < creditos);
+  const textoSaldo = saldoUsd != null ? `${usd(saldoUsd)} disponibles` : `${cred(saldo)} créditos`;
+  const pendientes = [...faltantes(req, { producto, avatar, prompt, url }), ...(sinSaldo ? [`No te alcanza el saldo: tienes ${textoSaldo} y esto cuesta ${saldoUsd != null ? usd(pr.precio) : `${cred(creditos)} créditos`}.`] : [])];
   const ocupado = enviando || subida?.progreso != null;
 
   const elegirArchivo = async (f) => {
@@ -197,7 +201,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                         <span className="lb-costo-n">{nCred(creditos)}{pr && <span> · {usd(pr.precio)}</span>}</span>
                         <span className="ms-cost">
                           {rol === 'super_admin' && pr?.costo != null && `Costo ${usd(pr.costo)} · margen ${pr.margen} % · `}
-                          {rolReal !== 'super_admin' ? (saldo != null ? `Tu saldo: ${cred(saldo)} créditos` : '') : 'Super admin: no se descuenta del saldo de JH'}
+                          {rolReal !== 'super_admin' ? (saldoUsd != null || saldo != null ? `Tu saldo: ${textoSaldo}` : '') : 'Super admin: no se descuenta del saldo de JH'}
                         </span>
                       </>
                     ) : <span className="ms-cost">{TIPOS_VIDEO.has(preset.type) ? 'Calculando costo según la duración…' : ''}</span>}
