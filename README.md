@@ -82,6 +82,9 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   cualquiera. El orden no es casual: la descripción que escribe la IA se arma para la duración (tramos y ritmo), el
   formato y el sonido elegidos, así que van antes; si después se cambia alguno (o la foto), el paso 5 avisa que la
   descripción quedó descuadrada y ofrece reescribirla.
+- **Dictar** (🎙, paso 4 y en las plantillas): el reconocimiento de voz del navegador, igual que el menú digital
+  (`client/src/lib/dictado.js`); gratis, sin servidor. Lo dictado se usa como base para la IA (va como indicaciones del
+  usuario) o tal cual como descripción. Chrome, Edge y Safari; Firefox y los Chromium sin servicios de Google no.
 - **Cinema Studio 4.0 y 3.5** no están en el MCP: se cotizan y crean con la CLI oficial (`@higgsfield/cli`, misma cuenta y
   créditos; `server/lib/hf-cli.js`). Su sesión rota como `hf_token`, así que vive en la base (`hf_cli_sesion`) y cada
   llamada la toma con `FOR UPDATE`, corre la CLI en un directorio temporal y guarda lo renovado. El seguimiento es el mismo
@@ -151,4 +154,5 @@ borrar.
 - **Probar Cinema Studio 4.0 desde el panel** con una generación real (la CLI y el seguimiento ya se probaron por separado: video de 5 s, 35 créditos).
 - **Sesión de la CLI** (Cinema Studio 4.0 y 3.5): se renueva sola; si Super Admin la marca vencida, recargarla con `scripts/sesion-cli.js`. Si el MCP llega a exponer estos modelos, el panel usa el del MCP y la CLI deja de hacer falta.
 - **Facilidad de uso, 2.ª vuelta**: Crear (asistente de 5 pasos), Mis creaciones y Créditos ya están rediseñados; faltan **Super Admin y Redes**, y ajustar con lo que digan los usuarios de JH al usarlo.
+- **Probar el dictado con micrófono real** en Chrome/Edge (en el servidor de pruebas solo se probó sin micrófono: el flujo y las dos opciones de uso).
 - La clave de OpenAI es la misma del menú digital (servicio `generador`): si se rota allá, hay que actualizarla acá.
