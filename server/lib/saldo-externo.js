@@ -56,7 +56,9 @@ const olvidar = () => { _cache.exp = 0; };
 async function pendiente(cliente = pool) {
   const { rows: [r] } = await cliente.query(
     `SELECT COALESCE(SUM(precio_usd), 0) AS usd, COUNT(*)::int AS n FROM generaciones
-     WHERE cobro_externo AND gasto_informado IS NULL AND estado <> 'fallido'`
+     WHERE cobro_externo AND estado <> 'fallido'
+       -- lo recien descontado se sigue restando 30 s: el saldo leido tiene cache de 20 s y todavia no lo refleja
+       AND (gasto_informado IS NULL OR gasto_informado > now() - interval '30 seconds')`
   );
   return { usd: Math.round(Number(r.usd) * 10000) / 10000, n: r.n };
 }

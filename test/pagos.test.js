@@ -9,7 +9,7 @@ if (!URL_BD) {
   test('pagos (sin TEST_DATABASE_URL, se salta)', { skip: true }, () => {});
 } else {
   process.env.DATABASE_URL = URL_BD;
-  Object.assign(process.env, { SALDO_CLIENT_ID: '16', SALDO_API_KEY: 'clave-saldo', PAGOS_API_KEY: 'clave-test', PAGOS_SECRETO: 'secreto-test', PAGOS_CLIENTE: '16' });
+  Object.assign(process.env, { SALDO_CLIENT_ID: '16', SALDO_API_KEY: 'clave-saldo' });
   let estadoJob = 'in_progress';
   const hf = require('../server/lib/higgsfield');
   hf.llamar = async (tool) => {
@@ -25,7 +25,7 @@ if (!URL_BD) {
   const { encolar } = require('../server/lib/encolar');
   const w = require('../server/worker');
 
-  const mock = crearMock({ apiKeySaldo: 'clave-saldo', apiKey: 'clave-test', secreto: 'secreto-test', clientes: { 16: { saldo: 5, nombre: 'JH Electroalambres', email: 'jh@x.com' } } });
+  const mock = crearMock({ apiKeySaldo: 'clave-saldo', callerId: 14, apiKey: 'clave-ajuste', clientes: { 16: { saldo: 5, nombre: 'JH Electroalambres', email: 'jh@x.com' } } });
   const usuario = { id: '11111111-1111-4111-8111-111111111111', email: 'vendedor@jh.com', nombre: 'Vendedor', rolReal: 'usuario' };
   const video = () => ({
     presetId: 'cinematic_studio_video_4_0', presetNombre: 'Cinema Studio 4.0', presetTipo: 'libre_video', portada: null, creditos: 35,
@@ -41,7 +41,12 @@ if (!URL_BD) {
     estadoJob = estado;
     await w.revisarEnProceso();
   }
-  const conPagos = async (fn) => { process.env.PAGOS_URL = `http://localhost:${mock.server.address().port}`; try { return await fn(); } finally { delete process.env.PAGOS_URL; } };
+  // Descuento de saldo configurado solo dentro de fn.
+  const conAjuste = async (fn) => {
+    Object.assign(process.env, { AJUSTE_URL: `http://localhost:${mock.server.address().port}/api/credits/adjust`, AJUSTE_CALLER_ID: '14', AJUSTE_API_KEY: 'clave-ajuste' });
+    try { return await fn(); } finally { delete process.env.AJUSTE_CALLER_ID; delete process.env.AJUSTE_API_KEY; }
+  };
+  const eventos = (id) => pool.query('SELECT * FROM pagos_eventos WHERE generacion_id = $1', [id]).then((r) => r.rows);
 
   test.before(async () => {
     await new Promise((r) => mock.server.listen(0, r));
@@ -119,26 +124,86 @@ if (!URL_BD) {
     assert.equal(mock.peticiones.length, n);
   });
 
-  test('gasto informado (endpoint propuesto): una vez, con detalle, y sale de pendiente', async () => {
+  test('al terminar se descuenta una vez del saldo, con el detalle en la nota', async () => {
     await pool.query(`UPDATE generaciones SET estado = 'fallido' WHERE cobro_externo`);
     const r = await encolar(usuario, video());
-    await conPagos(async () => {
+    await conAjuste(async () => {
       await terminar(r.g.id);
       await pagos.procesarCola();
       await pagos.procesarCola();
     });
-    const c = mock.consumos.get(`mkt-gen-${r.g.id}`);
-    assert.ok(c);
-    assert.equal(mock.peticiones.filter((p) => p.ruta === '/consumos').length, 1);
-    assert.equal(c.monto_usd, 2.184);
-    assert.equal(c.detalle.duracion_s, 5);
-    assert.equal(c.detalle.calidad, '720p');
-    assert.equal(c.detalle.resultados[0].url, 'https://cdn/v.mp4');
-    assert.ok((await fila(r.g.id)).gasto_informado, 'marcado como informado');
+    assert.equal(mock.ajustes.length, 1, 'un solo descuento');
+    const a = mock.ajustes[0];
+    assert.equal(a.callerId, 14);
+    assert.equal(a.clientId, 16);
+    assert.equal(a.operation, 'subtract');
+    assert.equal(a.concept, 'marketing');
+    assert.equal(a.amount, 2.18, 'en centavos, lo mismo que ve JH');
+    assert.equal(a.note, `Video Cinema Studio 4.0 · 5 s · 720p · vertical 9:16 · con audio · 35 créditos · $2.18 · vendedor@jh.com · ref mkt-gen-${r.g.id}`);
+    assert.ok((await fila(r.g.id)).gasto_informado, 'marcado como descontado');
+    assert.equal(Math.round(mock.saldo[16] * 1000) / 1000, 2.82);
+    // Recien descontado se sigue restando unos segundos (el saldo leido tiene cache).
+    assert.equal((await saldoExterno.pendiente()).usd, 2.184);
+    await pool.query(`UPDATE generaciones SET gasto_informado = now() - interval '1 minute' WHERE id = $1`, [r.g.id]);
     saldoExterno.olvidar();
     const s = await saldoExterno.resumen();
     assert.equal(s.pendienteUsd, 0, 'ya se descontó alla: no se resta dos veces');
     assert.equal(s.saldoUsd, 2.82);
+  });
+
+  test('503: no llego, se reintenta solo', async () => {
+    mock.saldo[16] = 100; // saldo de sobra para lo que queda
+    const r = await encolar(usuario, video());
+    const antes = mock.ajustes.length;
+    await conAjuste(async () => {
+      await terminar(r.g.id);
+      mock.fallarAjuste('503');
+      await pagos.procesarCola();
+      mock.fallarAjuste(null);
+      let [ev] = await eventos(r.g.id);
+      assert.equal(ev.estado, 'pendiente');
+      assert.ok(new Date(ev.proximo) > new Date(), 'con espera');
+      await pool.query(`UPDATE pagos_eventos SET proximo = now() WHERE id = $1`, [ev.id]);
+      await pagos.procesarCola();
+      [ev] = await eventos(r.g.id);
+      assert.equal(ev.estado, 'hecho');
+    });
+    assert.equal(mock.ajustes.length, antes + 1);
+  });
+
+  test('500 (pudo haberse aplicado): no se repite solo; queda para revisar y se puede dar por hecho', async () => {
+    const r = await encolar(usuario, video());
+    await conAjuste(async () => {
+      await terminar(r.g.id);
+      mock.fallarAjuste('500');
+      await pagos.procesarCola();
+      mock.fallarAjuste(null);
+      await pagos.procesarCola();
+    });
+    const [ev] = await eventos(r.g.id);
+    assert.equal(ev.estado, 'error');
+    assert.match(ev.ultimo_error, /Puede que se haya descontado/);
+    assert.equal(ev.intentos, 1, 'no se reintento solo');
+    assert.equal(await pagos.marcarHecho(ev.id, 'admin@nebo'), true);
+    assert.ok((await fila(r.g.id)).gasto_informado);
+  });
+
+  test('cortado a mitad del envio: pasa a revisar, no se repite', async () => {
+    const r = await encolar(usuario, video());
+    await conAjuste(async () => {
+      await terminar(r.g.id);
+      await pool.query(`UPDATE pagos_eventos SET estado = 'enviando', proximo = now() - interval '10 minutes' WHERE generacion_id = $1`, [r.g.id]);
+      assert.equal(await pagos.liberarEnviando(), 1);
+    });
+    assert.equal((await eventos(r.g.id))[0].estado, 'error');
+  });
+
+  test('completada sin descuento encolado: la red de seguridad lo encola', async () => {
+    const r = await encolar(usuario, video());
+    await terminar(r.g.id); // sin configurar: no se encola
+    assert.equal((await eventos(r.g.id)).length, 0);
+    await conAjuste(async () => { assert.ok(await pagos.encolarFaltantes() >= 1); });
+    assert.equal((await eventos(r.g.id)).length, 1);
   });
 
   test('sin el endpoint de gasto configurado no se envia nada', async () => {

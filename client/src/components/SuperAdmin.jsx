@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, clasificarPlantillas, registrarWebhookRedes } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, clasificarPlantillas, registrarWebhookRedes } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, cred } from '../precio';
 
@@ -79,15 +79,21 @@ function PagosCentral() {
       )}
       <div className="card-sub" style={{ margin: '10px 0 0' }}>
         {d.gasto.configurado
-          ? (conError ? `${conError} gasto(s) no se pudieron informar.` : pendientes ? `${pendientes} gasto(s) por informar.` : 'Todos los gastos informados.')
-          : 'Endpoint de gasto: pendiente. Hasta tenerlo, lo creado queda "por descontar" y no se descuenta del saldo total.'}
+          ? (conError ? `${conError} descuento(s) para revisar.` : pendientes ? `${pendientes} descuento(s) en camino.` : 'Cada creación cobrada se descuenta del saldo con su detalle.')
+          : 'Descuento de saldo sin configurar: faltan AJUSTE_CALLER_ID y AJUSTE_API_KEY (en panel y worker). Hasta entonces lo creado queda "por descontar".'}
       </div>
       {d.gasto.errores.length > 0 && (
         <div className="sa-pagos-lista">
           {d.gasto.errores.map((e) => (
             <div key={e.id} className="sa-pagos-fila">
-              <span>#{e.generacion_id} {e.preset_nombre} · {e.precio_usd != null ? usd(e.precio_usd) : ''}<br /><span className="ms-cost">{e.ultimo_error}</span></span>
-              <button className="mini-btn" onClick={async () => { try { await reintentarConsumo(e.id); setMsg({ ok: 'Se reintentará en el próximo ciclo.' }); cargar(); } catch (x) { setMsg({ error: x.message }); } }}>↻ Reintentar</button>
+              <span>#{e.generacion_id} {e.preset_nombre} · {e.precio_usd != null ? usd(e.precio_usd) : ''} · <code>{e.referencia}</code><br /><span className="ms-cost">{e.ultimo_error}</span></span>
+              <span className="ms-ok-acc">
+                <button className="mini-btn" title="En la plataforma ya aparece este descuento: no se vuelve a enviar" onClick={async () => { try { await marcarDescontado(e.id); setMsg({ ok: 'Marcado como descontado.' }); cargar(); } catch (x) { setMsg({ error: x.message }); } }}>✓ Ya se descontó</button>
+                <button className="mini-btn" onClick={async () => {
+                  if (!window.confirm(`Antes de reintentar, busca "${e.referencia}" en la plataforma de pagos: si ya aparece, reintentar lo descontaría dos veces. ¿No aparece y quieres reintentar?`)) return;
+                  try { await reintentarConsumo(e.id); setMsg({ ok: 'Se reintentará en el próximo ciclo.' }); cargar(); } catch (x) { setMsg({ error: x.message }); }
+                }}>↻ Reintentar</button>
+              </span>
             </div>
           ))}
         </div>

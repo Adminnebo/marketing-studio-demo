@@ -92,7 +92,7 @@ router.post('/superadmin/cli/sesion', ruta(async (req, res) => {
 router.get('/superadmin/pagos', ruta(async (req, res) => {
   const [{ rows: cola }, { rows: errores }, { rows: [mes] }] = await Promise.all([
     pool.query(`SELECT estado, COUNT(*)::int AS n FROM pagos_eventos GROUP BY estado`),
-    pool.query(`SELECT e.id, e.generacion_id, e.intentos, e.ultimo_error, e.creado, g.preset_nombre, g.precio_usd
+    pool.query(`SELECT e.id, e.generacion_id, e.referencia, e.intentos, e.ultimo_error, e.creado, g.preset_nombre, g.precio_usd
                 FROM pagos_eventos e JOIN generaciones g ON g.id = e.generacion_id WHERE e.estado = 'error' ORDER BY e.id DESC LIMIT 30`),
     pool.query(`SELECT COALESCE(SUM(precio_usd), 0) AS usd, COUNT(*)::int AS n FROM generaciones
                 WHERE cobro_externo AND estado <> 'fallido' AND creado > now() - interval '30 days'`),
@@ -113,6 +113,12 @@ router.post('/superadmin/pagos/probar', ruta(async (req, res) => {
   try { res.json({ ok: true, ...(await saldoExterno.leer({ fresco: true })) }); } catch (e) {
     throw errPublico(`La plataforma de pagos no respondió bien: ${e.message.slice(0, 200)}`, 502);
   }
+}));
+
+router.post('/superadmin/pagos/eventos/:id/hecho', ruta(async (req, res) => {
+  if (!(await pagos.marcarHecho(Number(req.params.id) || 0, req.user.email))) throw errPublico('Ese envío no está en error.');
+  console.log(`[pagos] ${req.user.email} marco como descontado el evento ${req.params.id}`);
+  res.json({ ok: true });
 }));
 
 router.post('/superadmin/pagos/eventos/:id/reintentar', ruta(async (req, res) => {

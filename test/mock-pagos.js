@@ -1,15 +1,14 @@
 /**
  * Plataforma de pagos SIMULADA para pruebas y desarrollo local:
  *   GET  /api/credits/balance?clientId=&apiKey=   saldo de JH (mismo formato que Sword AI)
- *   POST /consumos                                gasto de una generacion (PROPUESTA, firmado e
- *                                                 idempotente; descuenta del saldo)
- *   SALDO_API_KEY=... PAGOS_API_KEY=... PAGOS_SECRETO=... node test/mock-pagos.js 4600
+ *   POST /api/credits/adjust                      descuenta (o suma) saldo (mismo formato que Sword AI)
+ *   SALDO_API_KEY=... AJUSTE_CALLER_ID=14 AJUSTE_API_KEY=... node test/mock-pagos.js 4600
  */
 const http = require('http');
-const crypto = require('crypto');
 
-function crearMock({ apiKeySaldo, apiKey, secreto, clientes = {} }) {
-  const consumos = new Map();
+function crearMock({ apiKeySaldo, callerId, apiKey, clientes = {} }) {
+  const ajustes = [];
+  let modo = null; // '500' | '503' para simular fallas del ajuste
   const peticiones = [];
   const saldo = Object.fromEntries(Object.entries(clientes).map(([id, c]) => [id, c.saldo]));
   const responder = (res, status, cuerpo) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(cuerpo)); };
@@ -30,21 +29,20 @@ function crearMock({ apiKeySaldo, apiKey, secreto, clientes = {} }) {
         const s = Math.round(saldo[id] * 100) / 100;
         return responder(res, 200, { success: true, clientId: Number(id), email: clientes[id].email, name: clientes[id].nombre, credits: s, balance: s, currency: 'USD', autoRechargeEnabled: false, autoRechargeThreshold: 30 });
       }
-      if (req.method === 'POST' && url.pathname === '/consumos') {
-        if (req.headers.authorization !== `Bearer ${apiKey}`) return responder(res, 401, { error: 'no_autorizado' });
-        const esperada = crypto.createHmac('sha256', secreto).update(`${req.headers['x-nebo-timestamp']}.${crudo}`).digest('hex');
-        if (req.headers['x-nebo-firma'] !== esperada) return responder(res, 401, { error: 'firma_invalida' });
+      if (req.method === 'POST' && url.pathname === '/api/credits/adjust') {
         const b = JSON.parse(crudo || '{}');
-        if (!b.referencia || !b.detalle || !(String(b.cliente) in saldo)) return responder(res, 400, { error: 'datos_invalidos' });
-        if (consumos.has(b.referencia)) return responder(res, 200, { referencia: b.referencia, estado: 'registrado', repetido: true });
-        consumos.set(b.referencia, b);
-        saldo[String(b.cliente)] -= Number(b.monto_usd) || 0;
-        return responder(res, 201, { referencia: b.referencia, estado: 'registrado' });
+        if (modo === '500') return responder(res, 500, { success: false, error: 'Internal error' });
+        if (modo === '503') return responder(res, 503, { success: false, error: 'Unavailable' });
+        if (b.callerId !== callerId || b.apiKey !== apiKey) return responder(res, 401, { success: false, error: 'Invalid caller' });
+        if (!(String(b.clientId) in saldo) || !(Number(b.amount) > 0) || !['add', 'subtract'].includes(b.operation)) return responder(res, 400, { success: false, error: 'Invalid request' });
+        saldo[String(b.clientId)] += (b.operation === 'subtract' ? -1 : 1) * Number(b.amount);
+        ajustes.push(b);
+        return responder(res, 200, { success: true, clientId: b.clientId, newBalance: Math.round(saldo[String(b.clientId)] * 100) / 100 });
       }
       return responder(res, 404, { error: 'ruta_desconocida' });
     });
   });
-  return { server, consumos, saldo, peticiones, caer: (v = true) => { caido = v; } };
+  return { server, ajustes, saldo, peticiones, caer: (v = true) => { caido = v; }, fallarAjuste: (m) => { modo = m; } };
 }
 
 module.exports = { crearMock };
@@ -52,7 +50,7 @@ module.exports = { crearMock };
 if (require.main === module) {
   const puerto = Number(process.argv[2]) || 4600;
   const { server } = crearMock({
-    apiKeySaldo: process.env.SALDO_API_KEY || 'clave-saldo', apiKey: process.env.PAGOS_API_KEY || 'clave', secreto: process.env.PAGOS_SECRETO || 'secreto',
+    apiKeySaldo: process.env.SALDO_API_KEY || 'clave-saldo', callerId: Number(process.env.AJUSTE_CALLER_ID || 14), apiKey: process.env.AJUSTE_API_KEY || 'clave-ajuste',
     clientes: { 16: { saldo: 50, nombre: 'JH Electroalambres', email: 'jh@example.com' } },
   });
   server.listen(puerto, () => console.log(`Plataforma de pagos simulada en http://localhost:${puerto} (clientId 16, saldo $50)`));

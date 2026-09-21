@@ -113,9 +113,10 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   Admin, por defecto 0). "Por descontar" = lo creado que aún no se informó a la plataforma; se chequea con un lock para
   que dos creaciones simultáneas no gasten la misma plata. Si la plataforma no responde, no se crea (503).
 - Recarga: la página de pago de Nebo embebida en Créditos (`PAGO_URL`), con "Actualizar saldo" y refresco cada 30 s.
-- **Pendiente**: el endpoint para descontar el gasto de cada creación. La propuesta (detalle completo, firmado,
-  idempotente) está en `docs/pagos-contrato.md` y en `server/lib/pagos.js`, dormida hasta tener `PAGOS_*`. Hasta
-  entonces lo creado queda "por descontar" y no baja el saldo total.
+- Descuento: cada creación cobrada que sale bien se resta del saldo con `POST /api/credits/adjust` (monto en
+  centavos, detalle y referencia `mkt-gen-<id>` en la nota), por una cola en el worker. El endpoint no tiene
+  idempotencia: solo se reintenta solo si es seguro que no llegó; los cortes a mitad quedan en Super Admin para
+  revisar ("Ya se descontó" / "Reintentar"). Mientras no se descuenta, se resta del saldo leído.
 - Sin las variables de saldo se vuelve a la billetera local de créditos con recarga manual.
 
 ## Redes sociales (Zernio)
@@ -160,7 +161,7 @@ borrar.
 ## Pendiente (detalles y correcciones finales)
 
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
-- **Endpoint de gasto** (descontar cada creación del saldo de JH): lo entrega el equipo de pagos; el lado de Marketing está listo para adaptarlo (`docs/pagos-contrato.md`). Hasta entonces lo creado queda "por descontar".
+- **Idempotencia en el descuento**: pedir al equipo de pagos que `/api/credits/adjust` acepte una referencia única y rechace repetidos; hoy un corte a mitad requiere revisión manual.
 - **Política de saldo negativo**: JH está en -$1,018 en la plataforma; con el ajuste en $0 no pueden crear hasta pagar. Definir si se permite un margen.
 - **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.

@@ -1,74 +1,75 @@
 /**
- * Informar a la plataforma de pagos de Nebo el gasto de cada generacion cobrada,
- * con su detalle completo (medio, modelo o plantilla, duracion, calidad, formato,
- * audio, descripcion, resultados, creditos, precio). Con eso la plataforma lo
- * descuenta del saldo de JH (lib/saldo-externo.js), que es el saldo con el que
- * se genera.
+ * Descontar del saldo de JH (plataforma de pagos de Nebo, Sword AI) el gasto de
+ * cada generacion cobrada, con su detalle:
  *
- * PENDIENTE: el endpoint de gasto todavia no existe. La forma de abajo (POST
- * {PAGOS_URL}/consumos, firmado e idempotente por referencia mkt-gen-<id>) es
- * la propuesta de docs/pagos-contrato.md y se ajusta al que entreguen. Sin las
- * variables PAGOS_* no se envia nada: lo gastado queda "pendiente de descontar"
- * y se resta del saldo leido para que no se gaste dos veces.
+ *   POST {AJUSTE_URL}   (por defecto https://app.swordaisolutions.com/api/credits/adjust)
+ *   { callerId, apiKey, clientId, amount, operation: 'subtract', concept: 'marketing', note }
  *
- * Los envios van por una cola (pagos_eventos) que el worker reintenta con espera
- * creciente; al confirmarse se marca generaciones.gasto_informado.
+ * amount = precio para JH en USD (costo + ganancia). note = el detalle legible
+ * (medio, modelo o plantilla, duracion, calidad, formato, audio, creditos, quien)
+ * con nuestra referencia mkt-gen-<id> para ubicarlo en la plataforma.
  *
- * Firma: HMAC-SHA256 en hex de `${timestamp}.${cuerpo}` con PAGOS_SECRETO, en
- * X-Nebo-Firma, y el timestamp (segundos) en X-Nebo-Timestamp.
+ * El endpoint no trae clave de idempotencia: repetir un pedido que SI se aplico
+ * descontaria dos veces. Por eso solo se reintenta solo cuando es seguro que no
+ * llego (no se pudo conectar, 429, 503). Si se corto a mitad (timeout, 500, 502,
+ * 504, sin respuesta legible) queda en 'error' para que un super_admin lo revise
+ * en la plataforma y decida reintentar o darlo por hecho.
+ *
+ * Los envios van por una cola (pagos_eventos) que procesa el worker; al
+ * confirmarse se marca generaciones.gasto_informado. Mientras tanto el gasto se
+ * resta del saldo leido como "por descontar" (lib/saldo-externo.js).
+ * La clave va solo en variables del servidor (AJUSTE_API_KEY).
  */
-const crypto = require('crypto');
 const { pool } = require('./db');
 
-const URL_BASE = () => (process.env.PAGOS_URL || '').replace(/\/+$/, '');
-const API_KEY = () => process.env.PAGOS_API_KEY || '';
-const SECRETO = () => process.env.PAGOS_SECRETO || '';
-const CLIENTE = () => process.env.PAGOS_CLIENTE || '';
-const ORIGEN = 'marketing';
+const URL_AJUSTE = () => process.env.AJUSTE_URL || 'https://app.swordaisolutions.com/api/credits/adjust';
+const CALLER = () => process.env.AJUSTE_CALLER_ID || '';
+const CLAVE = () => process.env.AJUSTE_API_KEY || '';
+const CLIENTE = () => process.env.SALDO_CLIENT_ID || '';
 
 class PagosError extends Error {
-  constructor(msg, { status = 0, codigo = null, datos = null, red = false } = {}) {
+  constructor(msg, { status = 0, seguro = false, datos = null } = {}) {
     super(msg);
-    this.status = status; this.codigo = codigo; this.datos = datos; this.red = red;
+    this.status = status; this.seguro = seguro; this.datos = datos; // seguro = no llego: se puede repetir
   }
 }
 
-const configurado = () => !!(URL_BASE() && API_KEY() && SECRETO() && CLIENTE());
+const configurado = () => !!(CALLER() && CLAVE() && CLIENTE());
 
-function firmar(cuerpo, ts = Math.floor(Date.now() / 1000)) {
-  return { ts: String(ts), firma: crypto.createHmac('sha256', SECRETO()).update(`${ts}.${cuerpo}`).digest('hex') };
-}
+// Errores de red que aseguran que el pedido no llego a la plataforma.
+const NO_LLEGO = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH']);
 
-async function llamar(metodo, ruta, body, { idempotencia, timeoutMs = 15000 } = {}) {
-  if (!configurado()) throw new PagosError('La plataforma de pagos no está configurada', { codigo: 'sin_configurar' });
-  const cuerpo = body ? JSON.stringify(body) : '';
-  const { ts, firma } = firmar(cuerpo);
+async function ajustar({ amount, note }) {
+  if (!configurado()) throw new PagosError('El descuento de saldo no está configurado');
+  const cuerpo = {
+    callerId: Number(CALLER()), apiKey: CLAVE(), clientId: Number(CLIENTE()),
+    amount, operation: 'subtract', concept: 'marketing', note,
+  };
   let r;
   try {
-    r = await fetch(URL_BASE() + ruta, {
-      method: metodo,
-      headers: {
-        authorization: 'Bearer ' + API_KEY(), 'x-nebo-timestamp': ts, 'x-nebo-firma': firma, 'x-nebo-origen': ORIGEN,
-        ...(body ? { 'content-type': 'application/json' } : {}),
-        ...(idempotencia ? { 'idempotency-key': idempotencia } : {}),
-      },
-      body: body ? cuerpo : undefined,
-      signal: AbortSignal.timeout(timeoutMs),
+    r = await fetch(URL_AJUSTE(), {
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(cuerpo), signal: AbortSignal.timeout(20000),
     });
   } catch (e) {
-    throw new PagosError(`${metodo} ${ruta}: sin respuesta (${e.message})`, { red: true });
+    const codigo = e.cause?.code || e.code;
+    throw new PagosError(`sin respuesta (${codigo || e.name}: ${e.message})`, { seguro: NO_LLEGO.has(codigo) });
   }
   const texto = await r.text();
-  let j = {};
-  try { j = texto ? JSON.parse(texto) : {}; } catch { j = { texto: texto.slice(0, 300) }; }
-  if (!r.ok) throw new PagosError(`${metodo} ${ruta}: HTTP ${r.status} ${j.error || ''}`.trim(), { status: r.status, codigo: j.error || null, datos: j, red: r.status >= 500 });
+  let j = null;
+  try { j = texto ? JSON.parse(texto) : {}; } catch { /* respuesta no JSON */ }
+  if (!r.ok || !j || j.success === false) {
+    const motivo = (j && (j.error || j.message)) || texto.slice(0, 200) || '';
+    throw new PagosError(`HTTP ${r.status} ${motivo}`.trim(), { status: r.status, seguro: r.status === 429 || r.status === 503, datos: j });
+  }
   return j;
 }
 
-const redondear = (n) => (n == null ? null : Math.round(Number(n) * 10000) / 10000);
+const redondear = (n, d = 4) => (n == null ? null : Math.round(Number(n) * 10 ** d) / 10 ** d);
 
-// ── Gasto de cada generacion cobrada, con su detalle completo ──
+// ── Detalle de una generacion ──
 const TIPOS_VIDEO = new Set(['ugc', '2d_motion', 'hypermotion', 'mixed_media', 'saas_motion', 'libre_video']);
+const FORMATOS = { '9:16': 'vertical 9:16', '16:9': 'horizontal 16:9', '1:1': 'cuadrado 1:1', '4:5': 'vertical 4:5', '3:4': 'vertical 3:4', '4:3': 'horizontal 4:3', '21:9': 'cine 21:9' };
 function detalleDe(g) {
   const e = g.entrada || {};
   const libre = e.libre || null;
@@ -79,66 +80,69 @@ function detalleDe(g) {
   const audio = op.generate_audio ?? (op.sound != null ? op.sound !== 'off' : null);
   return {
     generacion_id: Number(g.id),
-    panel: ORIGEN,
     medio: esVideo ? 'video' : 'foto',
     origen: libre ? 'desde_cero' : 'plantilla',
     nombre: g.preset_nombre || null,
-    modelo: libre ? { id: libre.modelo, nombre: g.preset_nombre || libre.modelo } : { id: 'marketing_studio', nombre: 'Marketing Studio' },
-    plantilla: libre ? null : { id: g.preset_id, nombre: g.preset_nombre || null, tipo: g.preset_tipo, categoria: e.categoria || null, formato: args.format_name || null },
+    modelo: libre ? (g.preset_nombre || libre.modelo) : 'Marketing Studio',
+    plantilla: libre ? null : { id: g.preset_id, nombre: g.preset_nombre || null, tipo: g.preset_tipo, formato: args.format_name || null },
     duracion_s: esVideo ? Number(libre?.duracion || p.duration || e.detalle?.duracion_s) || null : null,
     calidad: op.resolution || op.quality || e.detalle?.resolucion || null,
     formato: libre?.aspecto || p.aspect_ratio || null,
     audio: esVideo ? audio : null,
-    opciones: libre ? op : {},
-    descripcion: String(p.prompt || args.prompt || '').slice(0, 2000) || null,
-    descripcion_por_ia: !!libre?.promptAuto,
-    imagen_producto: e.producto?.url || null,
-    persona: e.avatar?.name || null,
-    resultados: (g.resultados || []).filter((r) => r.url).map((r) => ({ url: r.url, miniatura: r.miniatura || null })),
-    creado: g.creado,
-    terminado: g.terminado || null,
-    segundos_proceso: g.enviado && g.terminado ? Math.round((new Date(g.terminado) - new Date(g.enviado)) / 1000) : null,
     creditos: g.creditos_estimados != null ? Number(g.creditos_estimados) : null,
     precio_usd: redondear(g.precio_usd),
-    // Interno de Nebo (reportes de margen); el cliente pago precio_usd.
-    costo_usd: redondear(g.costo_usd),
-    margen_pct: g.margen_pct != null ? Number(g.margen_pct) : null,
-    usd_por_credito: g.usd_por_credito != null ? Number(g.usd_por_credito) : null,
+    usuario: g.creado_por,
+    resultado: (g.resultados || []).find((r) => r.url)?.url || null,
   };
 }
 
-function descripcionDe(g) {
+// La nota que ve la plataforma: todo el detalle en una linea legible.
+function notaDe(g) {
   const d = detalleDe(g);
-  return [d.medio === 'video' ? 'Video' : 'Foto', d.origen === 'plantilla' ? `plantilla "${d.nombre}"` : d.modelo.nombre,
-    d.duracion_s ? `${d.duracion_s} s` : null, d.calidad, d.formato].filter(Boolean).join(' · ');
+  return [
+    `${d.medio === 'video' ? 'Video' : 'Foto'} ${d.origen === 'plantilla' ? `plantilla "${d.nombre}"` : d.modelo}`,
+    d.duracion_s ? `${d.duracion_s} s` : null,
+    d.calidad,
+    d.formato ? FORMATOS[d.formato] || d.formato : null,
+    d.audio === true ? 'con audio' : d.audio === false ? 'sin audio' : null,
+    d.creditos != null ? `${d.creditos} créditos` : null,
+    `$${Number(d.precio_usd).toFixed(2)}`,
+    d.usuario,
+    `ref mkt-gen-${d.generacion_id}`,
+  ].filter(Boolean).join(' · ').slice(0, 500);
 }
 
-// Solo se informa lo que se cobro de verdad (no lo de super_admin ni lo que fallo).
+// Encola el descuento de una generacion cobrada contra el saldo externo que salio bien.
 async function informarConsumo(generacionId) {
   if (!configurado()) return false;
   const { rows: [g] } = await pool.query(
-    `SELECT g.* FROM generaciones g
-     WHERE g.id = $1 AND g.estado = 'completado' AND g.gasto_informado IS NULL
-       AND (g.cobro_externo OR (
-         EXISTS (SELECT 1 FROM billetera b WHERE b.generacion_id = g.id AND b.tipo = 'consumo')
-         AND NOT EXISTS (SELECT 1 FROM billetera b WHERE b.generacion_id = g.id AND b.tipo = 'reembolso')))`, [generacionId]
+    `SELECT * FROM generaciones WHERE id = $1 AND estado = 'completado' AND cobro_externo AND gasto_informado IS NULL`, [generacionId]
   );
-  if (!g) return false;
-  const referencia = `mkt-gen-${g.id}`;
-  const cuerpo = {
-    cliente: CLIENTE(), origen: ORIGEN, referencia, monto_usd: redondear(g.precio_usd), moneda: 'USD',
-    creditos: g.creditos_estimados != null ? Number(g.creditos_estimados) : null,
-    descripcion: descripcionDe(g), detalle: detalleDe(g),
-    usuario: { id: g.user_id, email: g.creado_por },
-  };
+  if (!g || !(Number(g.precio_usd) > 0)) return false;
+  // Se descuenta en centavos: lo mismo que JH ve en el panel ($2.18, no $2.184).
+  const cuerpo = { amount: redondear(g.precio_usd, 2), note: notaDe(g), detalle: detalleDe(g) };
   const r = await pool.query(
     `INSERT INTO pagos_eventos (generacion_id, referencia, tipo, cuerpo) VALUES ($1, $2, 'consumo', $3)
-     ON CONFLICT (generacion_id, tipo) DO NOTHING`, [g.id, referencia, JSON.stringify(cuerpo)]
+     ON CONFLICT (generacion_id, tipo) DO NOTHING`, [g.id, `mkt-gen-${g.id}`, JSON.stringify(cuerpo)]
   );
   return r.rowCount > 0;
 }
 
-// Espera entre intentos: 1, 2, 4... min, tope 1 h. Tras 12 intentos queda 'error' para Super Admin.
+// Red de seguridad: completadas cobradas sin su descuento encolado (p. ej. si fallo al encolar).
+async function encolarFaltantes() {
+  if (!configurado()) return 0;
+  const { rows } = await pool.query(
+    `SELECT g.id FROM generaciones g
+     WHERE g.estado = 'completado' AND g.cobro_externo AND g.gasto_informado IS NULL
+       AND NOT EXISTS (SELECT 1 FROM pagos_eventos e WHERE e.generacion_id = g.id)
+     ORDER BY g.id LIMIT 20`
+  );
+  let n = 0;
+  for (const { id } of rows) if (await informarConsumo(id)) n++;
+  return n;
+}
+
+// Espera entre intentos seguros: 1, 2, 4... min, tope 1 h, hasta 12 intentos.
 const MAX_INTENTOS = 12;
 const espera = (n) => Math.min(60, 2 ** Math.max(0, n - 1));
 
@@ -149,30 +153,53 @@ async function procesarCola({ limite = 10 } = {}) {
   );
   let hechos = 0;
   for (const ev of rows) {
+    // Se marca 'enviando' antes de pedir: si el worker muere a mitad, queda para revisar (no se repite solo).
+    const { rowCount } = await pool.query(`UPDATE pagos_eventos SET estado = 'enviando', proximo = now() WHERE id = $1 AND estado = 'pendiente'`, [ev.id]);
+    if (!rowCount) continue;
     try {
-      const r = await llamar('POST', '/consumos', ev.cuerpo, { idempotencia: ev.referencia });
+      const r = await ajustar({ amount: ev.cuerpo.amount, note: ev.cuerpo.note });
       await pool.query(`UPDATE pagos_eventos SET estado = 'hecho', intentos = intentos + 1, hecho = now(), respuesta = $2, ultimo_error = NULL WHERE id = $1`, [ev.id, JSON.stringify(r).slice(0, 2000)]);
       await pool.query(`UPDATE generaciones SET gasto_informado = now() WHERE id = $1`, [ev.generacion_id]);
       hechos++;
     } catch (e) {
-      // 4xx (menos 408/429) no se arregla reintentando: queda en error para revisar en Super Admin.
-      const sinArreglo = e.status >= 400 && e.status < 500 && ![408, 429].includes(e.status);
-      const final = sinArreglo || ev.intentos + 1 >= MAX_INTENTOS;
+      const repetir = e.seguro && ev.intentos + 1 < MAX_INTENTOS;
       await pool.query(
         `UPDATE pagos_eventos SET intentos = intentos + 1, ultimo_error = $2, estado = $3,
            proximo = now() + ($4 || ' minutes')::interval WHERE id = $1`,
-        [ev.id, e.message.slice(0, 500), final ? 'error' : 'pendiente', espera(ev.intentos + 1)]
+        [ev.id, (e.seguro ? '' : 'Puede que se haya descontado: revisa en la plataforma antes de reintentar. ') + e.message.slice(0, 400),
+          repetir ? 'pendiente' : 'error', espera(ev.intentos + 1)]
       );
     }
   }
   return { hechos, revisados: rows.length };
 }
 
+// Lo que quedo 'enviando' (el worker se cayo a mitad) pasa a error para revisar; nunca se repite solo.
+async function liberarEnviando() {
+  const { rowCount } = await pool.query(
+    `UPDATE pagos_eventos SET estado = 'error', ultimo_error = 'Se cortó mientras se enviaba: puede que se haya descontado. Revisa en la plataforma antes de reintentar.'
+     WHERE estado = 'enviando' AND proximo < now() - interval '5 minutes'`
+  );
+  return rowCount;
+}
+
 async function reintentar(id) {
-  const r = await pool.query(`UPDATE pagos_eventos SET estado = 'pendiente', proximo = now(), intentos = 0 WHERE id = $1 AND estado = 'error'`, [id]);
+  const r = await pool.query(`UPDATE pagos_eventos SET estado = 'pendiente', proximo = now() WHERE id = $1 AND estado = 'error'`, [id]);
   return r.rowCount > 0;
 }
 
+// Se verificó en la plataforma que sí entró (o se descontó a mano): se da por hecho sin reenviar.
+async function marcarHecho(id, por) {
+  const { rows: [ev] } = await pool.query(
+    `UPDATE pagos_eventos SET estado = 'hecho', hecho = now(), respuesta = $2 WHERE id = $1 AND estado = 'error' RETURNING generacion_id`,
+    [id, JSON.stringify({ marcado_a_mano_por: por })]
+  );
+  if (!ev) return false;
+  await pool.query(`UPDATE generaciones SET gasto_informado = now() WHERE id = $1`, [ev.generacion_id]);
+  return true;
+}
+
 module.exports = {
-  configurado, llamar, firmar, detalleDe, descripcionDe, informarConsumo, procesarCola, reintentar, PagosError, MAX_INTENTOS,
+  configurado, ajustar, detalleDe, notaDe, informarConsumo, encolarFaltantes, procesarCola, liberarEnviando,
+  reintentar, marcarHecho, PagosError, MAX_INTENTOS,
 };

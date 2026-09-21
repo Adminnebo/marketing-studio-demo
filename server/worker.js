@@ -140,7 +140,7 @@ async function revisarEnProceso() {
         await pool.query(`UPDATE generaciones SET estado = 'completado', resultados = $2, terminado = now(), revisado = now() WHERE id = $1`, [g.id, JSON.stringify(resultados)]);
         log(`#${g.id} completada (${ok.length} resultado/s)`);
         // Lo cobrado se informa a la plataforma central con el detalle completo (va por la cola).
-        if (await pagos.informarConsumo(g.id).catch((e) => { log(`#${g.id} no se pudo encolar el consumo: ${e.message}`); return false; })) log(`#${g.id} consumo encolado para la plataforma de pagos`);
+        if (await pagos.informarConsumo(g.id).catch((e) => { log(`#${g.id} no se pudo encolar el descuento: ${e.message}`); return false; })) log(`#${g.id} descuento encolado para la plataforma de pagos`);
       } else {
         const motivo = st.includes('nsfw') ? 'El contenido fue rechazado por el filtro de seguridad. Prueba con otra imagen o descripción.' : 'La generación falló. Intenta de nuevo o prueba otra plantilla.';
         await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, error_detalle = $4, terminado = now(), revisado = now() WHERE id = $1`,
@@ -246,10 +246,14 @@ async function ciclo() {
   } catch (e) {
     log('No se pudieron clasificar plantillas:', e.message);
   }
-  // Plataforma de pagos: gastos por informar (cuando exista el endpoint de gasto).
+  // Plataforma de pagos: descontar del saldo de JH lo creado (POST /api/credits/adjust).
   try {
+    const f = await pagos.encolarFaltantes();
+    if (f) log(`pagos: ${f} descuento/s encolado/s que faltaban`);
+    const cortados = await pagos.liberarEnviando();
+    if (cortados) log(`pagos: ${cortados} descuento/s cortado/s a mitad, quedan para revisar`);
     const r = await pagos.procesarCola();
-    if (r.hechos) log(`pagos: ${r.hechos} gasto/s informado/s`);
+    if (r.hechos) log(`pagos: ${r.hechos} descuento/s aplicado/s en la plataforma`);
   } catch (e) {
     log('Error con la plataforma de pagos:', e.message);
   }
