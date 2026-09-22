@@ -149,6 +149,13 @@ El equipo le pide un producto a Camila en lenguaje natural (botón **Camila · B
 - **Datos de la ficha técnica**: con un producto elegido con Camila, el paso "Descripción" (Desde cero) y el cuadro "¿Quieres cambiar algo?" (plantillas) muestran "📄 Datos de la ficha técnica". La IA (`gpt-4.1-mini`, misma `OPENAI_API_KEY`) lee el PDF del bucket de fichas y devuelve solo lo pertinente (identidad, lo que se ve, 2-3 datos para destacar); se revisa y se añade con un toque. Cada ficha se lee una vez y queda en `camila_fichas` (~US$0.002 la primera vez). Ruta `POST /api/camila/ficha` (`server/lib/fichas.js`).
 - Variables en `panel`: `CAMILA_N8N_URL` y `CAMILA_N8N_TOKEN`. Sin ellas Camila igual se ve, avisa que no está conectada y no busca nada. Las respuestas tardan 10-25 s (DeepSeek con razonamiento).
 
+## Publicar en redes: permiso, caption e hashtags
+
+- **Permiso**: solo publica o programa quien tiene "Puede publicar en redes" (Super Admin → Usuarios; columna `accesos.puede_publicar`). Los super admin siempre (menos en "Ver como"). La pestaña Redes la ven los admin y quien tiene el permiso; conectar o quitar cuentas es solo de admin.
+- **Caption con IA**: en la ventana de publicar, "✨ Escribir con IA" con tono (cercano, profesional, promoción) e indicaciones. Usa la imagen, el producto y, si se eligió con Camila, los datos ya leídos de su ficha técnica. No inventa precios, promociones, teléfonos ni links. `POST /api/publicaciones/caption` (`server/lib/captions.js`, `gpt-4.1-mini`, ~US$0.001).
+- **Hashtags recomendados**: 12-15 sugerencias (marca primero, producto, uso, local, sector); "Auto" marca los ideales para las redes elegidas (Instagram 10, TikTok 4, Facebook/LinkedIn/Threads/YouTube 3, X 2) con al menos uno local; se suman al final del texto y cuentan en el límite.
+- **Programar**: "Publicar ahora" o "Programar" con fecha y atajos (hoy/mañana 12:00 y 7:00 p. m.).
+
 ## Desarrollo local
 
 ```bash

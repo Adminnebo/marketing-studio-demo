@@ -117,7 +117,7 @@ app.get('/api/me', ruta(async (req, res) => {
   const a = await ajustes.leer();
   res.json({
     email: req.user.email, nombre: req.user.nombre, rol: req.user.rol,
-    rolReal: req.user.rolReal, verComo: req.user.rol !== req.user.rolReal ? req.user.rol : null,
+    rolReal: req.user.rolReal, verComo: req.user.rol !== req.user.rolReal ? req.user.rol : null, puedePublicar: !!req.user.puedePublicar,
     // Precio de 1 credito para JH (costo + ganancia); el costo solo lo ve el super_admin.
     precios: ajustes.precioCredito(a) != null
       ? { precioCredito: ajustes.precioCredito(a), ...(req.user.rol === 'super_admin' ? { usdPorCredito: a.usd_por_credito, margenPct: a.margen_pct } : {}) }
@@ -393,8 +393,10 @@ app.get('/api/creditos', ruta(async (req, res) => {
 // Camila: busca productos de JH y deja la foto lista para crear (server/camila.js).
 app.use('/api', require('./camila').router);
 
-// Redes sociales (conectar cuentas y publicar): admin de Marketing en adelante.
-app.use(['/api/redes', '/api/publicaciones'], auth.requireRol('admin'));
+// Redes sociales: ver cuentas y publicaciones = admin o quien tiene permiso de publicar;
+// publicar/programar exige el permiso (server/redes.js); conectar cuentas, admin.
+app.use(['/api/redes', '/api/publicaciones'], (req, res, next) => (auth.NIVEL[req.user.rol] >= auth.NIVEL.admin || req.user.puedePublicar ? next()
+  : res.status(403).json({ error: 'No tienes permiso para esto.' })));
 app.use('/api', require('./redes').router);
 
 // Super Admin (margen, usuarios, consumo).
@@ -410,6 +412,7 @@ app.get(/^(?!\/api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html')
 async function arrancar() {
   await migrar();
   await require('./lib/camila').migrar();
+  await require('./lib/permisos').migrar();
   require('./lib/jh-catalogo').calentar();
   if (await hf.sembrarToken()) console.log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   // Webhook de Zernio: se registra solo en cuanto hay clave y secreto.

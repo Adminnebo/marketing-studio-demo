@@ -161,3 +161,5 @@ export const usarProductoCamila = (datos) => api('/camila/usar', { method: 'POST
 export const fichaCamila = (codigo) => api('/camila/ficha', { method: 'POST', body: JSON.stringify({ codigo }) });
 export const fetchZernioSetup = () => api('/superadmin/zernio');
 export const elegirPerfilZernio = (id) => api('/superadmin/zernio/perfil', { method: 'PUT', body: JSON.stringify({ id }) });
+export const captionPublicacion = (datos) => api('/publicaciones/caption', { method: 'POST', body: JSON.stringify(datos) });
+export const cambiarPermisoPublicar = (id, valor) => api(`/superadmin/usuarios/${id}/publicar`, { method: 'PUT', body: JSON.stringify({ valor }) });

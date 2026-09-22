@@ -1,6 +1,6 @@
 import RedesSetup from './RedesSetup';
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, clasificarPlantillas, registrarWebhookRedes } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, cred } from '../precio';
 
@@ -341,6 +341,11 @@ function Usuarios({ yo }) {
     return (lista || []).filter((u) => (!solo || u.acceso) && (!t || (u.email || '').toLowerCase().includes(t) || (u.nombre || '').toLowerCase().includes(t)));
   }, [lista, q, solo]);
 
+  const permisoPublicar = async (u, valor) => {
+    setGuardando(u.id);
+    try { await cambiarPermisoPublicar(u.id, valor); setLista((l) => l.map((x) => (x.id === u.id ? { ...x, puedePublicar: valor } : x))); }
+    catch (e) { setMsg({ error: e.message }); } finally { setGuardando(null); }
+  };
   const cambiar = async (u, acceso) => {
     setGuardando(u.id);
     setMsg(null);
@@ -364,7 +369,7 @@ function Usuarios({ yo }) {
       {!lista ? <div className="loading"><div className="spinner" /></div> : (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Usuario</th><th>Rol en los paneles</th><th>Acceso a Marketing</th><th>Dado por</th></tr></thead>
+            <thead><tr><th>Usuario</th><th>Rol en los paneles</th><th>Acceso a Marketing</th><th>Puede publicar en redes</th><th>Dado por</th></tr></thead>
             <tbody>
               {visibles.map((u) => (
                 <tr key={u.id}>
@@ -377,6 +382,13 @@ function Usuarios({ yo }) {
                         <option value="usuario">Usuario</option>
                         <option value="admin">Admin</option>
                       </select>
+                    )}
+                  </td>
+                  <td>
+                    {u.acceso === 'super_admin' ? <span className="ms-cost">Siempre</span> : !u.acceso ? <span className="ms-cost">—</span> : (
+                      <label className="user-admin-check" title="Solo quien tiene este permiso puede publicar o programar en redes">
+                        <input type="checkbox" checked={!!u.puedePublicar} disabled={guardando === u.id} onChange={(e) => permisoPublicar(u, e.target.checked)} /> {u.puedePublicar ? 'Sí' : 'No'}
+                      </label>
                     )}
                   </td>
                   <td className="trunc">{u.otorgadoPor || ''}</td>

@@ -216,3 +216,21 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 /* "Ver como": aviso de vista de prueba (solo super admin) */
 .hd-menu-vista { margin: 4px 5px; padding: 8px 10px; border-radius: 9px; font-size: 0.78rem; line-height: 1.45; color: var(--text-secondary); background: color-mix(in srgb, var(--warning) 14%, transparent); }
 .hd-menu-vista b { color: var(--text-primary); }
+
+/* ── Publicar: caption con IA, hashtags y atajos de horario ── */
+.pb-ia { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.pb-tonos { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; gap: 2px; }
+.pb-tono { border: 0; background: none; font: inherit; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); padding: 5px 10px; border-radius: 7px; cursor: pointer; }
+.pb-tono.on { background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow); }
+.pb-indic { flex: 1 1 200px; min-width: 0; padding: 7px 10px; font-size: 0.8rem; }
+.pb-escribir { flex: none; }
+.pb-tags { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.pb-tags-cab { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pb-tags-l { display: flex; flex-wrap: wrap; gap: 5px; }
+.pb-tag { font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 4px 10px; border-radius: 999px; border: 1px dashed var(--baseline); background: none; color: var(--text-muted); }
+.pb-tag.on { border-style: solid; border-color: transparent; background: color-mix(in srgb, var(--series-1) 14%, transparent); color: var(--series-1); }
+.pb-tag.on.t-marca { background: color-mix(in srgb, var(--series-5) 16%, transparent); color: var(--series-5); }
+.pb-tag.on.t-local { background: color-mix(in srgb, var(--series-2) 16%, transparent); color: var(--series-2); }
+.pb-atajos { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pb-atajo { font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); }
+.pb-atajo.on { border-color: var(--series-1); color: var(--series-1); background: color-mix(in srgb, var(--series-1) 8%, var(--surface-1)); }

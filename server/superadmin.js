@@ -204,13 +204,14 @@ router.post('/superadmin/recargas', ruta(async (req, res) => {
 }));
 
 router.get('/superadmin/usuarios', ruta(async (req, res) => {
-  const [perfiles, { rows }] = await Promise.all([auth.perfiles(), pool.query('SELECT user_id, rol, otorgado_por, actualizado FROM accesos')]);
+  const [perfiles, { rows }] = await Promise.all([auth.perfiles(), pool.query('SELECT user_id, rol, puede_publicar, otorgado_por, actualizado FROM accesos')]);
   const acc = new Map(rows.map((r) => [r.user_id, r]));
   res.json({
     usuarios: perfiles.map((p) => ({
       id: p.id, email: p.email, nombre: p.full_name || null, rolPaneles: p.role || 'agent',
       acceso: p.role === 'super_admin' ? 'super_admin' : acc.get(p.id)?.rol || null,
       otorgadoPor: acc.get(p.id)?.otorgado_por || null, actualizado: acc.get(p.id)?.actualizado || null,
+      puedePublicar: p.role === 'super_admin' ? true : !!acc.get(p.id)?.puede_publicar,
     })),
   });
 }));
@@ -232,6 +233,18 @@ router.put('/superadmin/usuarios/:id', ruta(async (req, res) => {
   }
   console.log(`[accesos] ${req.user.email} -> ${p.email}: ${acceso || 'sin acceso'}`);
   res.json({ ok: true, acceso });
+}));
+
+// Permiso de publicar en redes (solo para quien ya tiene acceso al panel).
+router.put('/superadmin/usuarios/:id/publicar', ruta(async (req, res) => {
+  const valor = req.body?.valor === true;
+  const p = (await auth.perfiles()).find((x) => x.id === req.params.id);
+  if (!p) throw errPublico('Ese usuario no existe.', 404);
+  if (p.role === 'super_admin') throw errPublico('Los super admin siempre pueden publicar.');
+  const r = await pool.query('UPDATE accesos SET puede_publicar = $2, otorgado_por = $3, actualizado = now() WHERE user_id = $1', [p.id, valor, req.user.email]);
+  if (!r.rowCount) throw errPublico('Primero dale acceso a Marketing.');
+  console.log(`[accesos] ${req.user.email} -> ${p.email}: ${valor ? 'puede' : 'no puede'} publicar`);
+  res.json({ ok: true, puedePublicar: valor });
 }));
 
 // Consumo del mes (YYYY-MM, hora de Santo Domingo). Solo cuenta lo completado;

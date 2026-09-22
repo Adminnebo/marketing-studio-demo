@@ -6,6 +6,10 @@
 const express = require('express');
 const { pool } = require('./lib/db');
 const zernio = require('./lib/zernio');
+const auth = require('./lib/auth');
+const { requirePublicar } = require('./lib/permisos');
+const captions = require('./lib/captions');
+const soloAdmin = auth.requireRol('admin');
 
 const redesP = import('../shared/redes.mjs');
 const router = express.Router();
@@ -39,7 +43,7 @@ const cuentasPanel = async () => { const { REDES } = await redesP; return (await
 router.get('/redes/cuentas', ruta(async (req, res) => res.json({ cuentas: await cuentasPanel() })));
 
 // Devuelve la URL de autorizacion de la red; al terminar vuelve al panel.
-router.post('/redes/conectar', ruta(async (req, res) => {
+router.post('/redes/conectar', soloAdmin, ruta(async (req, res) => {
   const { REDES } = await redesP;
   const plataforma = String(req.body?.plataforma || '');
   if (!REDES[plataforma]) return res.status(400).json({ error: 'Red no soportada.' });
@@ -48,7 +52,7 @@ router.post('/redes/conectar', ruta(async (req, res) => {
   res.json({ url });
 }));
 
-router.delete('/redes/cuentas/:id', ruta(async (req, res) => {
+router.delete('/redes/cuentas/:id', soloAdmin, ruta(async (req, res) => {
   const lista = await cuentasPanel();
   if (!lista.some((c) => c.id === req.params.id)) return res.status(404).json({ error: 'Esa cuenta no está conectada a este panel.' });
   await zernio.desconectar(req.params.id);
@@ -94,7 +98,28 @@ function cuerpoZernio({ texto, medio, cuentas, opciones, modo, fechaLocal, zona 
   return cuerpo;
 }
 
-router.post('/publicaciones', ruta(async (req, res) => {
+// Caption y hashtags recomendados con IA para un resultado (antes de publicar).
+router.post('/publicaciones/caption', requirePublicar, async (req, res) => {
+  const b = req.body || {};
+  const { REDES, limiteDe, tipoMedio } = await redesP;
+  try {
+    const { rows: [g] } = await pool.query('SELECT id, preset_nombre, entrada, portada, resultados FROM generaciones WHERE id = $1', [Number(b.generacion_id) || 0]);
+    if (!g) return res.status(404).json({ error: 'Esa creación no existe.' });
+    const redes = (Array.isArray(b.redes) ? b.redes : []).filter((r) => REDES[r]);
+    const ok = (g.resultados || []).filter((r) => r.url);
+    const tipo = tipoMedio(ok[Math.min(Number(b.indice) || 0, ok.length - 1)]?.url);
+    // Deja lugar para los hashtags dentro del limite de la red mas corta.
+    const limite = redes.length ? Math.min(...redes.map((r) => limiteDe(r, tipo))) : 2200;
+    const largo = Math.max(120, Math.min(1200, limite - (limite <= 300 ? 60 : 180)));
+    res.json(await captions.generar({ generacion: g, indice: Number(b.indice) || 0, redes: redes.map((r) => REDES[r].nombre), tono: b.tono, indicaciones: b.indicaciones, largo }));
+  } catch (e) {
+    if (e instanceof captions.ErrorDeCaption) { console.error('[captions]', e.message, e.detalle || ''); return res.status(e.status).json({ error: e.message }); }
+    console.error('[captions]', e.message);
+    res.status(500).json({ error: 'Error interno. Intenta de nuevo.' });
+  }
+});
+
+router.post('/publicaciones', requirePublicar, ruta(async (req, res) => {
   const { validarPublicacion, tipoMedio, DESDE_ZERNIO } = await redesP;
   const b = req.body || {};
   const { rows: [g] } = await pool.query('SELECT id, estado, resultados FROM generaciones WHERE id = $1', [Number(b.generacion_id) || 0]);
@@ -154,7 +179,7 @@ router.get('/publicaciones', ruta(async (req, res) => {
 }));
 
 // Cancelar una programada (antes de que salga).
-router.post('/publicaciones/:id/cancelar', ruta(async (req, res) => {
+router.post('/publicaciones/:id/cancelar', requirePublicar, ruta(async (req, res) => {
   const { rows: [p] } = await pool.query('SELECT id, estado, zernio_post_id FROM publicaciones WHERE id = $1', [Number(req.params.id) || 0]);
   if (!p) return res.status(404).json({ error: 'No existe.' });
   if (p.estado !== 'programada' || !p.zernio_post_id) return res.status(400).json({ error: 'Solo se pueden cancelar publicaciones programadas.' });

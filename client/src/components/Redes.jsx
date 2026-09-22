@@ -69,7 +69,7 @@ function Publicacion({ p, onCambio }) {
   );
 }
 
-export default function Redes({ estado, cuentas, errorCuentas, publicaciones, aviso, onRecargar }) {
+export default function Redes({ estado, cuentas, errorCuentas, publicaciones, aviso, onRecargar, administrar = true }) {
   const [conectando, setConectando] = useState(null);
   const [error, setError] = useState(null);
 
@@ -113,15 +113,15 @@ export default function Redes({ estado, cuentas, errorCuentas, publicaciones, av
           <div className="rs-cuentas">
             {cuentas.map((c) => (
               <Cuenta key={c.id} c={c}>
-                {c.reconectar && <button className="mini-btn danger" onClick={() => conectar(c.plataforma)}>Reconectar</button>}
-                <button className="mini-btn rs-quitar" onClick={() => quitar(c)} title="Desconectar" aria-label="Desconectar">✕</button>
+                {administrar && c.reconectar && <button className="mini-btn danger" onClick={() => conectar(c.plataforma)}>Reconectar</button>}
+                {administrar && <button className="mini-btn rs-quitar" onClick={() => quitar(c)} title="Desconectar" aria-label="Desconectar">✕</button>}
               </Cuenta>
             ))}
           </div>
         ) : (
           <div className="card-sub">Todavía no hay cuentas conectadas. Conecta una para poder publicar.</div>
         )}
-        <div className="rs-conectar">
+        {administrar ? <><div className="rs-conectar">
           <span className="filter-lbl">Conectar:</span>
           {Object.entries(REDES).map(([k, r]) => (
             <button key={k} className="chip sm" disabled={!!conectando} onClick={() => conectar(k)} title={r.nota || ''}>
@@ -131,7 +131,7 @@ export default function Redes({ estado, cuentas, errorCuentas, publicaciones, av
         </div>
         <div className="card-sub" style={{ margin: '10px 0 0' }}>
           Se abre el inicio de sesión de la red. Al aceptar vuelves aquí con la cuenta conectada. Facebook pide elegir la Página; Instagram debe ser una cuenta profesional.
-        </div>
+        </div></> : <div className="card-sub" style={{ margin: '10px 0 0' }}>Para conectar o quitar cuentas, pídeselo a un admin.</div>}
       </div>
 
       <div className="section-title">Publicaciones</div>

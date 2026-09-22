@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { publicar, fetchInfoTiktok } from '../api';
+import { publicar, fetchInfoTiktok, captionPublicacion } from '../api';
 import { REDES, tipoMedio, limiteDe, validarPublicacion } from '@shared/redes.mjs';
 import { Cuenta } from './Redes';
 
 const ZONA = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Santo_Domingo';
 const dosDig = (n) => String(n).padStart(2, '0');
+// Cuantos hashtags conviene por red (se usa el de la red mas exigente entre las elegidas).
+const HASHTAGS_POR_RED = { instagram: 10, tiktok: 4, facebook: 3, linkedin: 3, threads: 3, youtube: 3, twitter: 2 };
+const TONOS = [['cercano', 'Cercano'], ['profesional', 'Profesional'], ['promocion', 'Promoción']];
+// Atajos de horario (hora local): [etiqueta, dias desde hoy, hora].
+const ATAJOS = [['Hoy 12:00 p. m.', 0, 12], ['Hoy 7:00 p. m.', 0, 19], ['Mañana 12:00 p. m.', 1, 12], ['Mañana 7:00 p. m.', 1, 19]];
+// Los n mas relevantes (vienen ordenados), con al menos uno local si entran 4 o mas.
+function elegirAuto(lista, n) {
+  const elegidos = lista.slice(0, n);
+  if (n >= 4 && !elegidos.some((t) => t.tipo === 'local')) {
+    const local = lista.find((t) => t.tipo === 'local');
+    if (local) elegidos[elegidos.length - 1] = local;
+  }
+  return new Set(elegidos.map((t) => t.tag));
+}
 const localInput = (d) => `${d.getFullYear()}-${dosDig(d.getMonth() + 1)}-${dosDig(d.getDate())}T${dosDig(d.getHours())}:${dosDig(d.getMinutes())}`;
 
 // Modal para publicar (o programar) un resultado en las cuentas conectadas.
@@ -24,6 +38,12 @@ export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, on
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
   const [hecha, setHecha] = useState(null);
+  const [tono, setTono] = useState('cercano');
+  const [indicIa, setIndicIa] = useState('');
+  const [escribiendo, setEscribiendo] = useState(false);
+  const [errIa, setErrIa] = useState(null);
+  const [tags, setTags] = useState([]); // sugeridos: [{ tag, tipo }]
+  const [tagsOn, setTagsOn] = useState(() => new Set());
 
   const elegidas = (cuentas || []).filter((c) => sel.has(c.id));
   const cuentaTk = elegidas.find((c) => c.plataforma === 'tiktok');
@@ -50,10 +70,25 @@ export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, on
   const tkOn = (api) => tkInfo?.interacciones?.[api]?.enabled !== false;
   const tkEfectivo = { ...tk, comentarios: tk.comentarios && tkOn('allow_comment'), duo: tk.duo && tkOn('allow_duet'), stitch: tk.stitch && tkOn('allow_stitch') };
   const opciones = { instagram: ig, youtube: yt, tiktok: tkEfectivo };
+  // Texto final = lo escrito + los hashtags elegidos al final.
+  const elegidosTags = tags.filter((t) => tagsOn.has(t.tag)).map((t) => t.tag);
+  const textoFinal = elegidosTags.length ? `${texto.trimEnd()}${texto.trim() ? '\n\n' : ''}${elegidosTags.join(' ')}` : texto;
+  const cuantosTags = elegidas.length ? Math.min(...elegidas.map((c) => HASHTAGS_POR_RED[c.plataforma] ?? 5)) : 5;
+  const escribirConIa = async () => {
+    setEscribiendo(true); setErrIa(null);
+    try {
+      const r = await captionPublicacion({ generacion_id: generacion.id, indice, redes: [...new Set(elegidas.map((c) => c.plataforma))], tono, indicaciones: indicIa });
+      setTexto(r.caption || '');
+      setTags(r.hashtags || []);
+      setTagsOn(elegirAuto(r.hashtags || [], cuantosTags)); // auto: los mas relevantes
+    } catch (e) { setErrIa(e.message); } finally { setEscribiendo(false); }
+  };
+  const alternarTag = (t) => setTagsOn((s) => { const n = new Set(s); if (n.has(t)) n.delete(t); else n.add(t); return n; });
+  const autoTags = () => setTagsOn(elegirAuto(tags, cuantosTags));
   const fechaIso = modo === 'programar' && fecha ? new Date(fecha).toISOString() : null;
   const errores = useMemo(
-    () => validarPublicacion({ texto, tipo, cuentas: elegidas, opciones, modo, fecha: fechaIso }),
-    [texto, tipo, elegidas, ig, yt, tk, tkInfo, modo, fechaIso] // eslint-disable-line react-hooks/exhaustive-deps
+    () => validarPublicacion({ texto: textoFinal, tipo, cuentas: elegidas, opciones, modo, fecha: fechaIso }),
+    [textoFinal, tipo, elegidas, ig, yt, tk, tkInfo, modo, fechaIso] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const limite = elegidas.length ? Math.min(...elegidas.map((c) => limiteDe(c.plataforma, tipo))) : null;
 
@@ -69,7 +104,7 @@ export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, on
     setError(null);
     try {
       const p = await publicar({
-        generacion_id: generacion.id, indice, texto, cuentas: [...sel], opciones, modo,
+        generacion_id: generacion.id, indice, texto: textoFinal, cuentas: [...sel], opciones, modo,
         fechaLocal: modo === 'programar' ? fecha : null, fechaIso, zona: ZONA,
       });
       setHecha(p);
@@ -124,10 +159,33 @@ export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, on
 
               <div>
                 <span className="ms-label">Texto de la publicación
-                  {limite != null && <span style={{ float: 'right', textTransform: 'none', color: texto.length > limite ? 'var(--critical)' : undefined }}>{texto.length} / {limite.toLocaleString('es')}</span>}
+                  {limite != null && <span style={{ float: 'right', textTransform: 'none', color: textoFinal.length > limite ? 'var(--critical)' : undefined }}>{textoFinal.length} / {limite.toLocaleString('es')}{elegidosTags.length ? ' con hashtags' : ''}</span>}
                 </span>
-                <textarea className="ms-textarea" value={texto} onChange={(e) => setTexto(e.target.value)} disabled={enviando}
-                  placeholder="Escribe el copy, hashtags, llamada a la acción…" />
+                <div className="pb-ia">
+                  <div className="pb-tonos" role="radiogroup" aria-label="Tono">
+                    {TONOS.map(([k, l]) => <button key={k} type="button" className={`pb-tono ${tono === k ? 'on' : ''}`} onClick={() => setTono(k)} aria-pressed={tono === k}>{l}</button>)}
+                  </div>
+                  <input className="ms-input pb-indic" maxLength={500} value={indicIa} onChange={(e) => setIndicIa(e.target.value)} disabled={escribiendo || enviando}
+                    placeholder="Indicaciones opcionales (ej.: promo de la semana, para electricistas…)" aria-label="Indicaciones para la IA" />
+                  <button type="button" className="btn pb-escribir" onClick={escribirConIa} disabled={escribiendo || enviando}>
+                    {escribiendo ? 'Escribiendo…' : texto.trim() ? '↻ Otra versión con IA' : '✨ Escribir con IA'}
+                  </button>
+                </div>
+                {errIa && <div className="ms-gen-err">{errIa}</div>}
+                <textarea className="ms-textarea" value={texto} onChange={(e) => setTexto(e.target.value)} disabled={enviando || escribiendo}
+                  placeholder={escribiendo ? 'La IA está escribiendo…' : 'Escribe el texto o deja que la IA lo escriba. Los hashtags van aparte, abajo.'} />
+                {tags.length > 0 && (
+                  <div className="pb-tags">
+                    <div className="pb-tags-cab">
+                      <span className="ms-label" style={{ margin: 0 }}>Hashtags recomendados · {elegidosTags.length} elegidos</span>
+                      <button type="button" className="linklike" onClick={autoTags} title={`Elige los ${cuantosTags} más relevantes para las redes marcadas`}>Auto ({cuantosTags} para {elegidas.length ? 'estas redes' : 'redes'})</button>
+                      {elegidosTags.length > 0 && <button type="button" className="linklike" onClick={() => setTagsOn(new Set())}>Ninguno</button>}
+                    </div>
+                    <div className="pb-tags-l">
+                      {tags.map((t) => <button key={t.tag} type="button" className={`pb-tag t-${t.tipo} ${tagsOn.has(t.tag) ? 'on' : ''}`} onClick={() => alternarTag(t.tag)} aria-pressed={tagsOn.has(t.tag)}>{t.tag}</button>)}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {elegidas.some((c) => c.plataforma === 'instagram') && (
@@ -186,6 +244,16 @@ export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, on
                     <input type="datetime-local" className="dr-date" value={fecha} min={localInput(new Date())} onChange={(e) => setFecha(e.target.value)} />
                   )}
                 </div>
+                {modo === 'programar' && (
+                  <div className="pb-atajos">
+                    {ATAJOS.map(([l, dias, hora]) => {
+                      const d = new Date(); d.setDate(d.getDate() + dias); d.setHours(hora, 0, 0, 0);
+                      if (d.getTime() < Date.now() + 5 * 60e3) return null; // ya paso
+                      const v = localInput(d);
+                      return <button key={l} type="button" className={`pb-atajo ${fecha === v ? 'on' : ''}`} onClick={() => setFecha(v)}>{l}</button>;
+                    })}
+                  </div>
+                )}
                 {modo === 'programar' && <div className="ms-cost" style={{ marginTop: 6 }}>Hora de {ZONA.replace('_', ' ')}</div>}
               </div>
 

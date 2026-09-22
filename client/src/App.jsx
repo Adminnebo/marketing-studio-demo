@@ -151,7 +151,7 @@ export default function App() {
     fetchMe().then((m) => {
       setMe(m);
       if (m.rol === 'super_admin') fetchSaldo().then(setSaldo).catch(() => {});
-      if (NIVEL[m.rol] >= NIVEL.admin) cargarRedes();
+      if (NIVEL[m.rol] >= NIVEL.admin || m.puedePublicar) cargarRedes();
     }).catch((e) => { if (e.sinAcceso) setSinAcceso(true); });
     fetchEstado().then(setEstado).catch(() => {});
     fetchCamilaEstado().then((e) => setCamila((c) => ({ ...c, conectada: !!e.configurado }))).catch(() => {});
@@ -200,7 +200,9 @@ export default function App() {
     );
   }
   if (!me) return <div className="app"><div className="loading"><div className="spinner" />Cargando…</div></div>;
-  const tabs = TABS.filter((t) => !t.min || NIVEL[me.rol] >= NIVEL[t.min]);
+  // Redes: admin o quien tiene permiso de publicar.
+  const verRedes = NIVEL[me.rol] >= NIVEL.admin || !!me.puedePublicar;
+  const tabs = TABS.filter((t) => !t.min || NIVEL[me.rol] >= NIVEL[t.min] || (t.id === 'redes' && verRedes));
 
   const enCurso = gens.items.filter((g) => EN_CURSO.has(g.estado)).length;
   // Saldo: el de la plataforma de pagos (USD) o, si no esta configurada, la billetera local (creditos).
@@ -359,15 +361,15 @@ export default function App() {
       {tab === 'generaciones' && (
         <Generaciones items={gens.items} cargando={gens.cargando} error={gens.error} hayMas={!!gens.siguiente}
           onMas={masGens} onRepetir={repetir} rol={me.rol} onCrear={() => setTab('plantillas')}
-          onPublicar={NIVEL[me.rol] >= NIVEL.admin ? (g, indice) => setPublicando({ g, indice }) : null} />
+          onPublicar={me.puedePublicar ? (g, indice) => setPublicando({ g, indice }) : null} />
       )}
 
       {tab === 'creditos' && <Creditos recarga={me.saldo} onRecargada={() => fetchMe().then(setMe).catch(() => {})} />}
 
       {tab === 'superadmin' && me.rol === 'super_admin' && <SuperAdmin yo={me.email} onAjustes={() => fetchMe().then(setMe).catch(() => {})} />}
 
-      {tab === 'redes' && NIVEL[me.rol] >= NIVEL.admin && (
-        <Redes estado={redesEstado} cuentas={cuentas} errorCuentas={errorCuentas} publicaciones={publicaciones}
+      {tab === 'redes' && verRedes && (
+        <Redes estado={redesEstado} cuentas={cuentas} errorCuentas={errorCuentas} publicaciones={publicaciones} administrar={NIVEL[me.rol] >= NIVEL.admin}
           aviso={avisoRedes} onRecargar={cargarRedes} />
       )}
 
