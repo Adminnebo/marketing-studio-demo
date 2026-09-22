@@ -20,6 +20,7 @@ const promptAuto = require('./lib/prompt-auto');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
 const saldoExterno = require('./lib/saldo-externo');
+const saldoMarketing = require('./lib/saldo-marketing');
 
 const router = express.Router();
 router.use('/superadmin', auth.requireRol('super_admin'));
@@ -146,7 +147,10 @@ router.post('/superadmin/plantillas/clasificar', ruta(async (req, res) => {
   clasificando = true;
   catalogo.olvidar();
   catalogo.todas().then((items) => clasificar.clasificarNuevas(items, { max: 60 }))
-    .then((r) => { console.log(`[clasificar] ${req.user.email}: ${r.hechas} nuevas clasificadas, quedan ${r.pendientes}`); catalogo.olvidar(); })
+    .then(async (r) => {
+      console.log(`[clasificar] ${req.user.email}: ${r.hechas} nuevas clasificadas, quedan ${r.pendientes}`); catalogo.olvidar();
+      if (r.uso?.entrada) await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'clasificar', detalle: `${r.hechas} plantillas`, ...r.uso, aJh: true });
+    })
     .catch((e) => console.error('[clasificar]', e.message))
     .finally(() => { clasificando = false; });
   res.json({ ok: true, iniciado: true });

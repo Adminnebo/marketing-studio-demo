@@ -124,9 +124,9 @@ app.post('/api/n8n/costo-camila', ruta(async (req, res) => {
   if (!conv || !b.execution_id || !(costo >= 0)) return res.status(400).json({ error: 'faltan datos' });
   const { rows: [c] } = await pool.query('SELECT email FROM camila_conversaciones WHERE id = $1', [Number(conv)]);
   if (!c) return res.json({ ok: true, cobrado: 0, motivo: 'conversacion desconocida' });
+  // Super admin: se registra igual y va al saldo general de JH.
   const perfil = (await auth.perfiles().catch(() => [])).find((p) => (p.email || '').toLowerCase() === c.email);
-  if (perfil?.role === 'super_admin') return res.json({ ok: true, cobrado: 0, motivo: 'super admin' });
-  const cobrado = await saldoMarketing.cobrarIa({ por: c.email, clase: 'camila', costoUsd: costo, ref: `camila:${b.execution_id}` });
+  const cobrado = await saldoMarketing.cobrarIa({ por: c.email, clase: 'camila', costoUsd: costo, ref: `camila:${b.execution_id}`, aJh: perfil?.role === 'super_admin' });
   console.log(`[camila] costo de la ejecucion ${b.execution_id} (${c.email}): ${costo} USD -> cobrado ${cobrado}`);
   res.json({ ok: true, cobrado });
 }));
@@ -371,10 +371,15 @@ app.post('/api/libre/autoprompt', ruta(async (req, res) => {
     });
     console.log(`[autoprompt] ${req.user.email} ${modelo.id} ${r.modelo} tokens ${r.tokens.entrada}/${r.tokens.salida} avisos ${r.avisos.length}`);
     // Costo de la IA al saldo de Marketing (se suma al total de la creacion que se haga con esta descripcion).
-    const costoIa = saldoMarketing.exento(req.user) ? 0 : await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'descripcion', modelo: r.modelo, entrada: r.tokens.entrada, salida: r.tokens.salida })
+    // Super admin: se registra igual y va al saldo general de JH.
+    const costoIa = await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'descripcion', modelo: r.modelo, entrada: r.tokens.entrada, salida: r.tokens.salida, aJh: saldoMarketing.exento(req.user) })
       .catch((e) => { console.error('[autoprompt] cobro IA', e.message); return 0; });
     res.json({ prompt: r.prompt, avisos: r.avisos, costoIa });
   } catch (e) {
+    if (e.uso) { // la IA respondio pero no sirvio: los tokens se gastaron igual
+      await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'descripcion', detalle: 'no salió', modelo: e.uso.modelo, entrada: e.uso.entrada, salida: e.uso.salida, aJh: saldoMarketing.exento(req.user) })
+        .catch((x) => console.error('[autoprompt] cobro IA', x.message));
+    }
     if (e instanceof promptAuto.ErrorDePrompt) {
       console.error('[autoprompt]', e.message, e.detalle || '');
       return res.status(e.status).json({ error: e.message });

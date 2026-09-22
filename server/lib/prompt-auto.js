@@ -478,15 +478,15 @@ function pedido({ imagenUrl, tipo, duracion = 5, conAudio = false, aspecto = '9:
 
 function leer(respuesta) {
   if (respuesta?.status === 'incomplete') {
-    throw new ErrorDePrompt('La IA no terminó el prompt. Probá de nuevo o escribilo a mano.', { detalle: respuesta.incomplete_details?.reason });
+    throw new ErrorDePrompt('La IA no terminó el prompt. Prueba de nuevo o escríbelo a mano.', { detalle: respuesta.incomplete_details?.reason });
   }
   const bloques = (respuesta?.output ?? []).flatMap((i) => i.content ?? []);
-  if (bloques.some((b) => b.type === 'refusal')) throw new ErrorDePrompt('La IA no quiso describir esa imagen. Probá con otra o escribí el prompt a mano.', { status: 422 });
+  if (bloques.some((b) => b.type === 'refusal')) throw new ErrorDePrompt('La IA no quiso describir esa imagen. Prueba con otra o escribe el prompt a mano.', { status: 422 });
   const texto = bloques.filter((b) => b.type === 'output_text').map((b) => b.text ?? '').join('');
   let d;
   try { d = JSON.parse(texto); } catch { throw new ErrorDePrompt('La IA devolvió el prompt con un formato inesperado.', { detalle: texto.slice(0, 300) }); }
   const prompt = typeof d?.prompt === 'string' ? d.prompt.trim() : '';
-  if (prompt.length < 200) throw new ErrorDePrompt('La IA devolvió un prompt incompleto. Probá de nuevo.');
+  if (prompt.length < 200) throw new ErrorDePrompt('La IA devolvió un prompt incompleto. Prueba de nuevo.');
   return {
     prompt,
     avisos: Array.isArray(d.avisos) ? d.avisos.filter((a) => typeof a === 'string' && a.trim()).map((a) => a.trim()) : [],
@@ -507,15 +507,17 @@ async function generar(datos, { fetch: pedir = globalThis.fetch } = {}) {
     });
   } catch (e) {
     if (e instanceof ErrorDePrompt) throw e;
-    throw new ErrorDePrompt('La IA no respondió. Probá de nuevo en un rato.', { status: 503, detalle: e.message });
+    throw new ErrorDePrompt('La IA no respondió. Prueba de nuevo en un rato.', { status: 503, detalle: e.message });
   }
   if (!r.ok) {
     const detalle = (await r.text().catch(() => '')).slice(0, 300);
     if (r.status === 401 || r.status === 403) throw new ErrorDePrompt('La clave de la IA no es válida. Avísale al administrador.', { status: 503, detalle });
-    if ([400, 404, 413, 422].includes(r.status)) throw new ErrorDePrompt('La IA rechazó la imagen. Probá con otra o escribí el prompt a mano.', { status: 422, detalle });
-    throw new ErrorDePrompt('La IA está saturada o no respondió. Probá de nuevo en un rato.', { status: 503, detalle });
+    if ([400, 404, 413, 422].includes(r.status)) throw new ErrorDePrompt('La IA rechazó la imagen. Prueba con otra o escribe el prompt a mano.', { status: 422, detalle });
+    throw new ErrorDePrompt('La IA está saturada o no respondió. Prueba de nuevo en un rato.', { status: 503, detalle });
   }
-  return leer(await r.json());
+  const j = await r.json();
+  try { return leer(j); } catch (e) { e.uso = usoDe(j); throw e; } // la IA respondio: esos tokens se gastaron igual
 }
+const usoDe = (j) => ({ modelo: j?.model || MODELO_PROMPT, entrada: j?.usage?.input_tokens || 0, salida: j?.usage?.output_tokens || 0 });
 
 module.exports = { generar, pedido, leer, tramos, ritmo, configurado, ErrorDePrompt, INSTRUCCIONES_VIDEO, INSTRUCCIONES_FOTO };

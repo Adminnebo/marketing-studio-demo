@@ -8,7 +8,7 @@
  *  - saldo_negativo_permitido: con saldo externo, hasta cuantos USD por debajo de cero se deja crear
  *    (0 = solo con saldo positivo que cubra el costo).
  *  - informar_super_admin: 1 = las creaciones de super admins tambien se descuentan del saldo de JH en la
- *    plataforma de pagos (con la marca "super admin" en la nota). 0 = no se informan (por defecto).
+ *    plataforma de pagos (con la marca "super admin" en la nota; por defecto). 0 = no se informan.
  */
 const { pool } = require('./db');
 
@@ -19,7 +19,7 @@ const DEFECTOS = {
   margen_pct: 0,
   limite_diario_creditos: 0,
   saldo_negativo_permitido: 0,
-  informar_super_admin: 0,
+  informar_super_admin: 1, // todo lo de super admins tambien se cobra a JH (pedido 2026-09-22)
 };
 const NUMEROS = ['costo_auto', 'usd_por_credito', 'margen_pct', 'limite_diario_creditos', 'saldo_negativo_permitido', 'informar_super_admin'];
 

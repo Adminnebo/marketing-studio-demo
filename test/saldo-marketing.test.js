@@ -117,4 +117,30 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal(ajustados.length, antes);
     await assert.rejects(sm.fijarSaldo({ objetivoUsd: -1, por: 'jefe@x' }), /entre \$0/);
   });
+
+  test('super admin y sistema: se registran aparte, no tocan el saldo de Marketing y van a JH por lotes', async () => {
+    const antes = await sm.saldo();
+    const n0 = ajustados.length;
+    assert.ok(await sm.cobrarIa({ por: 'admin@nebo', clase: 'descripcion', costoUsd: 0.004, aJh: true }) > 0);
+    assert.ok(await sm.cobrarIa({ por: 'sistema', clase: 'clasificar', costoUsd: 0.002, aJh: true }) > 0);
+    assert.equal(await sm.saldo(), antes); // Marketing no lo paga
+    assert.equal((await sm.gastoDelMes()).jhUsd, 0.0072);
+    assert.ok(!(await sm.movimientos()).some((m) => m.a_jh)); // el equipo no lo ve
+    assert.equal((await sm.movimientos(60, { conJh: true })).filter((m) => m.a_jh).length, 2);
+    // no llega: se deshace y se reintenta
+    sm._probar({ activo: true, resumen: async () => ({ disponibleUsd: 100 }), ajustar: async () => { throw Object.assign(new Error('ECONNRESET'), { seguro: true }); } });
+    assert.equal((await sm.enviarAJh()).estado, 'reintentar');
+    sm._probar({ activo: true, resumen: async () => ({ disponibleUsd: 100 }), ajustar: async (a) => { ajustados.push(a); return { success: true }; } });
+    const l = await sm.enviarAJh();
+    assert.equal(l.estado, 'enviado');
+    assert.equal(l.usd, 0.01); // $0.0072 redondeado a centavos
+    assert.equal(ajustados.length, n0 + 1);
+    assert.match(ajustados.at(-1).note, /super admin \/ sistema\) · 2 usos .*Clasificación de plantillas/);
+    assert.equal(await sm.enviarAJh(), null); // nada pendiente: no se manda dos veces
+    // incierto: queda para revisar y no se repite
+    await sm.cobrarIa({ por: 'admin@nebo', clase: 'caption', costoUsd: 0.05, aJh: true });
+    sm._probar({ activo: true, resumen: async () => ({ disponibleUsd: 100 }), ajustar: async () => { throw new Error('HTTP 500'); } });
+    assert.equal((await sm.enviarAJh()).estado, 'revisar');
+    assert.equal(await sm.enviarAJh(), null);
+  });
 }

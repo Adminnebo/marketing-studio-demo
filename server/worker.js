@@ -215,6 +215,7 @@ async function clasificarPlantillas() {
   catalogo.olvidar();
   const r = await clasificar.clasificarNuevas(await catalogo.todas(), { max: 60 });
   if (r.hechas || r.pendientes) log(`plantillas: ${r.hechas} nuevas clasificadas, quedan ${r.pendientes}`);
+  if (r.uso?.entrada) await saldoMarketing.cobrarIa({ por: 'sistema', clase: 'clasificar', detalle: `${r.hechas} plantillas`, ...r.uso, aJh: true }).catch((e) => log(`clasificar: no se pudo registrar el costo (${e.message})`));
 }
 
 // Sesion de la CLI: se usa (y asi se renueva) cada 6 h aunque nadie genere con esos modelos.
@@ -229,6 +230,7 @@ async function mantenerCli() {
 }
 
 let ultimoAviso = 0;
+let ultimoLoteJh = 0;
 async function ciclo() {
   try {
     await hf.accessToken(); // renueva si hace falta
@@ -259,6 +261,16 @@ async function ciclo() {
     if (r.hechos) log(`pagos: ${r.hechos} descuento/s aplicado/s en la plataforma`);
   } catch (e) {
     log('Error con la plataforma de pagos:', e.message);
+  }
+  // IA de super admins y del sistema: al saldo general de JH, por lotes (cada 10 min).
+  try {
+    if (Date.now() - ultimoLoteJh > 10 * 60e3) {
+      ultimoLoteJh = Date.now();
+      const l = await saldoMarketing.enviarAJh();
+      if (l) log(`IA a JH: lote #${l.lote} de $${l.usd} (${l.usos || '?'} usos) -> ${l.estado}${l.error ? ` (${l.error})` : ''}`);
+    }
+  } catch (e) {
+    log('No se pudo enviar la IA de super admins a JH:', e.message);
   }
   try {
     await mantenerCli();

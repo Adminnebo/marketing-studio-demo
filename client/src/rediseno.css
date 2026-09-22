@@ -274,3 +274,4 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .cr-pago-det summary { cursor: pointer; font-weight: 640; font-size: 0.88rem; }
 .cr-pago-det .cr-pago { padding: 14px 0 0; }
 .lb-costo-ia { font-size: 0.78rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.pill.mov-jh { color: var(--text-secondary); margin-left: 6px; }

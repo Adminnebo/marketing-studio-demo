@@ -166,7 +166,8 @@ async function generar({ generacion, indice = 0, redes = [], tono = 'cercano', i
   }
   if (!resp.ok) throw new ErrorDeCaption('La IA no pudo escribir el texto. Intenta de nuevo en un momento.', { detalle: `HTTP ${resp.status} ${(await resp.text().catch(() => '')).slice(0, 300)}` });
   const j = await resp.json();
-  const out = leer(j, largo);
+  let out;
+  try { out = leer(j, largo); } catch (e) { e.uso = { modelo: j.model || MODELO, entrada: j.usage?.input_tokens || 0, salida: j.usage?.output_tokens || 0 }; throw e; }
   console.log(`[captions] gen ${generacion.id} ${j.model || MODELO} ${j.usage?.input_tokens || 0}/${j.usage?.output_tokens || 0} tok · ficha ${ctx.ficha ? 'si' : 'no'}`);
   return { ...out, usoFicha: !!ctx.ficha, producto: ctx.producto, uso: { modelo: j.model || MODELO, entrada: j.usage?.input_tokens || 0, salida: j.usage?.output_tokens || 0 } };
 }

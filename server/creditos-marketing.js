@@ -24,7 +24,7 @@ const soloAprobador = (req, res, next) => (req.user.puedeAprobar ? next()
 router.get('/creditos', ruta(async (req, res, next) => {
   if (!saldoMarketing.activo()) return next();
   const [a, saldo, gasto, movimientos, mias] = await Promise.all([
-    ajustes.leer(), saldoMarketing.saldo(), saldoMarketing.gastoDelMes(), saldoMarketing.movimientos(60), saldoMarketing.solicitudes({ por: req.user.email, limite: 10 }),
+    ajustes.leer(), saldoMarketing.saldo(), saldoMarketing.gastoDelMes(), saldoMarketing.movimientos(60, { conJh: req.user.rol === 'super_admin' }), saldoMarketing.solicitudes({ por: req.user.email, limite: 10 }),
   ]);
   const r = { fuente: 'marketing', saldoUsd: saldo, gastoMes: gasto, movimientos, misSolicitudes: mias, precioCredito: ajustes.precioCredito(a), puedeAprobar: !!req.user.puedeAprobar, puedeFijar: req.user.rol === 'super_admin' };
   if (req.user.puedeAprobar) {

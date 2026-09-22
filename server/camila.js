@@ -89,14 +89,13 @@ router.post('/camila/ficha', async (req, res) => {
   try {
     if (!(await camila.productoMostrado(req.user.email, codigo))) return res.status(404).json({ error: 'Ese producto no aparece en tus búsquedas con Camila.' });
     if (!(await saldoMarketing.puedeGastarIa(req.user))) return res.status(402).json({ error: 'No hay saldo de Marketing para usar la IA. Pide una recarga en Créditos.', sinSaldo: true });
-    const { uso, ...r } = await fichas.extraer(codigo);
+    // Solo se cobra la primera lectura (despues queda guardada y no cuesta); un super admin va al saldo general.
+    const cobrar = (uso, extra = '') => saldoMarketing.cobrarIa({ por: req.user.email, clase: 'ficha', detalle: `cód. ${codigo}${extra}`, modelo: uso.modelo, entrada: uso.entrada, salida: uso.salida,
+      ref: extra ? null : `ficha:${codigo}`, aJh: saldoMarketing.exento(req.user) }).catch((e) => { console.error('[fichas] cobro IA', e.message); return 0; });
+    let uso; let r;
+    try { ({ uso, ...r } = await fichas.extraer(codigo)); } catch (e) { if (e.uso) await cobrar(e.uso, ' · no salió'); throw e; }
     if (r.sinFicha) return res.json({ sinFicha: true });
-    // Solo se cobra la primera lectura (despues queda guardada y no cuesta).
-    let costoIa = 0;
-    if (uso && !saldoMarketing.exento(req.user)) {
-      costoIa = await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'ficha', detalle: `cód. ${codigo}`, modelo: uso.modelo, entrada: uso.entrada, salida: uso.salida, ref: `ficha:${codigo}` })
-        .catch((e) => { console.error('[fichas] cobro IA', e.message); return 0; });
-    }
+    const costoIa = uso ? await cobrar(uso) : 0;
     res.json({ ...r, costoIa });
   } catch (e) { errorDe(res, e); }
 });

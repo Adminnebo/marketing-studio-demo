@@ -42,7 +42,7 @@ function imagenDe(p) {
   return typeof u === 'string' && /^https:\/\//.test(u) ? u : null;
 }
 
-async function clasificarUna(p, { fetch: pedir = globalThis.fetch } = {}) {
+async function clasificarUna(p, { fetch: pedir = globalThis.fetch, uso = null } = {}) {
   const img = imagenDe(p);
   if (!img) throw new Error('sin imagen de portada');
   const r = await pedir('https://api.openai.com/v1/responses', {
@@ -57,6 +57,7 @@ async function clasificarUna(p, { fetch: pedir = globalThis.fetch } = {}) {
   });
   if (!r.ok) throw new Error('OpenAI HTTP ' + r.status);
   const j = await r.json();
+  if (uso) { uso.modelo = j.model || MODELO; uso.entrada += j.usage?.input_tokens || 0; uso.salida += j.usage?.output_tokens || 0; } // costo, aunque la respuesta no sirva
   const texto = (j.output || []).flatMap((i) => i.content || []).filter((b) => b.type === 'output_text').map((b) => b.text).join('');
   const d = JSON.parse(texto);
   if (!PRODUCTOS.includes(d.p) || !Array.isArray(d.e) || !d.e.every((x) => ESTILOS.includes(x))) throw new Error('clasificacion invalida');
@@ -68,9 +69,10 @@ async function clasificarNuevas(items, { max = 25, fetch } = {}) {
   if (!API_KEY) return { hechas: 0, pendientes: 0, sinClave: true };
   const nuevas = items.filter((p) => !p._clasif);
   let hechas = 0;
+  const uso = { modelo: MODELO, entrada: 0, salida: 0 };
   for (const p of nuevas.slice(0, max)) {
     try {
-      const c = await clasificarUna(p, { fetch });
+      const c = await clasificarUna(p, { fetch, uso });
       await pool.query(
         `INSERT INTO plantillas_clasif (id, p, e, per, jh, nombre, fuente) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING`,
         [p.id, c.p, JSON.stringify(c.e), c.per, c.jh, p.name || null, MODELO]
@@ -80,7 +82,7 @@ async function clasificarNuevas(items, { max = 25, fetch } = {}) {
       console.log(`[clasificar] ${p.id} (${p.name}): ${e.message}`);
     }
   }
-  return { hechas, pendientes: Math.max(0, nuevas.length - hechas) };
+  return { hechas, pendientes: Math.max(0, nuevas.length - hechas), uso };
 }
 
 module.exports = { clasificarNuevas, clasificarUna, imagenDe, configurado, INSTRUCCIONES };

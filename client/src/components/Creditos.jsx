@@ -3,7 +3,7 @@ import { fetchCreditos, pedirRecarga, aprobarRecarga, rechazarRecarga, resolverR
 import { usd, usdFino, cred } from '../precio';
 
 const TIPOS = { recarga: 'Recarga', consumo: 'Generación', reembolso: 'Devolución', ajuste: 'Ajuste', ia: 'Ayuda de IA' };
-const CLASES_IA = { descripcion: 'Descripción automática', ficha: 'Lectura de ficha técnica', caption: 'Texto para redes', camila: 'Búsqueda con Camila' };
+const CLASES_IA = { descripcion: 'Descripción automática', ficha: 'Lectura de ficha técnica', caption: 'Texto para redes', camila: 'Búsqueda con Camila', clasificar: 'Clasificación de plantillas' };
 const EST_SOL = { pendiente: 'Pendiente', aprobada: 'Aprobada', rechazada: 'Rechazada', revisar: 'En revisión' };
 const MONTOS = [25, 50, 100, 250];
 // Referencias de consumo (creditos aproximados; el costo exacto se ve antes de crear).
@@ -223,7 +223,8 @@ function CreditosMarketing({ d, onActualizar, actualizando }) {
           <div className="kpi-accent" style={{ background: 'var(--series-3)' }} />
           <div className="kpi-label">Gastado este mes</div>
           <div className="kpi-value">{usd(d.gastoMes.gastoUsd)}</div>
-          <div className="kpi-foot">{d.gastoMes.iaUsd > 0 ? `Incluye ${usd(d.gastoMes.iaUsd)} de ayudas de IA (descripciones, fichas, Camila).` : 'Creaciones y ayudas de IA, sin contar lo devuelto.'}</div>
+          <div className="kpi-foot">{d.gastoMes.iaUsd > 0 ? `Incluye ${usd(d.gastoMes.iaUsd)} de ayudas de IA (descripciones, fichas, Camila).` : 'Creaciones y ayudas de IA, sin contar lo devuelto.'}
+            {d.puedeFijar && d.gastoMes.jhUsd > 0 && ` Aparte, IA de super admins y del sistema cobrada a JH: ${usdFino(d.gastoMes.jhUsd)}.`}</div>
         </div>
       </div>
 
@@ -303,9 +304,9 @@ function CreditosMarketing({ d, onActualizar, actualizando }) {
               {d.movimientos.length ? d.movimientos.map((m) => (
                 <tr key={m.id}>
                   <td>{fecha(m.creado)}</td>
-                  <td><span className={`pill mov-${m.tipo}`}>{TIPOS[m.tipo] || m.tipo}</span></td>
+                  <td><span className={`pill mov-${m.tipo}`}>{TIPOS[m.tipo] || m.tipo}</span>{m.a_jh && <span className="pill mov-jh" title="No sale del saldo de Marketing: se descuenta del saldo general de JH">{m.lote_estado === 'enviado' ? 'Cobrado a JH' : m.lote_estado === 'revisar' ? 'A JH · revisar' : 'A JH · por enviar'}</span>}</td>
                   <td className="trunc">{detalleMov(m)}</td>
-                  <td className="num" style={{ color: m.usd < 0 ? 'var(--critical)' : 'var(--good-ink)' }}>{m.usd > 0 ? '+' : '−'}{usdFino(Math.abs(m.usd))}</td>
+                  <td className="num" style={{ color: m.a_jh ? 'var(--text-muted)' : m.usd < 0 ? 'var(--critical)' : 'var(--good-ink)' }}>{m.usd > 0 ? '+' : '−'}{usdFino(Math.abs(m.usd))}</td>
                 </tr>
               )) : <tr><td colSpan={4} className="trunc">Todavía no hay movimientos.</td></tr>}
             </tbody>

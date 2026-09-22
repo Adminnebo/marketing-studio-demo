@@ -119,7 +119,8 @@ async function extraer(codigo, { fetch: pedir = globalThis.fetch } = {}) {
     throw new ErrorDeFicha(r.status === 400 ? 'No se pudo abrir el PDF de la ficha.' : 'La IA no pudo leer la ficha. Intenta de nuevo en un momento.', { status: 502, detalle: `HTTP ${r.status} ${detalle}` });
   }
   const j = await r.json();
-  const datos = leer(j);
+  let datos;
+  try { datos = leer(j); } catch (e) { e.uso = { modelo: j.model || MODELO, entrada: j.usage?.input_tokens || 0, salida: j.usage?.output_tokens || 0 }; throw e; }
   await pool.query(
     `INSERT INTO camila_fichas (codigo, archivo, datos, modelo, tokens_entrada, tokens_salida) VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (codigo) DO NOTHING`,

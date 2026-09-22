@@ -30,7 +30,8 @@ if (!process.env.TEST_DATABASE_URL) {
       { id: 'nueva', name: 'B', type: 'product_shots', cover_image: { url: 'https://x/b.png' }, _clasif: false },
     ];
     const r = await clasificar.clasificarNuevas(items, { fetch });
-    assert.deepEqual(r, { hechas: 1, pendientes: 0 });
+    assert.deepEqual({ hechas: r.hechas, pendientes: r.pendientes }, { hechas: 1, pendientes: 0 });
+    assert.equal(r.uso.modelo, "gpt-4.1"); // tokens de la IA para registrar el costo
     assert.equal(pedidos.length, 1);
     assert.equal(pedidos[0].input[0].content[0].image_url, 'https://x/b.png');
     const { rows: [f] } = await pool.query("SELECT * FROM plantillas_clasif WHERE id = 'nueva'");

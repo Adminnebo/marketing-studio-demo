@@ -113,10 +113,13 @@ router.post('/publicaciones/caption', requirePublicar, async (req, res) => {
     const limite = redes.length ? Math.min(...redes.map((r) => limiteDe(r, tipo))) : 2200;
     const largo = Math.max(120, Math.min(1200, limite - (limite <= 300 ? 60 : 180)));
     if (!(await saldoMarketing.puedeGastarIa(req.user))) return res.status(402).json({ error: 'No hay saldo de Marketing para usar la IA. Pide una recarga en Créditos.', sinSaldo: true });
-    const { uso, ...out } = await captions.generar({ generacion: g, indice: Number(b.indice) || 0, redes: redes.map((r) => REDES[r].nombre), tono: b.tono, indicaciones: b.indicaciones, largo });
-    // El caption se suma al total de esa creacion.
-    const costoIa = saldoMarketing.exento(req.user) ? 0 : await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'caption', modelo: uso.modelo, entrada: uso.entrada, salida: uso.salida, generacionId: g.id })
+    // El caption se suma al total de esa creacion (super admin: al saldo general de JH). Si la IA respondio mal, se cobra igual.
+    const cobrar = (uso, detalle = null) => saldoMarketing.cobrarIa({ por: req.user.email, clase: 'caption', detalle, modelo: uso.modelo, entrada: uso.entrada, salida: uso.salida, generacionId: g.id, aJh: saldoMarketing.exento(req.user) })
       .catch((e) => { console.error('[captions] cobro IA', e.message); return 0; });
+    let uso; let out;
+    try { ({ uso, ...out } = await captions.generar({ generacion: g, indice: Number(b.indice) || 0, redes: redes.map((r) => REDES[r].nombre), tono: b.tono, indicaciones: b.indicaciones, largo })); }
+    catch (e) { if (e.uso) await cobrar(e.uso, 'no salió'); throw e; }
+    const costoIa = await cobrar(uso);
     res.json({ ...out, costoIa });
   } catch (e) {
     if (e instanceof captions.ErrorDeCaption) { console.error('[captions]', e.message, e.detalle || ''); return res.status(e.status).json({ error: e.message }); }
