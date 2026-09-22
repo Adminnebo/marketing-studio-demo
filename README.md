@@ -183,7 +183,9 @@ borrar.
 
 ## Pendiente (detalles y correcciones finales)
 
-- **Camila**: el tono de la Camila paralela es rioplatense ("usás", "Sos…"); cambiarlo a tuteo dominicano si JH lo prefiere. Cada búsqueda cuesta ~US$0.005 y en Sword se cobra ~US$0.05 (regla del agente `camila`, redondeo a 2 decimales).
+- **Saldo de Marketing (activo desde 2026-09-22)**: arranca en $0; nadie de Marketing (salvo super admins) puede crear hasta que se apruebe la primera recarga. Dar el permiso **Aprueba recargas** en Super Admin → Usuarios a quien corresponda.
+- **Camila → saldo de Marketing**: cambiar el flujo n8n "Camila Paralela - Costos" para que mande `{execution_id, contact_id, costo_usd}` a `/api/n8n/costo-camila` (header `x-panel-token`) y registre costo 0 en Sword. Mientras no se cambie, las búsquedas se siguen cobrando aparte en Sword.
+- **Camila, tono**: pegar la sección de marketing en tuteo en el system message del Agente en n8n y publicar.
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
 - **Idempotencia en el descuento**: pedir al equipo de pagos que `/api/credits/adjust` acepte una referencia única y rechace repetidos; hoy un corte a mitad requiere revisión manual.
 - **Política de saldo negativo**: JH está en -$1,018 en la plataforma; con el ajuste en $0 no pueden crear hasta pagar. Definir si se permite un margen.
