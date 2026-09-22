@@ -88,7 +88,8 @@ export default function App() {
   // Crear: con plantilla (lo facil, por defecto) o desde cero. Se recuerda por navegador.
   const [modoCrear, setModoCrearSt] = useState(() => { try { return localStorage.getItem('ms_modo_crear') || 'plantilla'; } catch { return 'plantilla'; } });
   const setModoCrear = (m) => { setModoCrearSt(m); try { localStorage.setItem('ms_modo_crear', m); } catch { /* sin storage */ } };
-  const [libre, setLibre] = useState({ n: 0, inicial: null }); // 'Usar de nuevo' de una generacion libre
+  const [libre, setLibre] = useState({ n: 0, inicial: null });
+  const [fotoPuesta, setFotoPuesta] = useState(null); // la foto que tiene ahora 'Desde cero' (de Camila o subida)
   const [gens, setGens] = useState({ items: [], cargando: false, error: null, siguiente: null });
   // Camila (buscar productos de JH; se ve siempre, aunque no este conectada al catalogo). productoListo = foto ya preparada para crear ({ media_id, url, nombre, producto }).
   const [camila, setCamila] = useState({ conectada: true, abierta: false, destino: null });
@@ -223,7 +224,7 @@ export default function App() {
   // Partir de una imagen ya creada: la sube al generador y abre "Desde cero" con ella puesta.
   const usarDeBase = async (g, indice) => {
     const m = await usarComoBase(g.id, indice);
-    setLibre((x) => ({ n: x.n + 1, inicial: { tipo: 'imagen', prompt: '', imagen: { media_id: m.media_id, url: m.url, nombre: m.nombre } } }));
+    setLibre((x) => ({ n: x.n + 1, inicial: { paso: 1, prompt: '', imagen: { media_id: m.media_id, url: m.url, nombre: m.nombre } } }));
     setTab('plantillas');
     setModoCrear('cero');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -359,6 +360,18 @@ export default function App() {
                   <button className="mini-btn" onClick={() => setProductoListo(null)}>Quitar</button>
                 </div>
               </div>
+            ) : fotoPuesta && modoCrear === 'cero' ? (
+              // Foto puesta que no viene de Camila (subida a mano o una creación usada como base).
+              <div className="cm-listo-bar">
+                <img src={fotoPuesta.local || fotoPuesta.url} alt="" />
+                <div className="cm-listo-bar-t">
+                  <strong>📸 Foto lista para crear</strong>
+                  <span>{fotoPuesta.nombre || 'Tu foto'}</span>
+                </div>
+                <div className="cm-listo-bar-acc">
+                  <button className="mini-btn" onClick={() => abrirCamila()}>Buscar un producto</button>
+                </div>
+              </div>
             ) : (
               <div className="cm-listo-bar cm-invita">
                 <div className="cm-listo-bar-t">
@@ -370,7 +383,7 @@ export default function App() {
             )}
             {modoCrear === 'cero' ? (
               <Libre key={libre.n} inicial={libre.inicial} {...saldoProps} rol={me.rol} rolReal={me.rolReal}
-                productoListo={productoListo} onBuscarCamila={() => abrirCamila('libre')}
+                productoListo={productoListo} onBuscarCamila={() => abrirCamila('libre')} onFoto={setFotoPuesta}
                 onVer={() => setTab('generaciones')} onRecargar={() => setTab('creditos')}
                 onEnviada={() => { recargarGens(); fetchMe().then(setMe).catch(() => {}); }} />
             ) : (

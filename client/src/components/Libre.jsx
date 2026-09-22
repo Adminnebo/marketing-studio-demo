@@ -31,12 +31,12 @@ const pasosDe = (tipo) => [
 // Crear desde cero, paso a paso. El orden importa: el formato y la duracion van ANTES de la
 // descripcion, porque la que escribe la IA se arma para esa duracion (tramos y ritmo), ese
 // formato y el sonido. Si despues se cambia alguno, se avisa y se ofrece reescribirla.
-export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal, inicial, productoListo, onBuscarCamila, onEnviada, onVer, onRecargar }) {
+export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal, inicial, productoListo, onBuscarCamila, onFoto, onEnviada, onVer, onRecargar }) {
   const [modelos, setModelos] = useState(null);
   const [iaUsd, setIaUsd] = useState(0); // ayudas de IA ya cobradas (descripcion, ficha): se suman al total
   const [error, setError] = useState(null);
-  // 'Usar de nuevo' trae todo lleno: abre en Revisar. 'Usar como base' trae solo la foto: abre en la descripción.
-  const [paso, setPaso] = useState(inicial ? (inicial.prompt ? 5 : 4) : 1);
+  // 'Usar de nuevo' trae todo lleno: abre en Revisar. 'Usar como base' abre en el paso 1 (foto o video).
+  const [paso, setPaso] = useState(inicial?.paso || (inicial?.prompt ? 5 : 1));
   const [tipo, setTipo] = useState(inicial?.tipo || 'video');
   const [modeloId, setModeloId] = useState(inicial?.modelo || '');
   const [verModelos, setVerModelos] = useState(false);
@@ -76,6 +76,9 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
     setProducto(productoListo.nombre || '');
     setSubida(null);
   }, [productoListo?.media_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // La barra de arriba muestra en verde que ya hay foto (sea de Camila o subida a mano).
+  useEffect(() => { onFoto?.(imagen); }, [imagen?.media_id, imagen?.local]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deTipo = useMemo(() => (modelos || []).filter((m) => m.tipo === tipo), [modelos, tipo]);
   const modelo = (modelos || []).find((m) => m.id === modeloId) || deTipo[0] || null;
