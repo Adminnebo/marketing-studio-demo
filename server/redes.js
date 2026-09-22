@@ -187,6 +187,38 @@ router.get('/publicaciones', ruta(async (req, res) => {
   res.json({ items: rows });
 }));
 
+// Calendario: publicaciones programadas o hechas en un rango (por fecha programada o de envio),
+// con lo necesario de su creacion para mostrarlas. Las canceladas no se muestran.
+router.get('/publicaciones/calendario', ruta(async (req, res) => {
+  const desde = new Date(req.query.desde); const hasta = new Date(req.query.hasta);
+  if (Number.isNaN(+desde) || Number.isNaN(+hasta) || hasta <= desde || hasta - desde > 45 * 864e5) return res.status(400).json({ error: 'Rango de fechas inválido.' });
+  const { rows } = await pool.query(
+    `SELECT p.id, p.generacion_id, p.indice, p.creado_por, p.texto, p.medio, p.cuentas, p.programada_para, p.zona, p.estado,
+            p.error, p.creado, COALESCE(p.programada_para, p.creado) AS fecha,
+            g.preset_nombre, g.preset_tipo, g.portada, g.resultados
+     FROM publicaciones p JOIN generaciones g ON g.id = p.generacion_id
+     WHERE p.estado <> 'cancelada' AND COALESCE(p.programada_para, p.creado) >= $1 AND COALESCE(p.programada_para, p.creado) < $2
+     ORDER BY fecha`, [desde, hasta]
+  );
+  res.json({ items: rows });
+}));
+
+// Mover la fecha de una programada (antes de que salga).
+router.post('/publicaciones/:id/reprogramar', requirePublicar, ruta(async (req, res) => {
+  const { rows: [p] } = await pool.query('SELECT id, estado, zernio_post_id, zona FROM publicaciones WHERE id = $1', [Number(req.params.id) || 0]);
+  if (!p) return res.status(404).json({ error: 'No existe.' });
+  if (p.estado !== 'programada' || !p.zernio_post_id) return res.status(400).json({ error: 'Solo se puede mover la fecha de publicaciones programadas.' });
+  const fechaLocal = String(req.body?.fechaLocal || '');
+  const zona = String(req.body?.zona || p.zona || 'America/Santo_Domingo');
+  const fechaIso = new Date(req.body?.fechaIso);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(fechaLocal) || Number.isNaN(+fechaIso)) return res.status(400).json({ error: 'Fecha inválida.' });
+  if (fechaIso - Date.now() < 5 * 60e3) return res.status(400).json({ error: 'Elige una fecha al menos 5 minutos en el futuro.' });
+  await zernio.reprogramarPost(p.zernio_post_id, fechaLocal.length === 16 ? fechaLocal + ':00' : fechaLocal, zona);
+  await pool.query(`UPDATE publicaciones SET programada_para = $2, zona = $3, actualizado = now() WHERE id = $1`, [p.id, fechaIso, zona]);
+  console.log(`[redes] ${req.user.email} movio la publicacion #${p.id} a ${fechaLocal} (${zona})`);
+  res.json({ ok: true, programada_para: fechaIso.toISOString() });
+}));
+
 // Cancelar una programada (antes de que salga).
 router.post('/publicaciones/:id/cancelar', requirePublicar, ruta(async (req, res) => {
   const { rows: [p] } = await pool.query('SELECT id, estado, zernio_post_id FROM publicaciones WHERE id = $1', [Number(req.params.id) || 0]);

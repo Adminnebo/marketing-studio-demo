@@ -300,6 +300,18 @@ app.post('/api/generaciones', ruta(async (req, res) => {
 }));
 
 // Mis creaciones, con busqueda y filtros (lib/filtros-gen.js).
+// Calendario: creaciones terminadas bien en un rango (por la fecha en que quedaron listas).
+app.get('/api/calendario/generaciones', ruta(async (req, res) => {
+  const desde = new Date(req.query.desde); const hasta = new Date(req.query.hasta);
+  if (Number.isNaN(+desde) || Number.isNaN(+hasta) || hasta <= desde || hasta - desde > 45 * 864e5) return res.status(400).json({ error: 'Rango de fechas inválido.' });
+  const { rows } = await pool.query(
+    `SELECT ${COLS}, COALESCE(terminado, creado) AS fecha FROM generaciones
+     WHERE estado = 'completado' AND COALESCE(terminado, creado) >= $1 AND COALESCE(terminado, creado) < $2
+     ORDER BY fecha LIMIT 500`, [desde, hasta]
+  );
+  res.json({ items: rows });
+}));
+
 app.get('/api/generaciones', ruta(async (req, res) => {
   const limite = Math.min(Number(req.query.limite) || 30, 100);
   const { where, vals } = filtrosGeneraciones(req.query, { email: req.user.email, vals: [limite] });

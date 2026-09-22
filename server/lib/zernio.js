@@ -110,6 +110,8 @@ const infoTiktok = (cuentaId, tipo) => llamar('GET', `/accounts/${encodeURICompo
 const crearPost = (cuerpo, requestId) => llamar('POST', '/posts', { body: cuerpo, headers: { 'x-request-id': requestId }, timeoutMs: 90000 });
 const leerPost = (postId) => llamar('GET', `/posts/${encodeURIComponent(postId)}`);
 const borrarPost = (postId) => llamar('DELETE', `/posts/${encodeURIComponent(postId)}`);
+// Cambiar la fecha de una programada (Zernio acepta editar posts 'scheduled').
+const reprogramarPost = (postId, scheduledFor, timezone) => llamar('PUT', `/posts/${encodeURIComponent(postId)}`, { body: { scheduledFor, timezone } });
 
 // ── Webhooks: Zernio avisa cuando un post sale, falla o una cuenta se desconecta ──
 const SECRETO_WEBHOOK = process.env.ZERNIO_WEBHOOK_SECRET || '';
@@ -148,6 +150,6 @@ function firmaValida(cuerpoCrudo, firma) {
 }
 
 module.exports = {
-  configurado, llamar, perfilId, perfiles, elegirPerfil, perfilElegido, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, ZernioError,
+  configurado, llamar, perfilId, perfiles, elegirPerfil, perfilElegido, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, reprogramarPost, ZernioError,
   webhookListo, asegurarWebhook, probarWebhook, firmaValida, EVENTOS,
 };

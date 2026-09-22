@@ -8,6 +8,7 @@ import Redes from './components/Redes';
 import SuperAdmin from './components/SuperAdmin';
 import Creditos from './components/Creditos';
 import Libre from './components/Libre';
+import Calendario from './components/Calendario';
 import { cred, usd, sinClausula } from './precio';
 import Publicar from './components/Publicar';
 import Camila from './components/Camila';
@@ -18,6 +19,7 @@ import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
 const TABS = [
   { id: 'plantillas', label: 'Crear', icon: '🎨' },
   { id: 'generaciones', label: 'Mis creaciones', icon: '🗂️' },
+  { id: 'calendario', label: 'Calendario', icon: '📅' },
   { id: 'creditos', label: 'Créditos', icon: '💳' },
   { id: 'redes', label: 'Redes', icon: '📣', min: 'admin' },
   { id: 'superadmin', label: 'Super Admin', icon: '🛡️', min: 'super_admin' },
@@ -74,6 +76,7 @@ export default function App() {
   const [errorCuentas, setErrorCuentas] = useState(null);
   const [publicaciones, setPublicaciones] = useState(null);
   const [publicando, setPublicando] = useState(null); // { g, indice }
+  const [versionCal, setVersionCal] = useState(0); // refresca el calendario despues de publicar
   const [me, setMe] = useState(null);
   const [estado, setEstado] = useState(null);
   const [saldo, setSaldo] = useState(null);
@@ -368,6 +371,11 @@ export default function App() {
         )
       )}
 
+      {tab === 'calendario' && (
+        <Calendario puedeVerPublicaciones={NIVEL[me.rol] >= NIVEL.admin || !!me.puedePublicar} puedePublicar={!!me.puedePublicar}
+          onPublicar={me.puedePublicar ? (g, indice) => { if (cuentas == null) cargarRedes(); setPublicando({ g, indice }); } : null} version={versionCal} />
+      )}
+
       {tab === 'generaciones' && (
         <Generaciones items={gens.items} cargando={gens.cargando} error={gens.error} hayMas={!!gens.siguiente}
           onMas={masGens} onRepetir={repetir} rol={me.rol} onCrear={() => setTab('plantillas')}
@@ -388,7 +396,7 @@ export default function App() {
           generacion={publicando.g}
           indice={publicando.indice}
           cuentas={cuentas}
-          onPublicada={() => fetchPublicaciones().then((d) => setPublicaciones(d.items)).catch(() => {})}
+          onPublicada={() => { setVersionCal((v) => v + 1); fetchPublicaciones().then((d) => setPublicaciones(d.items)).catch(() => {}); }}
           onCerrar={(ir) => { setPublicando(null); if (ir === 'redes') setTab('redes'); }}
         />
       )}

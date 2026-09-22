@@ -104,6 +104,17 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
 - **Recargas**: la pestaña Créditos muestra los paquetes con el precio para JH. El pago en línea está en pausa
   (`pagoEnLinea: false`); mientras tanto un super_admin suma créditos a mano desde Super Admin.
 
+## Calendario
+
+- Pestaña **Calendario** con tres modos (creadas, agendadas, ambos) y tres vistas (día, semana, mes). El modo y la
+  vista se recuerdan por navegador; las fechas se muestran en la hora local de quien mira.
+- Las creaciones se ubican por cuándo quedaron listas (`GET /api/calendario/generaciones`) y las publicaciones por su
+  fecha programada o de envío (`GET /api/publicaciones/calendario`, sin las canceladas). Los rangos se limitan a 45 días.
+- Al tocar un día se abre su lista: en las creaciones se puede **publicar** (si el usuario tiene el permiso) o
+  descargar; en las programadas se puede **mover la fecha** (`POST /api/publicaciones/:id/reprogramar`, que edita la
+  programación en Zernio) o **cancelarla**. Lo ya publicado o fallido solo se muestra.
+- El modo agendadas y las acciones de publicar solo aparecen para quien puede publicar en redes.
+
 ## Pagos: saldo de la plataforma de pagos de Nebo
 
 - Se crea contra el **saldo total de JH** en la plataforma de pagos (Sword AI, USD, compartido con sus otros

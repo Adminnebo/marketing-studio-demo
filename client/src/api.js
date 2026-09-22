@@ -179,3 +179,8 @@ export const resolverRecarga = (id, aplicada) => api(`/creditos/solicitudes/${id
 export const fijarSaldoMarketing = (saldo, motivo) => api('/creditos/fijar', { method: 'POST', body: JSON.stringify({ saldo, motivo }) });
 export const fetchConciliacion = () => api('/superadmin/conciliacion');
 export const correrConciliacion = () => api('/superadmin/conciliacion', { method: 'POST' });
+
+// Calendario: creaciones listas y publicaciones (programadas o hechas) en un rango de fechas.
+export const fetchCalGeneraciones = (desde, hasta) => api(`/calendario/generaciones?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+export const fetchCalPublicaciones = (desde, hasta) => api(`/publicaciones/calendario?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+export const reprogramarPublicacion = (id, datos) => api(`/publicaciones/${id}/reprogramar`, { method: 'POST', body: JSON.stringify(datos) });
