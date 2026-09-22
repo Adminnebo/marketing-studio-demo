@@ -105,6 +105,7 @@ router.get('/superadmin/pagos', ruta(async (req, res) => {
     saldo: { configurado: saldoExterno.configurado(), ...(saldo || {}), error: errorSaldo },
     gasto: { configurado: pagos.configurado(), cola: Object.fromEntries(cola.map((r) => [r.estado, r.n])), errores },
     ultimos30: { gastadoUsd: Number(mes.usd), creaciones: mes.n },
+    informarSuperAdmin: Number((await ajustes.leer()).informar_super_admin) === 1,
   });
 }));
 
@@ -113,6 +114,16 @@ router.post('/superadmin/pagos/probar', ruta(async (req, res) => {
   try { res.json({ ok: true, ...(await saldoExterno.leer({ fresco: true })) }); } catch (e) {
     throw errPublico(`La plataforma de pagos no respondió bien: ${e.message.slice(0, 200)}`, 502);
   }
+}));
+
+// Historial sin informar: se revisa el total y se manda a mano (descuenta del saldo de JH).
+router.get('/superadmin/pagos/historial', ruta(async (req, res) => res.json(await pagos.historialSinInformar())));
+router.post('/superadmin/pagos/historial', ruta(async (req, res) => {
+  if (!pagos.configurado()) throw errPublico('El descuento de saldo no está configurado.');
+  const r = await pagos.enviarHistorial(req.body?.total);
+  if (r.error) throw errPublico(r.error, 409);
+  console.log(`[pagos] ${req.user.email} envio el historial: ${r.encolados} creaciones, $${r.total}`);
+  res.json(r);
 }));
 
 router.post('/superadmin/pagos/eventos/:id/hecho', ruta(async (req, res) => {

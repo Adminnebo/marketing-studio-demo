@@ -1,6 +1,6 @@
 import RedesSetup from './RedesSetup';
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, cred } from '../precio';
 
@@ -52,8 +52,21 @@ function SesionCli({ cli, onCambio }) {
 function PagosCentral() {
   const [d, setD] = useState(null);
   const [msg, setMsg] = useState(null);
-  const cargar = () => fetchPagosAdmin().then(setD).catch((e) => setMsg({ error: e.message }));
+  const [hist, setHist] = useState(null);
+  const [verHist, setVerHist] = useState(false);
+  const cargar = () => {
+    fetchPagosAdmin().then(setD).catch((e) => setMsg({ error: e.message }));
+    fetchHistorialPagos().then(setHist).catch(() => {});
+  };
   useEffect(() => { cargar(); }, []);
+  const cambiarSuperAdmin = async (v) => {
+    if (v && !window.confirm('Desde ahora, cada creación de un super admin también se va a DESCONTAR del saldo de JH en la plataforma de pagos (con la marca "super admin" en la nota). ¿Activar?')) return;
+    try { await guardarAjustes({ informar_super_admin: v ? 1 : 0 }); setMsg({ ok: v ? 'Activado: las creaciones de super admins se informan.' : 'Desactivado.' }); cargar(); } catch (e) { setMsg({ error: e.message }); }
+  };
+  const enviarHist = async () => {
+    if (!window.confirm(`Se van a DESCONTAR ${usd(hist.total)} del saldo de JH en la plataforma de pagos: ${hist.enviables} creación(es) que nunca se informaron. No se puede deshacer desde aquí. ¿Enviar?`)) return;
+    try { const r = await enviarHistorialPagos(hist.total); setMsg({ ok: `${r.encolados} creación(es) en camino (${usd(r.total)}). Se envían en el próximo minuto.` }); setVerHist(false); cargar(); } catch (e) { setMsg({ error: e.message }); cargar(); }
+  };
   if (!d) return <div className="card"><h3>Saldo de JH (plataforma de pagos)</h3>{msg?.error ? <div className="ms-errors">{msg.error}</div> : <div className="spinner" />}</div>;
   const s = d.saldo;
   const pendientes = d.gasto.cola.pendiente || 0;
@@ -83,6 +96,29 @@ function PagosCentral() {
           ? (conError ? `${conError} descuento(s) para revisar.` : pendientes ? `${pendientes} descuento(s) en camino.` : 'Cada creación cobrada se descuenta del saldo con su detalle.')
           : 'Descuento de saldo sin configurar: faltan AJUSTE_CALLER_ID y AJUSTE_API_KEY (en panel y worker). Hasta entonces lo creado queda "por descontar".'}
       </div>
+      {d.gasto.configurado && (
+        <label className="user-admin-check" style={{ margin: '10px 0 0' }}>
+          <input type="checkbox" checked={!!d.informarSuperAdmin} onChange={(e) => cambiarSuperAdmin(e.target.checked)} />
+          Informar también las creaciones de super admins (se descuentan del saldo de JH, marcadas "super admin")
+        </label>
+      )}
+      {d.gasto.configurado && hist && hist.items.length > 0 && (
+        <div className="sa-pagos-lista">
+          <div className="sa-pagos-fila">
+            <span><strong>Historial sin informar:</strong> {hist.enviables} creación(es) · {usd(hist.total)}{hist.sinPrecio ? ` · ${hist.sinPrecio} sin precio (no se envían)` : ''}</span>
+            <span className="ms-ok-acc">
+              <button className="mini-btn" onClick={() => setVerHist(!verHist)}>{verHist ? 'Ocultar' : 'Ver detalle'}</button>
+              <button className="mini-btn" disabled={!hist.enviables} onClick={enviarHist}>Enviar {usd(hist.total)}</button>
+            </span>
+          </div>
+          {verHist && hist.items.map((it) => (
+            <div key={it.id} className="sa-pagos-fila">
+              <span>#{it.id} · {it.preset_nombre} · {it.creado_por}{it.cobro_externo ? '' : ' · super admin'}</span>
+              <span>{it.precio_usd > 0 ? usd(it.precio_usd) : 'sin precio'}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {d.gasto.errores.length > 0 && (
         <div className="sa-pagos-lista">
           {d.gasto.errores.map((e) => (

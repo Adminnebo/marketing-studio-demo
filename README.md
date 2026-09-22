@@ -117,6 +117,9 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   centavos, detalle y referencia `mkt-gen-<id>` en la nota), por una cola en el worker. El endpoint no tiene
   idempotencia: solo se reintenta solo si es seguro que no llegó; los cortes a mitad quedan en Super Admin para
   revisar ("Ya se descontó" / "Reintentar"). Mientras no se descuenta, se resta del saldo leído.
+- Super admins: por defecto sus creaciones no se cobran ni se informan. Con el ajuste "Informar también las creaciones
+  de super admins" se descuentan del saldo de JH con la marca "super admin" en la nota. El historial nunca informado se
+  ve en Super Admin con su total y solo se envía a mano (el envío exige que el total no haya cambiado).
 - Sin las variables de saldo se vuelve a la billetera local de créditos con recarga manual.
 
 ## Redes sociales (Zernio)

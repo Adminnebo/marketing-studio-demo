@@ -147,6 +147,8 @@ export const reconectarGenerador = () => api('/superadmin/generador/conectar', {
 export const fetchPagosAdmin = () => api('/superadmin/pagos');
 export const probarPagos = () => api('/superadmin/pagos/probar', { method: 'POST' });
 export const reintentarConsumo = (id) => api(`/superadmin/pagos/eventos/${id}/reintentar`, { method: 'POST' });
+export const fetchHistorialPagos = () => api('/superadmin/pagos/historial');
+export const enviarHistorialPagos = (total) => api('/superadmin/pagos/historial', { method: 'POST', body: JSON.stringify({ total }) });
 export const marcarDescontado = (id) => api(`/superadmin/pagos/eventos/${id}/hecho`, { method: 'POST' });
 export const verificarCli = () => api('/superadmin/cli/verificar', { method: 'POST' });
 export const cargarSesionCli = (paquete) => api('/superadmin/cli/sesion', { method: 'POST', body: JSON.stringify({ paquete }) });

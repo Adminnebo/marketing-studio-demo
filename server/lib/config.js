@@ -7,6 +7,8 @@
  *  - limite_diario_creditos: tope de creditos por usuario y dia (0 = sin tope). No aplica al super_admin.
  *  - saldo_negativo_permitido: con saldo externo, hasta cuantos USD por debajo de cero se deja crear
  *    (0 = solo con saldo positivo que cubra el costo).
+ *  - informar_super_admin: 1 = las creaciones de super admins tambien se descuentan del saldo de JH en la
+ *    plataforma de pagos (con la marca "super admin" en la nota). 0 = no se informan (por defecto).
  */
 const { pool } = require('./db');
 
@@ -17,8 +19,9 @@ const DEFECTOS = {
   margen_pct: 0,
   limite_diario_creditos: 0,
   saldo_negativo_permitido: 0,
+  informar_super_admin: 0,
 };
-const NUMEROS = ['costo_auto', 'usd_por_credito', 'margen_pct', 'limite_diario_creditos', 'saldo_negativo_permitido'];
+const NUMEROS = ['costo_auto', 'usd_por_credito', 'margen_pct', 'limite_diario_creditos', 'saldo_negativo_permitido', 'informar_super_admin'];
 
 let _cache = null;
 async function leer() {
@@ -39,7 +42,7 @@ function validar(k, valor) {
     const n = Number(valor);
     if (!Number.isFinite(n) || n < 0) throw new Error(`Valor inválido para ${k}`);
     if (k === 'margen_pct' && n > 1000) throw new Error('El margen no puede pasar de 1000 %');
-    return k === 'costo_auto' ? (n ? 1 : 0) : n;
+    return k === 'costo_auto' || k === 'informar_super_admin' ? (n ? 1 : 0) : n;
   }
   if (k === 'costo_info') return valor;
   throw new Error(`Ajuste desconocido: ${k}`);

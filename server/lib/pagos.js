@@ -21,6 +21,7 @@
  * La clave va solo en variables del servidor (AJUSTE_API_KEY).
  */
 const { pool } = require('./db');
+const ajustes = require('./config');
 
 const URL_AJUSTE = () => process.env.AJUSTE_URL || 'https://app.swordaisolutions.com/api/credits/adjust';
 const CALLER = () => process.env.AJUSTE_CALLER_ID || '';
@@ -108,15 +109,18 @@ function notaDe(g) {
     d.creditos != null ? `${d.creditos} créditos` : null,
     `$${Number(d.precio_usd).toFixed(2)}`,
     d.usuario,
+    g.cobro_externo === false ? 'super admin' : null,
     `ref mkt-gen-${d.generacion_id}`,
   ].filter(Boolean).join(' · ').slice(0, 500);
 }
 
-// Encola el descuento de una generacion cobrada contra el saldo externo que salio bien.
-async function informarConsumo(generacionId) {
+// Encola el descuento de una generacion que salio bien: las cobradas contra el saldo externo y, si
+// el ajuste informar_super_admin esta activo (o se fuerza desde el historial), las de super admins.
+async function informarConsumo(generacionId, { forzar = false } = {}) {
   if (!configurado()) return false;
+  const superAdmin = forzar || Number((await ajustes.leer()).informar_super_admin) === 1;
   const { rows: [g] } = await pool.query(
-    `SELECT * FROM generaciones WHERE id = $1 AND estado = 'completado' AND cobro_externo AND gasto_informado IS NULL`, [generacionId]
+    `SELECT * FROM generaciones WHERE id = $1 AND estado = 'completado' AND gasto_informado IS NULL AND (cobro_externo OR $2)`, [generacionId, superAdmin]
   );
   if (!g || !(Number(g.precio_usd) > 0)) return false;
   // Se descuenta en centavos: lo mismo que JH ve en el panel ($2.18, no $2.184).
@@ -129,6 +133,7 @@ async function informarConsumo(generacionId) {
 }
 
 // Red de seguridad: completadas cobradas sin su descuento encolado (p. ej. si fallo al encolar).
+// Solo las cobradas: las de super admin del pasado se mandan unicamente desde el historial, a mano.
 async function encolarFaltantes() {
   if (!configurado()) return 0;
   const { rows } = await pool.query(
@@ -183,6 +188,32 @@ async function liberarEnviando() {
   return rowCount;
 }
 
+// Historial: completadas que nunca se informaron (ni estan en cola), con y sin precio.
+async function historialSinInformar() {
+  const { rows } = await pool.query(
+    `SELECT g.id, g.creado_por, g.preset_nombre, g.preset_tipo, g.precio_usd, g.cobro_externo, g.creado
+     FROM generaciones g
+     WHERE g.estado = 'completado' AND g.gasto_informado IS NULL
+       AND NOT EXISTS (SELECT 1 FROM pagos_eventos e WHERE e.generacion_id = g.id)
+     ORDER BY g.id`
+  );
+  const conPrecio = rows.filter((r) => Number(r.precio_usd) > 0);
+  return {
+    items: rows.map((r) => ({ ...r, id: Number(r.id), precio_usd: r.precio_usd != null ? redondear(r.precio_usd, 2) : null })),
+    total: redondear(conPrecio.reduce((a, r) => a + redondear(r.precio_usd, 2), 0), 2),
+    enviables: conPrecio.length, sinPrecio: rows.length - conPrecio.length,
+  };
+}
+
+// Encola el historial (solo si el total coincide con lo que vio el super_admin, para no mandar de mas).
+async function enviarHistorial(totalVisto) {
+  const h = await historialSinInformar();
+  if (Math.abs(h.total - Number(totalVisto)) > 0.001) return { error: 'El historial cambió. Recarga y revisa el total antes de enviar.' };
+  let n = 0;
+  for (const it of h.items) if (it.precio_usd > 0 && await informarConsumo(it.id, { forzar: true })) n++;
+  return { encolados: n, total: h.total };
+}
+
 async function reintentar(id) {
   const r = await pool.query(`UPDATE pagos_eventos SET estado = 'pendiente', proximo = now() WHERE id = $1 AND estado = 'error'`, [id]);
   return r.rowCount > 0;
@@ -201,5 +232,5 @@ async function marcarHecho(id, por) {
 
 module.exports = {
   configurado, ajustar, detalleDe, notaDe, informarConsumo, encolarFaltantes, procesarCola, liberarEnviando,
-  reintentar, marcarHecho, PagosError, MAX_INTENTOS,
+  historialSinInformar, enviarHistorial, reintentar, marcarHecho, PagosError, MAX_INTENTOS,
 };

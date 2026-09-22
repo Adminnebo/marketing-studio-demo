@@ -206,6 +206,38 @@ if (!URL_BD) {
     assert.equal((await eventos(r.g.id)).length, 1);
   });
 
+  test('super admins: no se informan salvo con el ajuste activo, y van marcados', async () => {
+    const r = await encolar({ ...usuario, email: 'jefe@nebo.com', rolReal: 'super_admin' }, video());
+    await conAjuste(async () => {
+      await terminar(r.g.id);
+      assert.equal((await eventos(r.g.id)).length, 0, 'con el ajuste apagado no se informa');
+      assert.equal(await pagos.encolarFaltantes(), 0, 'la red de seguridad no manda las de super admin');
+      await ajustes.guardar({ informar_super_admin: 1 }, 'test');
+      const r2 = await encolar({ ...usuario, email: 'jefe@nebo.com', rolReal: 'super_admin' }, video());
+      await terminar(r2.g.id);
+      const [ev] = await eventos(r2.g.id);
+      assert.ok(ev, 'con el ajuste activo se encola al terminar');
+      assert.match(ev.cuerpo.note, /jefe@nebo\.com · super admin · ref mkt-gen-/);
+      await ajustes.guardar({ informar_super_admin: 0 }, 'test');
+    });
+  });
+
+  test('historial: lista lo nunca informado con total y solo envia si el total coincide', async () => {
+    await conAjuste(async () => {
+      await pagos.procesarCola({ limite: 50 }); // lo que quedo en cola de pruebas anteriores
+      const h = await pagos.historialSinInformar();
+      assert.ok(h.enviables >= 1);
+      assert.equal(h.total, Math.round(h.items.filter((i) => i.precio_usd > 0).reduce((a, i) => a + i.precio_usd, 0) * 100) / 100);
+      assert.match((await pagos.enviarHistorial(h.total + 1)).error, /cambió/);
+      const antes = mock.ajustes.length;
+      const r = await pagos.enviarHistorial(h.total);
+      assert.equal(r.encolados, h.enviables);
+      await pagos.procesarCola({ limite: 50 });
+      assert.equal(mock.ajustes.length - antes, h.enviables);
+      assert.equal((await pagos.historialSinInformar()).enviables, 0, 'no queda nada por informar');
+    });
+  });
+
   test('sin el endpoint de gasto configurado no se envia nada', async () => {
     const r = await encolar(usuario, video());
     await terminar(r.g.id);
