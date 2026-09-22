@@ -185,7 +185,7 @@ borrar.
 
 - **Saldo de Marketing (activo desde 2026-09-22)**: arranca en $0; nadie de Marketing (salvo super admins) puede crear hasta que se apruebe la primera recarga. Dar el permiso **Aprueba recargas** en Super Admin → Usuarios a quien corresponda.
 - **Costos de super admins y sistema**: se registran y van al saldo general de JH por lotes (worker, cada 10 min). Falta una pantalla para resolver lotes que queden "A JH · revisar" (hoy solo se marcan en Movimientos y en los logs del worker). Verificar en Super Admin que "Informar creaciones de super admins" esté activado (el valor guardado manda sobre el nuevo defecto).
-- **Conciliación**: comparar a diario las búsquedas de Camila con los cobros recibidos desde n8n, y el precio estimado de cada creación con los créditos que Higgsfield descontó de verdad.
+- **Conciliación (activa desde 2026-09-22)**: Camila faltante se cobra estimada sola; en Higgsfield solo se informa. La primera corrida encontró 3 creaciones con otro costo que el estimado y 3.5 cr gastados fuera del panel: revisarlas en Super Admin → Consumo y decidir si las diferencias se cobran automáticamente.
 - **Camila, tono**: pegar la sección de marketing en tuteo en el system message del Agente en n8n y publicar.
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
 - **Idempotencia en el descuento**: pedir al equipo de pagos que `/api/credits/adjust` acepte una referencia única y rechace repetidos; hoy un corte a mitad requiere revisión manual.
