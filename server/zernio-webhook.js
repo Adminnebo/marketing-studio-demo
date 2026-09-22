@@ -10,11 +10,7 @@ const zernio = require('./lib/zernio');
 const redesP = import('../shared/redes.mjs');
 const router = express.Router();
 
-// Plataformas del payload -> forma que guardamos (la misma que devuelve GET /v1/posts/:id).
-const plataformasDe = (post) => (post?.platforms || []).map((x) => ({
-  platform: x.platform, status: x.status, accountId: x.accountId || null,
-  platformPostUrl: x.publishedUrl || null, errorMessage: x.error || null,
-}));
+const { plataformasDe } = require('./lib/zernio');
 
 async function procesar(ev) {
   const { DESDE_ZERNIO, REDES } = await redesP;

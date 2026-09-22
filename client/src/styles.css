@@ -761,6 +761,12 @@ button.badge:hover { background: var(--surface-2); color: var(--text-primary); }
 .cal-ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
 .cal-leyenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.74rem; color: var(--text-muted); }
 .cal-leyenda span { display: inline-flex; align-items: center; gap: 5px; }
+.cal-leyenda-n { margin-left: auto; font-style: italic; }
+.cal-aviso { font-size: 0.76rem; color: var(--text-muted); background: var(--surface-2, rgba(127,127,127,0.08)); border-radius: 8px; padding: 6px 10px; }
+.cal-cuentas { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.cal-red { white-space: nowrap; }
+.cal-red.enlace { color: var(--link, #2563eb); text-decoration: none; }
+.cal-red.enlace:hover { text-decoration: underline; }
 .cal-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; background: var(--text-muted); }
 .cal-dot.gen { background: var(--series-2); }
 .est-programada { --c: var(--series-1); } .est-publicando, .est-enviando { --c: var(--series-5); }

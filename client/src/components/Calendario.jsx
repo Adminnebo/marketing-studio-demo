@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchCalGeneraciones, fetchCalPublicaciones, reprogramarPublicacion, cancelarPublicacion, descargar } from '../api';
-import { REDES, ESTADOS_PUB } from '@shared/redes.mjs';
+import { REDES, ESTADOS_PUB, PUB_AGENDADA, PUB_HECHA } from '@shared/redes.mjs';
 import { TIPOS } from '@shared/reglas.mjs';
 
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-const MODOS = [['ambos', 'Ambos'], ['generadas', 'Creadas'], ['agendadas', 'Agendadas']];
+const MODOS = [['ambos', 'Todo'], ['publicadas', 'Publicadas'], ['agendadas', 'Agendadas'], ['generadas', 'Creadas']];
 const VISTAS = [['dia', 'Día'], ['semana', 'Semana'], ['mes', 'Mes']];
 const ES_VIDEO = /\.(mp4|mov|webm)($|\?)/i;
 
@@ -55,7 +55,8 @@ function normalizar(gens, pubs) {
     const g = { id: p.generacion_id, preset_nombre: p.preset_nombre, preset_tipo: p.preset_tipo, portada: p.portada, resultados: p.resultados };
     items.push({
       tipo: 'pub', id: `p${p.id}`, fecha: new Date(p.fecha), titulo: p.preset_nombre || 'Publicación', thumb: miniatura(g), video: p.medio?.tipo === 'video',
-      redes: [...new Set((p.cuentas || []).map((c) => c.plataforma))], estado: p.estado, p,
+      redes: [...new Set((p.cuentas || []).map((c) => c.plataforma))], cuentas: p.cuentas || [], estado: p.estado,
+      hecha: PUB_HECHA.has(p.estado), enlaces: (p.plataformas || []).filter((x) => x.platformPostUrl), p,
     });
   }
   return items.sort((a, b) => a.fecha - b.fecha);
@@ -68,15 +69,16 @@ function Vista({ it, size = 'sm' }) {
     <span className={`cal-v cal-v-${size} ${it.tipo === 'gen' ? 'gen' : `est-${it.estado}`}`} title={`${et}: ${it.titulo}`}>
       {it.thumb ? <img src={it.thumb} alt="" loading="lazy" /> : <span className="cal-v-ph">{it.video ? '🎬' : '🖼️'}</span>}
       {it.video && <i className="cal-v-play">▶</i>}
-      {it.tipo === 'pub' && <i className="cal-v-h">{hora(it.fecha)}</i>}
+      {it.tipo === 'pub' && <i className="cal-v-h">{it.hecha ? '✓' : '🕒'} {hora(it.fecha)}</i>}
       {it.tipo === 'pub' && <i className="cal-v-redes">{it.redes.map((r) => REDES[r]?.icono || '•').join('')}</i>}
     </span>
   );
 }
 
-// Lista del dia: publicaciones (programadas o hechas) y creaciones, con sus acciones.
+// Lista del dia: lo que ya salio, lo que esta agendado y lo que se creo, cada cosa por su lado.
 function ListaDia({ dia, items, puedePublicar, onPublicar, onCambio }) {
-  const pubs = items.filter((i) => i.tipo === 'pub');
+  const hechas = items.filter((i) => i.tipo === 'pub' && i.hecha);
+  const agendadas = items.filter((i) => i.tipo === 'pub' && !i.hecha);
   const gens = items.filter((i) => i.tipo === 'gen');
   const [moviendo, setMoviendo] = useState(null); // { id, valor }
   const [msg, setMsg] = useState(null);
@@ -96,6 +98,19 @@ function ListaDia({ dia, items, puedePublicar, onPublicar, onCambio }) {
     setOcupado(true); setMsg(null);
     try { await cancelarPublicacion(it.p.id); setMsg({ ok: 'Publicación cancelada.' }); onCambio(); } catch (e) { setMsg({ error: e.message }); } finally { setOcupado(false); }
   };
+
+  // En que cuentas salio, con arroba, y el enlace a la publicacion real cuando lo hay.
+  const Cuentas = ({ it }) => (
+    <span className="cal-cuentas">
+      {(it.cuentas || []).map((c) => {
+        const enlace = (it.enlaces || []).find((x) => x.platform === c.plataforma);
+        const nombre = `${REDES[c.plataforma]?.icono || ''} ${c.usuario ? `@${c.usuario}` : REDES[c.plataforma]?.nombre || c.plataforma}`;
+        return enlace
+          ? <a key={c.id} className="cal-red enlace" href={enlace.platformPostUrl} target="_blank" rel="noreferrer" title="Ver la publicación en la red">{nombre} ↗</a>
+          : <span key={c.id} className="cal-red">{nombre}</span>;
+      })}
+    </span>
+  );
 
   const Tarjeta = ({ it, children, meta }) => {
     const r = (it.g?.resultados || it.p?.resultados || []).find((x) => x.url);
@@ -119,14 +134,29 @@ function ListaDia({ dia, items, puedePublicar, onPublicar, onCambio }) {
     <div className="cal-lista">
       {msg?.ok && <div className="ms-ok">{msg.ok}</div>}
       {msg?.error && <div className="ms-errors">{msg.error}</div>}
-      {pubs.length > 0 && (
+      {hechas.length > 0 && (
         <section>
-          <div className="cal-sec">📅 Publicaciones ({pubs.length})</div>
-          {pubs.map((it) => (
+          <div className="cal-sec">📣 Publicadas ({hechas.length})</div>
+          {hechas.map((it) => (
             <Tarjeta key={it.id} it={it} meta={<>
               <span className={`pill est-${it.estado}`}>{ESTADOS_PUB[it.estado] || it.estado}</span>
               <span>{hora(it.fecha)}</span>
-              <span>{it.redes.map((r) => `${REDES[r]?.icono || ''} ${REDES[r]?.nombre || r}`).join(' · ')}</span>
+              <Cuentas it={it} />
+            </>}>
+              {it.p.texto && <div className="cal-item-texto">{it.p.texto}</div>}
+              {it.p.error && <div className="ms-gen-err">{it.p.error}</div>}
+            </Tarjeta>
+          ))}
+        </section>
+      )}
+      {agendadas.length > 0 && (
+        <section>
+          <div className="cal-sec">🗓️ Agendadas ({agendadas.length})</div>
+          {agendadas.map((it) => (
+            <Tarjeta key={it.id} it={it} meta={<>
+              <span className={`pill est-${it.estado}`}>{ESTADOS_PUB[it.estado] || it.estado}</span>
+              <span>{hora(it.fecha)}</span>
+              <Cuentas it={it} />
             </>}>
               {it.p.texto && <div className="cal-item-texto">{it.p.texto}</div>}
               {it.p.error && <div className="ms-gen-err">{it.p.error}</div>}
@@ -178,7 +208,7 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
   const [vista, setVista] = useState(() => { try { return localStorage.getItem('cal_vista') || 'mes'; } catch { return 'mes'; } });
   const [ancla, setAncla] = useState(() => new Date());
   const [dia, setDia] = useState(null);
-  const [datos, setDatos] = useState({ gens: [], pubs: [], cargando: true, error: null });
+  const [datos, setDatos] = useState({ gens: [], pubs: [], cargando: true, error: null, aviso: null });
   const [recarga, setRecarga] = useState(0);
   const modoEf = puedeVerPublicaciones ? modo : 'generadas';
   useEffect(() => { try { localStorage.setItem('cal_modo', modo); localStorage.setItem('cal_vista', vista); } catch { /* sin storage */ } }, [modo, vista]);
@@ -187,15 +217,28 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
   useEffect(() => {
     let vivo = true;
     setDatos((d) => ({ ...d, cargando: true, error: null }));
+    const conGens = modoEf === 'ambos' || modoEf === 'generadas';
+    const conPubs = modoEf !== 'generadas';
     Promise.all([
-      modoEf !== 'agendadas' ? fetchCalGeneraciones(desde.toISOString(), hasta.toISOString()).then((r) => r.items) : [],
-      modoEf !== 'generadas' ? fetchCalPublicaciones(desde.toISOString(), hasta.toISOString()).then((r) => r.items) : [],
-    ]).then(([gens, pubs]) => vivo && setDatos({ gens, pubs, cargando: false, error: null }))
+      conGens ? fetchCalGeneraciones(desde.toISOString(), hasta.toISOString()).then((r) => r.items) : [],
+      conPubs ? fetchCalPublicaciones(desde.toISOString(), hasta.toISOString()) : { items: [] },
+    ]).then(([gens, rp]) => vivo && setDatos({
+      gens, pubs: rp.items, cargando: false, error: null,
+      aviso: !conPubs ? null
+        : !rp.filtrado ? 'No se pudieron leer las cuentas conectadas: se muestran todas las publicaciones.'
+        : rp.ocultas > 0 ? `${rp.ocultas} publicación(es) de cuentas ya desconectadas no se muestran.` : null,
+    }))
       .catch((e) => vivo && setDatos((d) => ({ ...d, cargando: false, error: e.message })));
     return () => { vivo = false; };
   }, [desde.getTime(), hasta.getTime(), modoEf, recarga, version]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const items = useMemo(() => normalizar(datos.gens, datos.pubs), [datos]);
+  const todos = useMemo(() => normalizar(datos.gens, datos.pubs), [datos]);
+  const items = useMemo(() => todos.filter((it) => (
+    modoEf === 'publicadas' ? it.tipo === 'pub' && it.hecha
+      : modoEf === 'agendadas' ? it.tipo === 'pub' && !it.hecha
+        : modoEf === 'generadas' ? it.tipo === 'gen'
+          : true
+  )), [todos, modoEf]);
   const porDia = useMemo(() => {
     const m = new Map();
     for (const it of items) { const k = clave(it.fecha); if (!m.has(k)) m.set(k, []); m.get(k).push(it); }
@@ -206,7 +249,11 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
 
   const mover = (n) => setAncla((a) => (vista === 'dia' ? sumarDias(a, n) : vista === 'semana' ? sumarDias(a, 7 * n) : new Date(a.getFullYear(), a.getMonth() + n, 1)));
   const recargar = () => setRecarga((x) => x + 1);
-  const resumen = (arr) => ({ g: arr.filter((i) => i.tipo === 'gen').length, p: arr.filter((i) => i.tipo === 'pub').length });
+  const resumen = (arr) => ({
+    g: arr.filter((i) => i.tipo === 'gen').length,
+    pub: arr.filter((i) => i.tipo === 'pub' && i.hecha).length,
+    ag: arr.filter((i) => i.tipo === 'pub' && !i.hecha).length,
+  });
 
   return (
     <div className="cal">
@@ -226,10 +273,13 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
         </div>
       </div>
       <div className="cal-leyenda">
-        {modoEf !== 'agendadas' && <span><i className="cal-dot gen" /> Creada</span>}
-        {modoEf !== 'generadas' && <><span><i className="cal-dot est-programada" /> Programada</span><span><i className="cal-dot est-publicada" /> Publicada</span><span><i className="cal-dot est-fallida" /> Falló</span></>}
+        {(modoEf === 'ambos' || modoEf === 'generadas') && <span><i className="cal-dot gen" /> Creada</span>}
+        {(modoEf === 'ambos' || modoEf === 'agendadas') && <span><i className="cal-dot est-programada" /> Agendada</span>}
+        {(modoEf === 'ambos' || modoEf === 'publicadas') && <><span><i className="cal-dot est-publicada" /> Publicada</span><span><i className="cal-dot est-fallida" /> No salió</span></>}
+        {modoEf !== 'generadas' && <span className="cal-leyenda-n">Solo de las cuentas conectadas</span>}
       </div>
       {datos.error && <div className="banner-off">{datos.error}</div>}
+      {datos.aviso && <div className="cal-aviso">{datos.aviso}</div>}
 
       {vista === 'mes' && (
         <div className="cal-mes">
@@ -242,7 +292,11 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
                 <span className="cal-celda-top">
                   <span className="cal-num">{d.getDate()}</span>
                   {arr.length > 0 && (() => { const r = resumen(arr); return (
-                    <span className="cal-cuenta">{r.p ? <i title={`${r.p} publicación(es)`}>📅{r.p}</i> : null}{r.g ? <i title={`${r.g} creación(es)`}>🎨{r.g}</i> : null}</span>
+                    <span className="cal-cuenta">
+                      {r.pub ? <i title={`${r.pub} publicada(s)`}>📣{r.pub}</i> : null}
+                      {r.ag ? <i title={`${r.ag} agendada(s)`}>🕒{r.ag}</i> : null}
+                      {r.g ? <i title={`${r.g} creación(es)`}>🎨{r.g}</i> : null}
+                    </span>
                   ); })()}
                 </span>
                 <span className="cal-vistas">
@@ -263,14 +317,16 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
               <div key={clave(d)} className={`cal-col ${mismoDia(d, hoy) ? 'hoy' : ''}`}>
                 <button className="cal-col-cab" onClick={() => setDia(d)}>
                   <span>{DIAS[i]}</span><b>{d.getDate()}</b>
-                  {(r.g || r.p) ? <span className="cal-col-res">{r.p ? `📅${r.p}` : ''} {r.g ? `🎨${r.g}` : ''}</span> : null}
+                  {(r.g || r.pub || r.ag) ? <span className="cal-col-res">{r.pub ? `📣${r.pub}` : ''} {r.ag ? `🕒${r.ag}` : ''} {r.g ? `🎨${r.g}` : ''}</span> : null}
                 </button>
                 <div className="cal-col-items">
                   {arr.map((it) => (
                     <button key={it.id} className="cal-col-item" onClick={() => setDia(d)} title={it.titulo}>
                       <Vista it={it} size="md" />
                       <span className="cal-col-t">{it.titulo}</span>
-                      <span className="cal-col-sub">{it.tipo === 'pub' ? `${hora(it.fecha)} · ${it.redes.map((r) => REDES[r]?.nombre || r).join(', ')}` : TIPOS[it.g.preset_tipo] || 'Creada'}</span>
+                      <span className="cal-col-sub">{it.tipo === 'pub'
+                        ? `${it.hecha ? 'Publicada' : 'Agendada'} ${hora(it.fecha)} · ${(it.cuentas || []).map((c) => (c.usuario ? `@${c.usuario}` : REDES[c.plataforma]?.nombre || c.plataforma)).join(', ')}`
+                        : TIPOS[it.g.preset_tipo] || 'Creada'}</span>
                     </button>
                   ))}
                   {!arr.length && <span className="cal-vacio">Sin nada</span>}
@@ -292,7 +348,7 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
               <div className="ms-modal__head">
                 <div>
                   <h2 style={{ textTransform: 'capitalize' }}>{fechaLarga(dia)}</h2>
-                  <span className="ms-cost">{(() => { const r = resumen(delDia(dia)); return [r.p && `${r.p} publicación(es)`, r.g && `${r.g} creación(es)`].filter(Boolean).join(' · ') || 'Sin actividad'; })()}</span>
+                  <span className="ms-cost">{(() => { const r = resumen(delDia(dia)); return [r.pub && `${r.pub} publicada(s)`, r.ag && `${r.ag} agendada(s)`, r.g && `${r.g} creación(es)`].filter(Boolean).join(' · ') || 'Sin actividad'; })()}</span>
                 </div>
                 <div className="rc-cerrar">
                   <button className="mini-btn" onClick={() => setDia(sumarDias(dia, -1))} aria-label="Día anterior">‹</button>

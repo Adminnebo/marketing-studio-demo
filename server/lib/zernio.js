@@ -149,7 +149,15 @@ function firmaValida(cuerpoCrudo, firma) {
   return a.length === b.length && require('crypto').timingSafeEqual(a, b);
 }
 
+// Plataformas del post (webhook o GET /v1/posts/:id) -> la forma que guardamos.
+// Una sola forma: el calendario cuenta con platformPostUrl para abrir la publicacion.
+const plataformasDe = (post) => (post?.platforms || []).map((x) => ({
+  platform: x.platform, status: x.status, accountId: x.accountId || null,
+  platformPostUrl: x.publishedUrl || x.platformPostUrl || null,
+  errorMessage: x.error || x.errorMessage || x.errorCategory || null,
+}));
+
 module.exports = {
-  configurado, llamar, perfilId, perfiles, elegirPerfil, perfilElegido, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, reprogramarPost, ZernioError,
+  plataformasDe, configurado, llamar, perfilId, perfiles, elegirPerfil, perfilElegido, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, reprogramarPost, ZernioError,
   webhookListo, asegurarWebhook, probarWebhook, firmaValida, EVENTOS,
 };

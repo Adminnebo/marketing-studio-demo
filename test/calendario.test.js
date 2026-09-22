@@ -10,7 +10,8 @@ if (!process.env.TEST_DATABASE_URL) {
   const express = require('express');
   const { pool, migrar } = require('../server/lib/db');
   const zernio = require('../server/lib/zernio');
-  const { router } = require('../server/redes');
+  const redes = require('../server/redes');
+  const { router } = redes;
   const app = express();
   app.use(express.json());
   app.use('/api', (req, res, next) => { req.user = { email: 'admin@nebo.com', rol: 'admin', puedePublicar: true }; next() }, router);
@@ -86,4 +87,34 @@ if (!process.env.TEST_DATABASE_URL) {
     const [, j] = await get(`/publicaciones/calendario?desde=${enDias(-1).toISOString()}&hasta=${enDias(9).toISOString()}`);
     assert.equal(j.items.length, 0);
   });
+  test('solo salen las publicaciones de las cuentas conectadas hoy', async () => {
+    // Una publicacion en la cuenta conectada y otra en una cuenta que ya se desconecto.
+    const { rows: [a] } = await pool.query(
+      `INSERT INTO publicaciones (generacion_id, creado_por, medio, cuentas, estado, programada_para)
+       VALUES ($1,'v@jh','{}','[{"id":"acc-viva","plataforma":"instagram","usuario":"jh"}]','publicada',$2) RETURNING id`, [genId, enDias(1)]
+    );
+    await pool.query(
+      `INSERT INTO publicaciones (generacion_id, creado_por, medio, cuentas, estado, programada_para)
+       VALUES ($1,'v@jh','{}','[{"id":"acc-vieja","plataforma":"instagram","usuario":"otra"}]','publicada',$2)`, [genId, enDias(1)]
+    );
+    zernio.cuentas = async () => [{ id: 'acc-viva', plataforma: 'instagram', usuario: 'jh' }];
+    redes._olvidarCuentas();
+    const [s, j] = await get(`/publicaciones/calendario?desde=${enDias(-1).toISOString()}&hasta=${enDias(7).toISOString()}`);
+    assert.equal(s, 200);
+    assert.equal(j.filtrado, true);
+    assert.ok(j.ocultas >= 1, 'la de la cuenta desconectada queda fuera');
+    assert.deepEqual(j.items.map((x) => Number(x.id)), [Number(a.id)], 'solo la de la cuenta conectada');
+  });
+
+  test('si no se pueden leer las cuentas, se muestran todas y se avisa', async () => {
+    zernio.cuentas = async () => { throw new Error('Zernio caido'); };
+    redes._olvidarCuentas();
+    const [s, j] = await get(`/publicaciones/calendario?desde=${enDias(-1).toISOString()}&hasta=${enDias(7).toISOString()}`);
+    assert.equal(s, 200);
+    assert.equal(j.filtrado, false);
+    // Mejor mostrar todo que dejar el calendario vacio: vuelve la de la cuenta desconectada.
+    const usuarios = j.items.flatMap((x) => (x.cuentas || []).map((c) => c.usuario));
+    assert.ok(usuarios.includes('otra'), 'se muestra tambien la de la cuenta desconectada');
+  });
+
 }

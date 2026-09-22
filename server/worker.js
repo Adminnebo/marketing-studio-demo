@@ -214,13 +214,14 @@ async function revisarPublicaciones() {
     try {
       const { post } = await zernio.leerPost(p.zernio_post_id);
       const estado = DESDE_ZERNIO[post?.status] || p.estado;
-      const fallos = (post?.platforms || []).filter((x) => x.status === 'failed');
+      const plataformas = zernio.plataformasDe(post);
+      const fallos = plataformas.filter((x) => x.status === 'failed');
       const error = fallos.length ? 'No salió en: ' + fallos.map((x) => REDES[x.platform]?.nombre || x.platform).join(', ') + '.' : null;
       await pool.query(
         `UPDATE publicaciones SET estado = $2, plataformas = $3, error = $4, error_detalle = $5, revisado = now(),
            actualizado = CASE WHEN estado <> $2 THEN now() ELSE actualizado END WHERE id = $1`,
-        [p.id, estado, JSON.stringify(post?.platforms || []), error,
-          fallos.length ? fallos.map((x) => `${x.platform}: ${x.errorMessage || x.errorCategory || 'error'}`).join(' | ').slice(0, 1000) : null]
+        [p.id, estado, JSON.stringify(plataformas), error,
+          fallos.length ? fallos.map((x) => `${x.platform}: ${x.errorMessage || 'error'}`).join(' | ').slice(0, 1000) : null]
       );
       if (estado !== p.estado) log(`publicacion #${p.id}: ${p.estado} -> ${estado}`);
     } catch (e) {

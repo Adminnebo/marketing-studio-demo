@@ -187,20 +187,38 @@ router.get('/publicaciones', ruta(async (req, res) => {
   res.json({ items: rows });
 }));
 
+// Cuentas conectadas ahora mismo (ids), con memoria corta: si Zernio no responde en ese
+// momento, el calendario sigue filtrando por las ultimas que se leyeron.
+let _idsCuentas = { ids: null, exp: 0 };
+async function idsConectadas() {
+  if (_idsCuentas.ids && _idsCuentas.exp > Date.now()) return { ids: _idsCuentas.ids, fresco: true };
+  try {
+    const ids = new Set((await cuentasPanel()).map((c) => String(c.id)));
+    _idsCuentas = { ids, exp: Date.now() + 60e3 };
+    return { ids, fresco: true };
+  } catch (e) {
+    console.error('[calendario] no se pudieron leer las cuentas conectadas:', e.message);
+    return { ids: _idsCuentas.ids, fresco: false }; // ids null = no se pudo filtrar
+  }
+}
+
 // Calendario: publicaciones programadas o hechas en un rango (por fecha programada o de envio),
-// con lo necesario de su creacion para mostrarlas. Las canceladas no se muestran.
+// con lo necesario de su creacion para mostrarlas. Las canceladas no se muestran, y solo salen
+// las de las cuentas conectadas hoy: lo de una cuenta que se desconecto ya no es de esta casa.
 router.get('/publicaciones/calendario', ruta(async (req, res) => {
   const desde = new Date(req.query.desde); const hasta = new Date(req.query.hasta);
   if (Number.isNaN(+desde) || Number.isNaN(+hasta) || hasta <= desde || hasta - desde > 45 * 864e5) return res.status(400).json({ error: 'Rango de fechas inválido.' });
   const { rows } = await pool.query(
     `SELECT p.id, p.generacion_id, p.indice, p.creado_por, p.texto, p.medio, p.cuentas, p.programada_para, p.zona, p.estado,
-            p.error, p.creado, COALESCE(p.programada_para, p.creado) AS fecha,
+            p.plataformas, p.error, p.creado, COALESCE(p.programada_para, p.creado) AS fecha,
             g.preset_nombre, g.preset_tipo, g.portada, g.resultados
      FROM publicaciones p JOIN generaciones g ON g.id = p.generacion_id
      WHERE p.estado <> 'cancelada' AND COALESCE(p.programada_para, p.creado) >= $1 AND COALESCE(p.programada_para, p.creado) < $2
      ORDER BY fecha`, [desde, hasta]
   );
-  res.json({ items: rows });
+  const { ids, fresco } = await idsConectadas();
+  const items = ids ? rows.filter((p) => (p.cuentas || []).some((c) => ids.has(String(c.id)))) : rows;
+  res.json({ items, filtrado: !!ids, cuentasAlDia: fresco, ocultas: rows.length - items.length });
 }));
 
 // Mover la fecha de una programada (antes de que salga).
@@ -230,4 +248,4 @@ router.post('/publicaciones/:id/cancelar', requirePublicar, ruta(async (req, res
   res.json({ ok: true });
 }));
 
-module.exports = { router, cuerpoZernio };
+module.exports = { router, cuerpoZernio, _olvidarCuentas: () => { _idsCuentas = { ids: null, exp: 0 }; } };

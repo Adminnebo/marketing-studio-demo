@@ -16,6 +16,9 @@ export const ESTADOS_PUB = {
   parcial: 'Parcial', fallida: 'Falló', cancelada: 'Cancelada',
 };
 export const PUB_EN_CURSO = new Set(['enviando', 'programada', 'publicando']);
+// Para el calendario: lo que todavia no salio (agendadas) y lo que ya se intentó (publicadas).
+export const PUB_AGENDADA = new Set(['enviando', 'programada', 'publicando']);
+export const PUB_HECHA = new Set(['publicada', 'parcial', 'fallida']);
 
 // Estado del post en Zernio -> estado local.
 export const DESDE_ZERNIO = {
