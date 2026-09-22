@@ -61,14 +61,17 @@ function normalizar(gens, pubs) {
   return items.sort((a, b) => a.fecha - b.fecha);
 }
 
-function Chip({ it }) {
-  return it.tipo === 'gen'
-    ? <span className="cal-chip gen" title={`Creada: ${it.titulo}`}><span className="cal-chip-ic">{it.video ? '🎬' : '🖼️'}</span>{it.titulo}</span>
-    : (
-      <span className={`cal-chip pub est-${it.estado}`} title={`${ESTADOS_PUB[it.estado] || it.estado}: ${it.titulo}`}>
-        <span className="cal-chip-h">{hora(it.fecha)}</span>{it.redes.map((r) => REDES[r]?.icono || '•').join('')} {it.titulo}
-      </span>
-    );
+// Vista previa cuadrada de un item, con su estado y (si es publicación) su hora y redes.
+function Vista({ it, size = 'sm' }) {
+  const et = it.tipo === 'pub' ? `${ESTADOS_PUB[it.estado] || it.estado} · ${hora(it.fecha)}` : 'Creada';
+  return (
+    <span className={`cal-v cal-v-${size} ${it.tipo === 'gen' ? 'gen' : `est-${it.estado}`}`} title={`${et}: ${it.titulo}`}>
+      {it.thumb ? <img src={it.thumb} alt="" loading="lazy" /> : <span className="cal-v-ph">{it.video ? '🎬' : '🖼️'}</span>}
+      {it.video && <i className="cal-v-play">▶</i>}
+      {it.tipo === 'pub' && <i className="cal-v-h">{hora(it.fecha)}</i>}
+      {it.tipo === 'pub' && <i className="cal-v-redes">{it.redes.map((r) => REDES[r]?.icono || '•').join('')}</i>}
+    </span>
+  );
 }
 
 // Lista del dia: publicaciones (programadas o hechas) y creaciones, con sus acciones.
@@ -94,16 +97,23 @@ function ListaDia({ dia, items, puedePublicar, onPublicar, onCambio }) {
     try { await cancelarPublicacion(it.p.id); setMsg({ ok: 'Publicación cancelada.' }); onCambio(); } catch (e) { setMsg({ error: e.message }); } finally { setOcupado(false); }
   };
 
-  const Tarjeta = ({ it, children, meta }) => (
-    <div className="cal-item">
-      <div className="cal-item-img">{it.thumb ? <img src={it.thumb} alt="" loading="lazy" /> : <span>{it.video ? '🎬' : '🖼️'}</span>}{it.video && it.thumb && <i className="cal-item-play">▶</i>}</div>
-      <div className="cal-item-cuerpo">
-        <div className="cal-item-t">{it.titulo}</div>
-        <div className="cal-item-m">{meta}</div>
-        {children}
+  const Tarjeta = ({ it, children, meta }) => {
+    const r = (it.g?.resultados || it.p?.resultados || []).find((x) => x.url);
+    const ver = r?.url || it.thumb;
+    return (
+      <div className="cal-item">
+        <a className="cal-item-img" href={ver || undefined} target="_blank" rel="noreferrer" title="Ver en grande">
+          {it.thumb ? <img src={it.thumb} alt="" loading="lazy" /> : <span>{it.video ? '🎬' : '🖼️'}</span>}
+          {it.video && <i className="cal-item-play">▶</i>}
+        </a>
+        <div className="cal-item-cuerpo">
+          <div className="cal-item-t">{it.titulo}</div>
+          <div className="cal-item-m">{meta}</div>
+          {children}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="cal-lista">
@@ -123,14 +133,18 @@ function ListaDia({ dia, items, puedePublicar, onPublicar, onCambio }) {
               {it.estado === 'programada' && puedePublicar && (
                 moviendo?.id === it.id ? (
                   <div className="cal-mover">
-                    <input type="datetime-local" className="search" value={moviendo.valor} min={aLocalInput(new Date(Date.now() + 6 * 60e3))} onChange={(e) => setMoviendo({ id: it.id, valor: e.target.value })} />
-                    <button className="btn" disabled={ocupado} onClick={() => mover(it)}>Guardar</button>
-                    <button className="btn secondary" disabled={ocupado} onClick={() => setMoviendo(null)}>Cancelar</button>
+                    <label className="filter-field"><span>Nueva fecha y hora</span>
+                      <input type="datetime-local" className="search" value={moviendo.valor} min={aLocalInput(new Date(Date.now() + 6 * 60e3))} onChange={(e) => setMoviendo({ id: it.id, valor: e.target.value })} />
+                    </label>
+                    <div className="cal-acc">
+                      <button className="btn" disabled={ocupado} onClick={() => mover(it)}>{ocupado ? 'Guardando…' : 'Guardar fecha'}</button>
+                      <button className="btn secondary" disabled={ocupado} onClick={() => setMoviendo(null)}>Cancelar</button>
+                    </div>
                   </div>
                 ) : (
                   <div className="cal-acc">
-                    <button className="mini-btn" disabled={ocupado} onClick={() => setMoviendo({ id: it.id, valor: aLocalInput(it.fecha) })}>🗓️ Mover fecha</button>
-                    <button className="mini-btn danger" disabled={ocupado} onClick={() => cancelar(it)}>✕ Cancelar publicación</button>
+                    <button className="btn secondary cal-b" disabled={ocupado} onClick={() => setMoviendo({ id: it.id, valor: aLocalInput(it.fecha) })}>🗓️ Mover fecha</button>
+                    <button className="btn secondary cal-b cal-b-danger" disabled={ocupado} onClick={() => cancelar(it)}>✕ Cancelar</button>
                   </div>
                 )
               )}
@@ -146,8 +160,8 @@ function ListaDia({ dia, items, puedePublicar, onPublicar, onCambio }) {
               <span>{TIPOS[it.g.preset_tipo] || it.g.preset_tipo}</span><span>{hora(it.fecha)}</span><span>{it.g.creado_por}</span>
             </>}>
               <div className="cal-acc">
-                {puedePublicar && onPublicar && <button className="mini-btn" onClick={() => onPublicar(it.g, 0)}>📣 Publicar</button>}
-                <button className="mini-btn" onClick={() => descargar(it.g.id, 0).catch((e) => setMsg({ error: e.message }))}>⬇ Descargar</button>
+                {puedePublicar && onPublicar && <button className="btn cal-b" onClick={() => onPublicar(it.g, 0)}>📣 Publicar</button>}
+                <button className="btn secondary cal-b" onClick={() => descargar(it.g.id, 0).catch((e) => setMsg({ error: e.message }))}>⬇ Descargar</button>
               </div>
             </Tarjeta>
           ))}
@@ -225,9 +239,16 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
             const fuera = d.getMonth() !== ancla.getMonth();
             return (
               <button key={clave(d)} className={`cal-celda ${fuera ? 'fuera' : ''} ${mismoDia(d, hoy) ? 'hoy' : ''} ${arr.length ? 'con' : ''}`} onClick={() => setDia(d)}>
-                <span className="cal-num">{d.getDate()}</span>
-                <span className="cal-chips">{arr.slice(0, 3).map((it) => <Chip key={it.id} it={it} />)}</span>
-                {arr.length > 3 && <span className="cal-mas">+{arr.length - 3} más</span>}
+                <span className="cal-celda-top">
+                  <span className="cal-num">{d.getDate()}</span>
+                  {arr.length > 0 && (() => { const r = resumen(arr); return (
+                    <span className="cal-cuenta">{r.p ? <i title={`${r.p} publicación(es)`}>📅{r.p}</i> : null}{r.g ? <i title={`${r.g} creación(es)`}>🎨{r.g}</i> : null}</span>
+                  ); })()}
+                </span>
+                <span className="cal-vistas">
+                  {arr.slice(0, 3).map((it) => <Vista key={it.id} it={it} />)}
+                  {arr.length > 3 && <span className="cal-v cal-v-sm cal-mas">+{arr.length - 3}</span>}
+                </span>
               </button>
             );
           })}
@@ -246,12 +267,13 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
                 </button>
                 <div className="cal-col-items">
                   {arr.map((it) => (
-                    <button key={it.id} className="cal-col-item" onClick={() => setDia(d)}>
-                      {it.thumb ? <img src={it.thumb} alt="" loading="lazy" /> : <span className="cal-col-ph">{it.video ? '🎬' : '🖼️'}</span>}
-                      <Chip it={it} />
+                    <button key={it.id} className="cal-col-item" onClick={() => setDia(d)} title={it.titulo}>
+                      <Vista it={it} size="md" />
+                      <span className="cal-col-t">{it.titulo}</span>
+                      <span className="cal-col-sub">{it.tipo === 'pub' ? `${hora(it.fecha)} · ${it.redes.map((r) => REDES[r]?.nombre || r).join(', ')}` : TIPOS[it.g.preset_tipo] || 'Creada'}</span>
                     </button>
                   ))}
-                  {!arr.length && <span className="cal-vacio">—</span>}
+                  {!arr.length && <span className="cal-vacio">Sin nada</span>}
                 </div>
               </div>
             );
