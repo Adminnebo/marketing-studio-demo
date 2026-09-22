@@ -15,13 +15,14 @@ const esVideoGen = (g) => g.preset_tipo === 'libre_video' || TIPOS_VIDEO.has(g.p
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
 
-function Tarjeta({ g, rol, onRepetir, onPublicar, onBase }) {
+function Tarjeta({ g, rol, onRepetir, onPublicar, onBase, onBorrar }) {
   const ok = (g.resultados || []).filter((r) => r.url);
   const [i, setI] = useState(0);
   const r = ok[Math.min(i, ok.length - 1)];
   const [bajando, setBajando] = useState(false);
   const [errBaja, setErrBaja] = useState(null);
   const [base, setBase] = useState(false);
+  const [borrando, setBorrando] = useState(false);
   const bajar = async () => {
     setBajando(true);
     setErrBaja(null);
@@ -85,6 +86,16 @@ function Tarjeta({ g, rol, onRepetir, onPublicar, onBase }) {
               {base ? 'Preparando…' : '✨ Usar como base'}
             </button>
           )}
+          {onBorrar && !EN_CURSO.has(g.estado) && (
+            <button className="mini-btn ms-gen-borrar" disabled={borrando} title="Quitarla de Mis creaciones (el gasto ya hecho no se devuelve)"
+              onClick={async () => {
+                if (!window.confirm(`¿Quitar "${g.preset_nombre || 'esta creación'}" de Mis creaciones? Se deja de ver para todos y no se puede deshacer desde aquí. Lo que costó no se devuelve.`)) return;
+                setBorrando(true); setErrBaja(null);
+                try { await onBorrar(g); } catch (e) { setErrBaja(e.message); setBorrando(false); }
+              }}>
+              {borrando ? 'Borrando…' : '🗑 Borrar'}
+            </button>
+          )}
           {(g.entrada?.preset || g.entrada?.libre) && <button className="mini-btn" onClick={() => onRepetir(g)} title="Abrir de nuevo con la misma foto y descripción para repetir o ajustar">↻ Usar de nuevo</button>}
         </div>
       </div>
@@ -116,15 +127,17 @@ function useBusqueda(f) {
     try { const d = await fetchGeneraciones(r.siguiente, f); setR((x) => ({ items: [...x.items, ...d.items], cargando: false, error: null, siguiente: d.siguiente })); }
     catch (e) { setR((x) => ({ ...x, cargando: false, error: e.message })); }
   };
-  return { activa, ...r, mas };
+  const quitar = (id) => setR((x) => ({ ...x, items: x.items.filter((g) => g.id !== id) }));
+  return { activa, ...r, mas, quitar };
 }
 
-export default function Generaciones({ items: todas, cargando: cargandoTodas, error: errorTodas, hayMas: hayMasTodas, onMas, onRepetir, onPublicar, onBase, rol, onCrear }) {
+export default function Generaciones({ items: todas, cargando: cargandoTodas, error: errorTodas, hayMas: hayMasTodas, onMas, onRepetir, onPublicar, onBase, onBorrar, rol, onCrear }) {
   const [filtro, setFiltro] = useState('');
   const [f, setF] = useState(FILTROS_VACIOS);
   const [autores, setAutores] = useState([]);
   const [tam, setTam] = useTamano('ms_tam_creaciones', 250);
   const b = useBusqueda(f);
+  const borrar = onBorrar && (async (g) => { await onBorrar(g); b.quitar(g.id); });
   useEffect(() => { if (rol !== 'usuario') fetchAutores().then((d) => setAutores(d.autores)).catch(() => {}); }, [rol]);
   // Lo que esta en curso se actualiza en la lista general; en la busqueda se toma de ahi.
   const frescas = new Map(todas.map((g) => [g.id, g]));
@@ -180,7 +193,7 @@ export default function Generaciones({ items: todas, cargando: cargandoTodas, er
         </div>
       ) : (
         <div className="ms-gens" style={{ '--tam': `${tam}px` }}>
-          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} onRepetir={onRepetir} onPublicar={onPublicar} onBase={onBase} />)}
+          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} onRepetir={onRepetir} onPublicar={onPublicar} onBase={onBase} onBorrar={borrar} />)}
         </div>
       )}
       {hayMas && (

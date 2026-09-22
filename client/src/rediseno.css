@@ -309,3 +309,4 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .ms-gen-pub:focus-visible { outline: 2px solid var(--series-1); outline-offset: -2px; }
 .ms-gen-abrir { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(0, 0, 0, 0.55); color: #fff; opacity: 0.85; transition: opacity 0.15s, background 0.15s; }
 .ms-gen-abrir:hover, .ms-gen-abrir:focus-visible { opacity: 1; background: rgba(0, 0, 0, 0.75); }
+.ms-gen-borrar:hover:not(:disabled) { border-color: color-mix(in srgb, var(--critical) 45%, var(--border)); color: var(--critical); }

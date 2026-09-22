@@ -174,6 +174,9 @@ const MIGRACIONES = [
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS cobro_externo BOOLEAN NOT NULL DEFAULT false`,
   // Pagada con el saldo de Marketing (lib/saldo-marketing.js): esa plata ya salio del saldo general al aprobar la recarga.
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS cobro_interno BOOLEAN NOT NULL DEFAULT false`,
+  // Borrada de la galeria: deja de verse en Mis creaciones, pero el gasto y su historial se conservan.
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS eliminada TIMESTAMPTZ`,
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS eliminada_por TEXT`,
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS gasto_informado TIMESTAMPTZ`,
   `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,

@@ -87,6 +87,7 @@ export const fetchGeneraciones = (antes, filtros = {}) => {
   return api('/generaciones?' + p);
 };
 export const fetchAutores = () => api('/generaciones-autores');
+export const borrarGeneracion = (id) => api(`/generaciones/${id}`, { method: 'DELETE' });
 // Partir de una imagen ya creada: la sube al generador y devuelve su media_id.
 export const usarComoBase = (generacionId, indice) => api('/medios/importar', { method: 'POST', body: JSON.stringify({ generacionId, indice }) });
 

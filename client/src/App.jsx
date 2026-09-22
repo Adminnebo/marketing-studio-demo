@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { iniciarAuth, sesion, salir, cambiarVerComo, fetchCamilaEstado, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, usarComoBase, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
+import { iniciarAuth, sesion, salir, cambiarVerComo, fetchCamilaEstado, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, usarComoBase, borrarGeneracion, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
 import Login from './components/Login';
 import Plantillas from './components/Plantillas';
 import Recrear from './components/Recrear';
@@ -230,6 +230,12 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Borrar de la galería: desaparece de Mis creaciones (el gasto queda registrado en Créditos).
+  const borrar = async (g) => {
+    await borrarGeneracion(g.id);
+    setGens((x) => ({ ...x, items: x.items.filter((i) => i.id !== g.id) }));
+  };
+
   const repetir = (g) => (g.entrada?.libre ? (() => {
     const l = g.entrada.libre;
     setLibre((x) => ({
@@ -400,7 +406,7 @@ export default function App() {
 
       {tab === 'generaciones' && (
         <Generaciones items={gens.items} cargando={gens.cargando} error={gens.error} hayMas={!!gens.siguiente}
-          onMas={masGens} onRepetir={repetir} onBase={usarDeBase} rol={me.rol} onCrear={() => setTab('plantillas')}
+          onMas={masGens} onRepetir={repetir} onBase={usarDeBase} onBorrar={borrar} rol={me.rol} onCrear={() => setTab('plantillas')}
           onPublicar={me.puedePublicar ? (g, indice) => setPublicando({ g, indice }) : null} />
       )}
 

@@ -41,6 +41,15 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.deepEqual(await buscar({ q: '%' }), [ids.gabinete]);
   });
 
+  test('lo borrado de la galería no se lista, pero la fila sigue ahí', async () => {
+    const { rows: [g] } = await pool.query(`INSERT INTO generaciones (creado_por, preset_id, preset_tipo, preset_nombre, entrada, estado, eliminada, eliminada_por)
+      VALUES ('ana@jh.do', 'p', 'poster', 'Anuncio viejo', '{}', 'completado', now(), 'ana@jh.do') RETURNING id`);
+    assert.ok(!(await buscar({})).includes(Number(g.id)));
+    assert.deepEqual(await buscar({ q: 'Anuncio viejo' }), []);
+    const { rows: [f] } = await pool.query('SELECT eliminada_por FROM generaciones WHERE id = $1', [g.id]);
+    assert.equal(f.eliminada_por, 'ana@jh.do');
+  });
+
   test('filtros de tipo, estado, fecha, autor y publicadas se combinan', async () => {
     assert.deepEqual(await buscar({ medio: 'video' }), [ids.breaker]);
     assert.deepEqual(await buscar({ medio: 'foto' }), [ids.otro, ids.gabinete]);

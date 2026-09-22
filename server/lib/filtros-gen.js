@@ -7,7 +7,7 @@
 const TIPOS_VIDEO_SQL = `('ugc', '2d_motion', 'hypermotion', 'mixed_media', 'saas_motion', 'libre_video')`;
 
 function filtrosGeneraciones(q, { email, vals = [] }) {
-  const cond = [];
+  const cond = ['eliminada IS NULL']; // las borradas de la galeria no se listan (el gasto sigue registrado)
   const v = (x) => { vals.push(x); return `$${vals.length}`; };
   if (Number(q.antes)) cond.push(`id < ${v(Number(q.antes))}`);
   // Cada palabra tiene que aparecer en algun campo ("gabinete 11" encuentra "GABINETE METALICO 11 MODULOS").

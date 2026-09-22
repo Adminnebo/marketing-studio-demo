@@ -338,6 +338,19 @@ app.get('/api/generaciones', ruta(async (req, res) => {
   res.json({ items: rows, siguiente: rows.length === limite ? rows.at(-1).id : null });
 }));
 
+// Borrar de la galeria: la crea quien la hizo o un admin. No se puede mientras se esta creando.
+// La fila queda (con su costo y su historial); solo deja de verse en Mis creaciones.
+app.delete('/api/generaciones/:id', ruta(async (req, res) => {
+  const { rows: [g] } = await pool.query('SELECT id, creado_por, estado, eliminada FROM generaciones WHERE id = $1', [Number(req.params.id) || 0]);
+  if (!g || g.eliminada) return res.status(404).json({ error: 'Esa creación ya no está.' });
+  const suya = (g.creado_por || '').toLowerCase() === req.user.email.toLowerCase();
+  if (!suya && auth.NIVEL[req.user.rol] < auth.NIVEL.admin) return res.status(403).json({ error: 'Solo puedes borrar lo que tú creaste.' });
+  if (['pendiente', 'enviando', 'en_proceso'].includes(g.estado)) return res.status(409).json({ error: 'Espera a que termine de crearse para borrarla.' });
+  await pool.query('UPDATE generaciones SET eliminada = now(), eliminada_por = $2 WHERE id = $1', [g.id, req.user.email]);
+  console.log(`[generaciones] ${req.user.email} borró de la galería #${g.id} (de ${g.creado_por})`);
+  res.json({ ok: true });
+}));
+
 // Quienes han creado (para el filtro "Quién").
 app.get('/api/generaciones-autores', ruta(async (req, res) => {
   const { rows } = await pool.query(`SELECT creado_por, COUNT(*)::int AS n FROM generaciones GROUP BY creado_por ORDER BY n DESC LIMIT 50`);
