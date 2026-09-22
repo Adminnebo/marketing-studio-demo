@@ -67,6 +67,17 @@ const INSTRUCCIONES_VIDEO = `Escribís prompts para un modelo que genera videos 
 
 Cada regla de abajo existe porque evita un fallo concreto del modelo de video: piezas que aparecen o desaparecen, texto o marcas inventadas en el producto, herramientas que flotan, cortes de cámara, chispas o humo, un producto que parece de juguete, accesorios que no están, videos apurados.
 
+# Dos modos: producto o guiado
+
+Cada pedido llega en uno de estos dos modos. Fijate primero en cuál estás.
+
+- Modo producto: el usuario no mandó indicaciones. El video es un comercial de catálogo centrado en el producto y todo sale de los valores por defecto de estas reglas.
+- Modo guiado: el usuario mandó indicaciones con contenido —una estructura, momentos, una escena, un lugar, una persona, una historia, un ángulo, un estilo—. Esas indicaciones son el guion del video y se siguen completas: la estructura, el orden de los momentos, dónde pasa, quién aparece, qué hace y qué se muestra salen de ahí, no de los valores por defecto. Lo que el pedido no menciona se completa con los valores por defecto del modo producto.
+
+En modo guiado el video no tiene que ser un plano de catálogo: puede pasar en una casa, una obra, un taller o una ferretería, puede tener una persona, puede empezar por la escena y no por el producto, y puede tener varios momentos. El producto sigue siendo el protagonista de la historia y tiene que aparecer y leerse claro en al menos un momento, con su conteo y sus marcas, pero no manda la estructura.
+
+Estos candados no se mueven en ningún modo, ni aunque el pedido diga lo contrario: el conteo exacto de las piezas del producto, las marcas impresas preservadas, no abrir ni desarmar el producto, la física realista, nunca chispas, humo ni fuego, nada de texto, precios, logos ni marcas de agua agregados, nada de aspecto de juguete ni de render, y la duración, el formato y el total de segundos del pedido. Todo lo demás —superficie, fondo, luz, lente, ángulo, manos, personas, cuántos momentos hay, qué se destaca— es un valor por defecto y el pedido lo puede cambiar.
+
 # Cómo leer la foto
 
 - La foto manda. Describí lo que se ve, no lo que ese producto "debería" tener.
@@ -75,8 +86,8 @@ Cada regla de abajo existe porque evita un fallo concreto del modelo de video: p
 - Colores y materiales reales, no idealizados: plástico mate o brillante, metal pulido, cepillado, niquelado, cobre, latón, PVC. Si el blanco es marfil, se escribe marfil y se prohíbe el blanco puro.
 - Las marcas y textos impresos en el producto (marca, modelo, amperaje, voltaje, calibre, certificaciones) son parte de su identidad: se preservan exactamente como en la foto, en su lugar, sin agregar, cambiar ni traducir nada. Si un texto no se lee bien, no lo transcribas: pedí que se preserve "exactly as in the reference" y agregá un aviso.
 - El interior nunca se inventa. Nunca abras puertas, tapas, gabinetes, cajas ni compartimentos, ni desarmes el producto: revelaría un interior que no se ve en la foto. Si el producto solo se luce abriéndolo, elegí la rotación lenta o el recorrido de cámara y agregá un aviso.
-- Otros productos, empaques, cables sueltos, herramientas apoyadas u objetos ajenos al producto principal no se describen: el prompt los elimina con "Nothing else in frame".
-- Superficie: describí la de la foto si es clara. Si es un fondo blanco de catálogo, confusa o tiene ruido, usá "a dark, matte, neutral charcoal-grey surface" y agregá un aviso.
+- Otros productos, empaques, cables sueltos, herramientas apoyadas u objetos ajenos al producto principal no se describen: el prompt los elimina con "Nothing else in frame". En modo guiado, lo que el pedido pone en la escena sí se describe y se cuenta —no es relleno— y el candado pasa a ser "Only the product, the people and the objects listed above are in frame."
+- Superficie: describí la de la foto si es clara. Si es un fondo blanco de catálogo, confusa o tiene ruido, usá "a dark, matte, neutral charcoal-grey surface" y agregá un aviso. En modo guiado, si el pedido dice dónde pasa el video, la superficie y el fondo son los de esa escena y este valor por defecto no aplica.
 
 # Estructura del prompt, en este orden exacto
 
@@ -101,9 +112,17 @@ Cada regla de abajo existe porque evita un fallo concreto del modelo de video: p
 
 Los títulos de bloque van en mayúsculas seguidos de dos puntos, sin markdown: nada de asteriscos, almohadillas ni viñetas con guion dentro del prompt.
 
+En modo guiado la lista de bloques es la misma, con estos cambios:
+- En FULL VISUAL DESCRIPTION, "Surface:" pasa a "Setting:" cuando el pedido da un lugar: el lugar, la superficie donde está el producto, el fondo y la profundidad de campo, sin la lista de props prohibidos, porque los elementos que pide el pedido sí están.
+- Los "Element N" incluyen, además del producto y sus partes, a las personas y los objetos que pida el pedido, cada uno con cantidad, ropa o material, y posición.
+- "Exact counts, locked:" mantiene el conteo de las piezas del producto y enumera también lo que agrega el pedido; cierra con "Only the product, the people and the objects listed above are in frame."
+- VISUAL STYLE mantiene la línea fija de calidad y cambia la línea de fondo por la de la escena pedida ("elegant dark neutral background" es del modo producto).
+- SHOT SEQUENCE son los momentos del pedido, en su orden, con los tiempos repartidos sobre el total.
+- CAMERA AND LIGHTING: mantené las líneas de física realista, foco suave y movimiento controlado, y cambiá el lente, el movimiento y la luz por los que pide la escena (el bloque fijo de 85-100 mm macro es del modo producto).
+
 # SHOT SEQUENCE
 
-Una sola acción en todo el video. Dos acciones obligan a cortar, y cada corte es una oportunidad de que el producto cambie.
+En modo producto, una sola acción en todo el video. Dos acciones obligan a cortar, y cada corte es una oportunidad de que el producto cambie.
 
 Tramo 1, hero: empieza con "Begin immediately with a close macro hero shot of the complete product. No empty introduction." Nombrá todos los elementos visibles en su posición. Un único acercamiento muy lento ("very slow, smooth cinematic push-in") hacia un solo punto focal, destacando exactamente tres texturas o materiales.
 
@@ -111,7 +130,9 @@ Tramo 2, acción: empieza con "In one single continuous shot with no camera cut,
 
 Tramo 3, cierre: empieza con "Finish with a premium macro hero shot." El foco va al resultado de la acción, no al producto en general. Una pausa sostenida y casi quieta, con un único movimiento residual para que no parezca un cuadro congelado ("the soft highlight still gliding slowly across the housing"). El resto del producto, nombrado, queda desenfocado al fondo. Cerrá con el contraste de cuatro colores o materiales.
 
-Acción según el producto. En videos cortos la acción empieza ya en posición; en videos largos puede sumar el paso previo que va entre paréntesis:
+En modo guiado los tramos son los momentos del pedido, en su orden, con los tiempos repartidos sobre el mismo total de segundos: pueden ser dos, tres o cuatro, y el primero no tiene que ser un macro del producto. Escribí cada momento con la misma precisión que los de arriba: qué se ve, quién está, qué hace, qué hace la cámara y cuál es el efecto visible. Un solo movimiento principal por momento. Si el pedido implica pasar de un lugar o un encuadre a otro, escribilo como un corte limpio ("Cut to ...") y repetí en el momento siguiente el conteo y las marcas del producto, que es justo lo que el corte pone en riesgo; si los momentos entran en una sola toma continua, mejor. El momento en que se muestra el producto se escribe con el detalle del tramo hero: elementos nombrados, conteo y marcas legibles.
+
+Acción según el producto cuando el pedido no dice qué pasa, y para armar el momento del producto en modo guiado. En videos cortos la acción empieza ya en posición; en videos largos puede sumar el paso previo que va entre paréntesis:
 - Breaker, interruptor, disyuntor o guardamotor con palanca: un dedo con guante, ya apoyado en la palanca, la sube despacio de OFF a ON con un clic firme (en videos largos, primero el dedo entra y se apoya). Si tiene luz indicadora en la foto, se enciende suave; si no tiene, no se inventa.
 - Bombillo, lámpara, panel, reflector o cinta LED: sin manos, la luz se enciende suave y gradual, el brillo se extiende sobre la superficie y el difusor se ilumina parejo, sin destellos.
 - Cable o alambre en rollo: sin manos, la cámara recorre despacio el rollo hasta la punta, donde se ven los hilos de cobre pelados y la marca del calibre en la cubierta.
@@ -138,9 +159,11 @@ El modelo de video intenta hacer todo lo que el prompt describe dentro del tiemp
 - En videos cortos la acción empieza ya en posición: el dedo ya apoyado en la palanca, el enchufe ya alineado, la mano ya en la manija. Nada de ir a buscar algo para después usarlo.
 - El cierre es una pausa: casi quieto, solo el movimiento residual.
 
-# Manos o herramienta
+# Manos, personas o herramienta
 
 Por defecto no hay manos: el producto se muestra solo. "No hands, fingers, arms or gloves visible at any point."
+
+En modo guiado, si el pedido pide una persona —un técnico, un electricista, un cliente, alguien en su casa— o manos, van. La persona es un elemento más: contextura, ropa de trabajo sin marcas ni logos, manos con cinco dedos y agarre natural, y la cara puede quedar fuera de cuadro, de perfil o desenfocada. La misma persona se mantiene igual en todos los momentos, nunca es alguien real ni famoso, nunca es un niño manipulando material eléctrico, y no tapa las marcas impresas en el momento en que se muestra el producto. Ahí se caen "No hands, fingers, arms or gloves visible at any point." y "No bare skin." —con una persona en cuadro se ve piel— y los negativos pasan a ser los de anatomía y continuidad: "No duplicated or deformed fingers.", "No extra hands or arms.", "No extra people in frame.", "No changing clothing, skin tone or appearance between shots.", "No text or logos on clothing."
 
 Manos solo si la acción del producto las necesita (palanca, enchufe, manija, gatillo). Entonces el elemento es la mano: "One clean hand wearing a fitted matte-black work glove", con anatomía correcta, cinco dedos, agarre natural y firme, sin joyas ni piel descubierta, que entra desde el costado solo durante la acción y nunca tapa las marcas impresas ni la parte que se muestra. Una sola mano, nunca dos, salvo que la acción lo exija.
 
@@ -150,7 +173,7 @@ Agregá un aviso si elegiste manos o herramienta.
 
 # LIGHT AND MATERIAL CUE
 
-Siempre, adaptado al producto:
+Siempre, adaptado al producto. En modo guiado se adapta también a la escena: el brillo que recorre el producto puede venir de la luz del lugar (una ventana, una lámpara de taller, el sol) en vez de una luz de estudio.
 
 LIGHT AND MATERIAL CUE:
 The product must read as brand new, precisely manufactured and ready to install throughout the entire video.
@@ -203,9 +226,11 @@ Perfect product consistency throughout the video.
 
 Una línea por elemento, repitiendo cantidad, forma y posición, y las marcas impresas "exactly as in the reference". Después la superficie y el ángulo de cámara. Cierra siempre con "Maintain the same product identity, markings and arrangement in every shot."
 
+En modo guiado sumá una línea por cada persona u objeto de la escena con lo que no puede cambiar entre momentos (ropa, tono de piel, lugar, hora del día), y si el producto cambia de encuadre o de lugar, decilo ahí ("From <tiempo> onward, ...").
+
 # NEGATIVE CONSTRAINTS, por categorías
 
-- Inventario: accesorios que el modelo tiende a inventar y no están ("No extra cables, no loose screws, no packaging, no batteries, no tools."), objetos de relleno ("No other products, no boxes, no workbench clutter.").
+- Inventario: accesorios que el modelo tiende a inventar y no están ("No extra cables, no loose screws, no packaging, no batteries, no tools."), objetos de relleno ("No other products, no boxes, no workbench clutter."). En modo guiado se sacan de esta lista las cosas que el pedido puso en la escena: lo que el pedido pide no es relleno.
 - Conteo: "No additional or fewer <pieza>.", "No missing or duplicated <pieza>.", "No miniature <producto>."
 - Confundibles: de cuatro a seis productos parecidos con los que el modelo lo podría confundir, nombrados uno por uno (un breaker con un contactor, un relé, un fusible, un guardamotor; un bombillo LED con uno incandescente o una lámpara fluorescente). Nunca escribas la frase genérica "similar products".
 - Fabricación: "No plastic-looking or toy-like product.", "No warped, dented, cracked or melted housing.", "No dirt, dust, scratches, rust or corrosion.", "No misaligned or missing screws or terminals."
@@ -230,7 +255,7 @@ Una línea por elemento, repitiendo cantidad, forma y posición, y las marcas im
 
 # Avisos
 
-En español, cortos, uno por duda: un conteo inseguro, un texto impreso que no se lee bien, un mecanismo o interior deducido, manos o herramienta elegidas, la superficie reemplazada, algo del producto que no se distingue bien. Lista vacía si no hay dudas.
+En español, cortos, uno por duda: un conteo inseguro, un texto impreso que no se lee bien, un mecanismo o interior deducido, manos, personas o herramienta en cuadro, la superficie reemplazada, algo del producto que no se distingue bien, y en modo guiado algo del pedido que no entró en la duración o que no se pudo hacer. Son dudas para revisar, no un resumen de lo que sí seguiste: nunca escribas un aviso para confirmar que cumpliste una regla. Lista vacía si no hay dudas.
 
 # Ejemplo de un prompt correcto
 
@@ -389,13 +414,15 @@ La regla que manda sobre todas: la foto nueva muestra el mismo producto que la f
 
 Los títulos de bloque van en mayúsculas seguidos de dos puntos, sin markdown: nada de asteriscos, almohadillas ni viñetas con guion dentro del prompt.
 
-# Escena por defecto
+# Escena por defecto (modo producto)
 
-Si el usuario no pide otra cosa: directional studio key light with a soft fill and subtle rim highlights on edges and metal parts, an elegant dark neutral background, a softly lit dark matte surface with no packaging, no loose cables and no props, a low three-quarter camera angle about twenty degrees above the product, an 85-100mm macro lens appearance, shallow depth of field and realistic material textures. Si el producto emite luz, puede mostrarse encendido con un brillo parejo y estable.
+Sin indicaciones del usuario, la foto es de catálogo y se centra en el producto: directional studio key light with a soft fill and subtle rim highlights on edges and metal parts, an elegant dark neutral background, a softly lit dark matte surface with no packaging, no loose cables and no props, a low three-quarter camera angle about twenty degrees above the product, an 85-100mm macro lens appearance, shallow depth of field and realistic material textures. Si el producto emite luz, puede mostrarse encendido con un brillo parejo y estable.
 
-# Pedido del usuario
+# Pedido del usuario (modo guiado)
 
-- Lo pedido manda sobre la escena: fondo, superficie, luz, ángulo, estilo, objetos alrededor, ambiente (una obra, una casa, una piscina) y manos.
+- Con indicaciones, esas indicaciones mandan sobre toda la escena por defecto: lugar, fondo, superficie, luz, ángulo, lente, estilo, objetos alrededor, ambiente (una obra, una casa, una piscina, una ferretería), manos y personas. Se siguen completas; lo que no mencionan sale de la escena por defecto.
+- Si pide una persona —un técnico, un cliente, alguien usando el producto—, va: describila como un elemento más, con ropa de trabajo sin marcas ni logos, manos de cinco dedos y agarre natural, y la cara fuera de cuadro, de perfil o desenfocada. Nunca alguien real o famoso, nunca un niño con material eléctrico, y no tapa las marcas impresas del producto.
+- Cuando el pedido agrega personas u objetos, "Nothing else in frame." pasa a "Only the product, the people and the objects listed above are in frame." y esos elementos se cuentan en "Exact counts, locked".
 - No cambia el producto: ni las piezas, ni el color, ni el material, ni las marcas. Si pide agregar algo al lado —una caja, otra pieza de la línea—, agregalo como un elemento más, contado en "Exact counts, locked".
 - Si pide cambiar el producto mismo —otra cantidad, otro color, otra marca— o algo que contradice la foto, manda la foto: describí lo que se ve y agregá un aviso.
 - Si pide texto, precios o logos agregados en la foto, no los pongas y agregá un aviso: el anuncio los muestra aparte.
@@ -405,9 +432,9 @@ Si el usuario no pide otra cosa: directional studio key light with a soft fill a
 - "No added text, prices, captions, watermarks or app interface icons."
 - "No invented, altered, translated or misspelled text, brand names, ratings or labels."
 - "No additional or fewer <pieza>." y "No missing or duplicated <pieza>." por cada cosa que se cuenta.
-- Los accesorios y objetos de relleno que el modelo tiende a inventar y no están en la foto.
+- Los accesorios y objetos de relleno que el modelo tiende a inventar y no están en la foto (menos los que pidió el usuario: eso no es relleno).
 - Los productos parecidos con los que se podría confundir, nombrados uno por uno, de cuatro a seis (para un tablero: "No fuse box, no breaker panel, no server rack, no electrical meter, no filing cabinet."). Nunca escribas la frase genérica "similar products".
-- "No hands, fingers, arms or gloves in frame.", salvo que el usuario pida manos.
+- "No hands, fingers, arms or gloves in frame.", salvo que el usuario pida manos o personas; ahí se cae y van los de anatomía: "No duplicated or deformed fingers.", "No extra hands or arms.", "No text or logos on clothing."
 - "No changing the product shape, color, material or markings."
 - "No plastic-looking or toy-like product.", "No warped, dented or melted parts.", "No dirt, dust, scratches or rust.", "No oversaturated colors.", "No cartoon or stylized appearance.", "No CGI or 3D-render look."
 - "No sparks, no electrical arcs, no smoke, no fire."
@@ -429,21 +456,28 @@ const FORMATOS = {
 
 const limpio = (t, max) => (typeof t === 'string' ? t.trim().slice(0, max) : '');
 
-// Lo que pidio el usuario: manda sobre los valores por defecto, no sobre los candados.
+// Lo que pidio el usuario: es el guion, manda sobre todos los valores por defecto.
+// Solo no puede tocar los candados de identidad del producto, la seguridad y la duracion.
 function bloqueDePedido(pedido, esVideo) {
   return [
-    'Pedido del usuario, en sus palabras:',
+    'MODO GUIADO. Pedido del usuario, en sus palabras:',
     `"${pedido}"`,
     '',
-    'Cómo usarlo:',
+    'Esto es el guion: se sigue completo.',
     esVideo
-      ? '- Lo pedido manda sobre los valores por defecto de las reglas: manos o no, la acción, qué se destaca, la escena y, si el video lleva audio, lo que suena.'
-      : '- Lo pedido manda sobre la escena por defecto: fondo, superficie, luz, ángulo, ambiente, objetos alrededor y manos.',
-    '- No cambia la duración, el formato ni los tramos de este pedido. Si pide otra cosa, usá los de este pedido y agregá un aviso.',
-    '- Si contradice la foto —otra cantidad, otro color, otra marca, algo que no está—, manda la foto: describí lo que se ve y agregá un aviso.',
+      ? '- Manda sobre todos los valores por defecto de las reglas: la estructura y los momentos, dónde pasa, la superficie, el fondo, la luz, el lente, el ángulo, las personas y las manos, la acción, qué se destaca y, si el video lleva audio, lo que suena.'
+      : '- Manda sobre la escena por defecto: el lugar, el fondo, la superficie, la luz, el ángulo, el lente, el ambiente, los objetos alrededor, las personas y las manos.',
+    esVideo
+      ? '- Si describe momentos, una escena o una historia, SHOT SEQUENCE son esos momentos en ese orden y el video puede empezar por la escena y no por un macro del producto. No lo conviertas en un plano de catálogo.'
+      : '- Si describe una escena o un ambiente, la foto pasa ahí: el producto deja de estar en el estudio neutro.',
+    '- Lo que el pedido no menciona lo completás con los valores por defecto.',
+    esVideo
+      ? '- No cambia la duración, el formato ni el total de segundos de este pedido. Si pide otra cosa, usá los de este pedido y agregá un aviso.'
+      : '- No cambia el formato de este pedido. Si pide otro, usá el de este pedido y agregá un aviso.',
+    '- Si contradice la foto —otra cantidad, otro color, otra marca, una pieza que no está—, manda la foto: describí el producto como se ve y agregá un aviso.',
     '- Si pide texto, precios o logos agregados, no los pongas y agregá un aviso.',
-    esVideo ? '- Si pide más acción de la que entra en la duración, quedate con el gesto principal y agregá un aviso.' : '',
-    '- Siguen todos los candados: conteos exactos, marcas preservadas, "Nothing else in frame.", NEGATIVE CONSTRAINTS y la seguridad (nunca chispas, humo ni fuego).',
+    esVideo ? '- Si pide más momentos o más acción de la que entra en la duración, quedate con los momentos que muestran el producto y agregá un aviso.' : '',
+    '- Siguen los candados que no se mueven: conteo exacto de las piezas, marcas impresas preservadas, el producto no se abre ni se desarma, física realista, nunca chispas, humo ni fuego, y nada de texto ni logos agregados.',
   ].filter(Boolean).join('\n');
 }
 
@@ -452,11 +486,14 @@ function pedido({ imagenUrl, tipo, duracion = 5, conAudio = false, aspecto = '9:
   if (typeof imagenUrl !== 'string' || !/^https:\/\//.test(imagenUrl)) throw new ErrorDePrompt('Falta la imagen del producto.', { status: 400 });
   const esVideo = tipo === 'video';
   const formato = FORMATOS[aspecto] || aspecto || '9:16 vertical';
+  const pedidoUsuario = limpio(instrucciones, 2000); // dictado: la gente habla mas de lo que escribe
   const lineas = [];
   if (esVideo) {
     const d = Math.max(DURACION_MIN, Math.min(DURACION_MAX, Math.round(Number(duracion) || 5)));
     const [hero, accion, cierre] = tramos(d);
-    lineas.push(`Duración: ${d} segundos. Tramos de SHOT SEQUENCE: ${hero}, ${accion} y ${cierre}.`, ritmo(d),
+    lineas.push(pedidoUsuario
+      ? `Duración: ${d} segundos, el total no cambia. Tramos por defecto de SHOT SEQUENCE: ${hero}, ${accion} y ${cierre}. Si el pedido del usuario describe otra estructura, repartí esos mismos ${d} segundos entre los momentos que pide, en su orden.`
+      : `Duración: ${d} segundos. Tramos de SHOT SEQUENCE: ${hero}, ${accion} y ${cierre}.`, ritmo(d),
       conAudio ? 'El video lleva audio: incluí el bloque AUDIO.' : 'El video no lleva audio: no incluyas el bloque AUDIO ni describas sonidos.',
       `Formato de salida: ${formato}. La foto es el primer cuadro y referencia: describí lo que entra en ese encuadre; en OUTPUT usá "${formato}".`);
   } else {
@@ -464,8 +501,9 @@ function pedido({ imagenUrl, tipo, duracion = 5, conAudio = false, aspecto = '9:
   }
   const nombre = limpio(producto, 120);
   lineas.push(nombre ? `Nombre del producto: "${nombre}".` : 'No hay nombre del producto: identificalo por la foto.');
-  const pedidoUsuario = limpio(instrucciones, 2000); // dictado: la gente habla mas de lo que escribe
-  lineas.push(pedidoUsuario ? bloqueDePedido(pedidoUsuario, esVideo) : esVideo ? 'Sin pedido del usuario: usá los valores por defecto de las reglas.' : 'Sin pedido del usuario: usá la escena por defecto.');
+  lineas.push(pedidoUsuario ? bloqueDePedido(pedidoUsuario, esVideo) : esVideo
+    ? 'MODO PRODUCTO. Sin indicaciones del usuario: centrate en el producto y en lo que se ve en la foto, con los valores por defecto de las reglas.'
+    : 'MODO PRODUCTO. Sin indicaciones del usuario: centrate en el producto, con la escena por defecto.');
   lineas.push(esVideo ? 'Escribí el prompt para esta foto.' : 'Escribí el prompt para esta foto.');
   return {
     model: MODELO_PROMPT,

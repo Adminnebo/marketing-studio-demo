@@ -485,10 +485,19 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
               </label>
               <label className="filter-field" style={{ width: '100%' }}><span>Tus indicaciones para la IA (opcional): escribe o dicta qué quieres</span>
                 <div className="eg-envol">
-                  <textarea className="ms-textarea lb-ind" maxLength={2000} placeholder="Ej.: fondo de obra, que se vea el amperaje, una mano con guante baja la palanca, luz cálida…" value={indicaciones} onChange={(e) => setIndicaciones(e.target.value)} />
+                  <textarea className="ms-textarea lb-ind" maxLength={2000}
+                    placeholder={tipo === 'video'
+                      ? 'Puedes contar el video completo. Ej.: arranca en una obra al amanecer, un obrero llega y se pone el casco, luego un plano cercano del casco con el sol pegando, y cierra con él trabajando de espaldas. Cámara en mano.'
+                      : 'Puedes contar la escena completa. Ej.: el breaker en el tablero de una casa moderna, un técnico señalándolo, luz de tarde entrando por la ventana.'}
+                    value={indicaciones} onChange={(e) => setIndicaciones(e.target.value)} />
                   <BotonAmpliar onClick={(e) => { e.preventDefault(); setGrande('indicaciones'); }} />
                 </div>
               </label>
+              <div className="lb-nota">
+                {indicaciones.trim()
+                  ? 'Se sigue lo que pediste: la escena, el orden y quién aparece salen de tus indicaciones.'
+                  : `Si lo dejas vacío, ${tipo === 'video' ? 'el video' : 'la foto'} se centra en el producto y en lo que se ve en la foto.`}
+              </div>
               <Dictar valor={indicaciones} onCambiar={setIndicaciones} />
               <button className="btn secondary" onClick={() => generarPrompt()} disabled={!imagen || generandoPrompt}>
                 {generandoPrompt ? 'Escribiendo… (unos 20 s)' : prompt ? '↻ Escribir otra descripción' : '✨ Escribir descripción'}
