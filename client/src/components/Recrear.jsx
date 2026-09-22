@@ -6,7 +6,7 @@ import Avatares from './Avatares';
 import Dictar from './Dictar';
 import FichaTecnica, { sumarTexto } from './FichaTecnica';
 import EditorGrande, { BotonAmpliar } from './EditorGrande';
-import { precioDe, usd, cred, creditos as nCred } from '../precio';
+import { precioDe, usd, usdFino, cred, creditos as nCred } from '../precio';
 
 const fmtCred = (n) => (n == null ? null : Number(n).toLocaleString('es-MX', { maximumFractionDigits: 1 }));
 
@@ -23,6 +23,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
     productoAntes.current = productoListo.media_id;
     setProducto({ media_id: productoListo.media_id, url: productoListo.url, nombre: productoListo.nombre });
   }, [productoListo?.media_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [iaUsd, setIaUsd] = useState(0); // lectura de la ficha ya cobrada: se suma al total
   const [subida, setSubida] = useState(null); // { progreso, nombre, error }
   const [avatar, setAvatar] = useState(inicial?.avatar || null);
   const [eligiendoAvatar, setEligiendoAvatar] = useState(false);
@@ -200,7 +201,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                 {!enviada && productoListo?.producto?.codigo && producto?.media_id === productoListo.media_id && (
                   <div style={{ marginTop: 8 }}>
                     <FichaTecnica key={productoListo.producto.codigo} codigo={productoListo.producto.codigo} tieneFicha={productoListo.producto.ficha ? true : undefined}
-                      onAnadir={(t) => setPrompt((x) => sumarTexto(x, t, 5000))} />
+                      onAnadir={(t) => setPrompt((x) => sumarTexto(x, t, 5000))} onCosto={(n) => setIaUsd((x) => x + n)} />
                   </div>
                 )}
               </div>
@@ -221,6 +222,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                     {creditos != null ? (
                       <>
                         <span className="lb-costo-n">{nCred(creditos)}{pr && <span> · {usd(pr.precio)}</span>}</span>
+                        {rolReal !== 'super_admin' && iaUsd > 0 && <span className="lb-costo-ia" title="La lectura de la ficha técnica ya se cobró y se suma al total de esta creación">+ {usdFino(iaUsd)} de IA{pr && <> · total {usd(pr.precio + iaUsd)}</>}</span>}
                         <span className="ms-cost">
                           {rol === 'super_admin' && pr?.costo != null && `Costo ${usd(pr.costo)} · margen ${pr.margen} % · `}
                           {rolReal !== 'super_admin' ? (saldoUsd != null || saldo != null ? `Tu saldo: ${textoSaldo}` : '') : 'Super admin: no se descuenta del saldo de JH'}

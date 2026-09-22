@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { fetchCreditos } from '../api';
-import { usd, cred } from '../precio';
+import { fetchCreditos, pedirRecarga, aprobarRecarga, rechazarRecarga, resolverRecarga } from '../api';
+import { usd, usdFino, cred } from '../precio';
 
-const TIPOS = { recarga: 'Recarga', consumo: 'Generación', reembolso: 'Devolución', ajuste: 'Ajuste' };
+const TIPOS = { recarga: 'Recarga', consumo: 'Generación', reembolso: 'Devolución', ajuste: 'Ajuste', ia: 'Ayuda de IA' };
+const CLASES_IA = { descripcion: 'Descripción automática', ficha: 'Lectura de ficha técnica', caption: 'Texto para redes', camila: 'Búsqueda con Camila' };
+const EST_SOL = { pendiente: 'Pendiente', aprobada: 'Aprobada', rechazada: 'Rechazada', revisar: 'En revisión' };
+const MONTOS = [25, 50, 100, 250];
 // Referencias de consumo (creditos aproximados; el costo exacto se ve antes de crear).
 const EJEMPLOS = [
   ['📦', 'Foto de producto (plantilla)', 1.5], ['🪧', 'Anuncio o póster', 7.5],
@@ -90,6 +93,197 @@ function CreditosExterno({ d, onActualizar, actualizando }) {
   );
 }
 
+// Saldo propio de Marketing: se recarga desde el saldo general de JH por solicitud. Quien
+// pide solo ve el saldo de Marketing; el saldo general lo ve solo quien puede aprobar.
+function PedirRecarga({ onPedida }) {
+  const [monto, setMonto] = useState(50);
+  const [otro, setOtro] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const valor = otro !== '' ? Number(otro) : monto;
+  const enviar = async () => {
+    setEnviando(true); setMsg(null);
+    try {
+      await pedirRecarga(valor, motivo.trim());
+      setMsg({ ok: true, t: `Listo: pediste ${usd(valor)}. Te avisamos aquí cuando se apruebe.` });
+      setMotivo(''); setOtro('');
+      onPedida();
+    } catch (e) { setMsg({ ok: false, t: e.message }); }
+    setEnviando(false);
+  };
+  return (
+    <div className="card cr-pedir">
+      <div className="cr-montos" role="group" aria-label="Monto a pedir">
+        {MONTOS.map((m) => (
+          <button key={m} className={`cr-monto ${otro === '' && monto === m ? 'on' : ''}`} onClick={() => { setMonto(m); setOtro(''); }}>{usd(m)}</button>
+        ))}
+        <label className="cr-otro-l">
+          <span>Otro</span>
+          <input id="cr-otro" type="number" min="1" max="5000" step="1" inputMode="decimal" className="cr-otro" placeholder="USD" value={otro} onChange={(e) => setOtro(e.target.value)} />
+        </label>
+      </div>
+      <label className="cr-motivo-l" htmlFor="cr-motivo">Para qué es <span className="ms-cost">(opcional, ayuda a que lo aprueben rápido)</span></label>
+      <input id="cr-motivo" className="cr-motivo" maxLength={300} placeholder="Ej. videos de la campaña de breakers de octubre" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+      <div className="ms-submit">
+        <span className={msg ? (msg.ok ? 'cr-ok' : 'cr-err') : 'ms-cost'}>{msg ? msg.t : 'Lo aprueba una persona autorizada de JH y se suma al saldo de Marketing.'}</span>
+        <button className="btn" onClick={enviar} disabled={enviando || !(valor >= 1 && valor <= 5000)}>{enviando ? 'Enviando…' : `Pedir ${valor >= 1 ? usd(valor) : 'recarga'}`}</button>
+      </div>
+    </div>
+  );
+}
+
+function SolicitudAbierta({ s, onHecho }) {
+  const [nota, setNota] = useState('');
+  const [ocupado, setOcupado] = useState(null);
+  const [error, setError] = useState(null);
+  const hacer = async (que, fn) => {
+    setOcupado(que); setError(null);
+    try { const r = await fn(); if (r?.error) setError(r.error); onHecho(); } catch (e) { setError(e.message); }
+    setOcupado(null);
+  };
+  const revisar = s.estado === 'revisar';
+  return (
+    <div className={`cr-sol ${revisar ? 'revisar' : ''}`}>
+      <div className="cr-sol-top">
+        <b className="num cr-sol-monto">{usd(s.monto_usd)}</b>
+        <span className="cr-sol-quien">{s.pedido_por} · {fecha(s.creado)}</span>
+        <span className={`pill sol-${s.estado}`}>{EST_SOL[s.estado]}</span>
+      </div>
+      {s.motivo && <div className="cr-sol-motivo">“{s.motivo}”</div>}
+      {revisar ? (
+        <>
+          <div className="cr-sol-aviso">No se pudo confirmar si la plataforma de pagos descontó este monto del saldo general. Revisa el historial de la cuenta JH en la plataforma y confirma lo que pasó.</div>
+          <div className="cr-sol-acc">
+            <button className="btn" disabled={!!ocupado} onClick={() => hacer('si', () => resolverRecarga(s.id, true))}>{ocupado === 'si' ? '…' : 'Sí se descontó: sumar a Marketing'}</button>
+            <button className="btn secondary" disabled={!!ocupado} onClick={() => hacer('no', () => resolverRecarga(s.id, false))}>{ocupado === 'no' ? '…' : 'No se descontó: volver a pendiente'}</button>
+          </div>
+        </>
+      ) : (
+        <div className="cr-sol-acc">
+          <input id={`cr-nota-${s.id}`} className="cr-motivo" maxLength={300} placeholder="Nota (opcional)" value={nota} onChange={(e) => setNota(e.target.value)} aria-label="Nota para quien pidió" />
+          <button className="btn" disabled={!!ocupado} onClick={() => hacer('ok', () => aprobarRecarga(s.id, nota.trim()))}>{ocupado === 'ok' ? 'Aprobando…' : 'Aprobar'}</button>
+          <button className="btn secondary" disabled={!!ocupado} onClick={() => hacer('no', () => rechazarRecarga(s.id, nota.trim()))}>{ocupado === 'no' ? '…' : 'Rechazar'}</button>
+        </div>
+      )}
+      {error && <div className="cr-err">{error}</div>}
+    </div>
+  );
+}
+
+function detalleMov(m) {
+  if (m.tipo === 'ia') return `${CLASES_IA[m.clase] || 'Ayuda de IA'}${m.concepto && m.concepto !== CLASES_IA[m.clase] ? ` · ${m.concepto}` : ''}${m.generacion_id ? ` → ${m.preset_nombre || 'creación'} #${m.generacion_id}` : ''} · ${m.por}`;
+  if (m.generacion_id) return `${m.preset_nombre || m.concepto || 'Creación'} #${m.generacion_id}${m.tipo === 'consumo' ? ` · ${m.por}` : ''}`;
+  return `${m.concepto || ''}${m.por && m.por !== 'sistema' ? ` · ${m.por}` : ''}`;
+}
+
+function CreditosMarketing({ d, onActualizar, actualizando }) {
+  const negativo = d.saldoUsd < 0;
+  const g = d.general;
+  return (
+    <>
+      <div className="grid kpis cr-kpis" style={{ marginTop: 16 }}>
+        <div className="card kpi">
+          <div className="kpi-accent" style={{ background: negativo ? 'var(--critical)' : 'var(--series-1)' }} />
+          <div className="kpi-label">Saldo de Marketing</div>
+          <div className="kpi-value" style={negativo ? { color: 'var(--critical)' } : undefined}>{usd(d.saldoUsd)}</div>
+          <div className="kpi-foot">{negativo || d.saldoUsd === 0 ? 'Pide una recarga para volver a crear.' : 'Con esto se pagan las creaciones y las ayudas de IA.'}</div>
+        </div>
+        <div className="card kpi">
+          <div className="kpi-accent" style={{ background: 'var(--series-3)' }} />
+          <div className="kpi-label">Gastado este mes</div>
+          <div className="kpi-value">{usd(d.gastoMes.gastoUsd)}</div>
+          <div className="kpi-foot">{d.gastoMes.iaUsd > 0 ? `Incluye ${usd(d.gastoMes.iaUsd)} de ayudas de IA (descripciones, fichas, Camila).` : 'Creaciones y ayudas de IA, sin contar lo devuelto.'}</div>
+        </div>
+      </div>
+
+      {d.puedeAprobar && (
+        <>
+          <div className="section-title">Solicitudes por aprobar {d.abiertas?.length > 0 && <span className="hd-n">{d.abiertas.length}</span>}</div>
+          <div className="card cr-aprob">
+            <div className="cr-general">
+              <div>
+                <div className="kpi-label">Saldo general de JH</div>
+                <div className="cr-general-v num">{g?.disponibleUsd != null ? usd(g.disponibleUsd) : '—'}</div>
+                <div className="ms-cost">{g?.error || `Disponible${g?.pendienteUsd ? ` · ${usd(g.pendienteUsd)} por descontar` : ''}. Solo lo ves tú.`}</div>
+              </div>
+              <span className="cr-general-flecha" aria-hidden="true">→</span>
+              <div>
+                <div className="kpi-label">Saldo de Marketing</div>
+                <div className="cr-general-v num">{usd(d.saldoUsd)}</div>
+                <div className="ms-cost">Al aprobar, el monto se resta del general y se suma aquí.</div>
+              </div>
+              <button className="mini-btn cr-general-act" onClick={onActualizar} disabled={actualizando}>{actualizando ? 'Actualizando…' : '↻ Actualizar'}</button>
+            </div>
+            <div className="cr-sols">
+              {d.abiertas?.length ? d.abiertas.map((s) => <SolicitudAbierta key={s.id} s={s} onHecho={onActualizar} />)
+                : <div className="ms-cost">No hay solicitudes esperando.</div>}
+            </div>
+          </div>
+          {d.pagoUrl && (
+            <details className="card cr-pago-det">
+              <summary>Recargar el saldo general de JH</summary>
+              <div className="cr-pago">
+                <iframe src={d.pagoUrl} title="Pagar · Nebo AI" className="cr-pago-frame" />
+                <div className="cr-pago-txt">
+                  <p>El pago se hace en la plataforma de pagos de Nebo y entra al saldo general de JH. Después apruebas lo que Marketing necesite.</p>
+                  <button className="btn secondary" onClick={onActualizar} disabled={actualizando}>{actualizando ? 'Actualizando…' : '↻ Ya pagué: actualizar'}</button>
+                </div>
+              </div>
+            </details>
+          )}
+        </>
+      )}
+
+      <div className="section-title">Pedir recarga</div>
+      <PedirRecarga onPedida={onActualizar} />
+      {d.misSolicitudes.length > 0 && (
+        <div className="cr-mias">
+          {d.misSolicitudes.map((s) => (
+            <div key={s.id} className="cr-mia">
+              <span className="num">{usd(s.monto_usd)}</span>
+              <span className="cr-mia-f">{fecha(s.creado)}</span>
+              <span className={`pill sol-${s.estado}`}>{EST_SOL[s.estado]}</span>
+              {s.nota && <span className="cr-mia-n">{s.resuelto_por ? `${s.resuelto_por}: ` : ''}{s.nota}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="section-title">¿Qué puedo hacer con el saldo?</div>
+      <div className="cr-ejemplos">
+        {EJEMPLOS.map(([ic, l, cr]) => (
+          <div key={l} className="cr-ej">
+            <span className="cr-ej-ic">{ic}</span>
+            <span className="cr-ej-l">{l}</span>
+            <span className="cr-ej-v"><strong>≈ {d.precioCredito ? usd(cr * d.precioCredito) : '—'}</strong></span>
+          </div>
+        ))}
+      </div>
+      <div className="ms-cost" style={{ margin: '8px 2px 0' }}>Son referencias: antes de crear siempre ves el costo exacto. Las ayudas de IA (descripción automática, leer la ficha técnica, textos para redes, Camila) cuestan centavos y se suman al total de la creación. Si una creación falla, se devuelve.</div>
+
+      <div className="section-title">Movimientos</div>
+      <div className="card" style={{ padding: 0 }}>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th className="num">USD</th></tr></thead>
+            <tbody>
+              {d.movimientos.length ? d.movimientos.map((m) => (
+                <tr key={m.id}>
+                  <td>{fecha(m.creado)}</td>
+                  <td><span className={`pill mov-${m.tipo}`}>{TIPOS[m.tipo] || m.tipo}</span></td>
+                  <td className="trunc">{detalleMov(m)}</td>
+                  <td className="num" style={{ color: m.usd < 0 ? 'var(--critical)' : 'var(--good-ink)' }}>{m.usd > 0 ? '+' : '−'}{usdFino(Math.abs(m.usd))}</td>
+                </tr>
+              )) : <tr><td colSpan={4} className="trunc">Todavía no hay movimientos.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // Billetera de JH: saldo, precio por credito, paquetes para recargar (pago en linea en standby) y movimientos.
 export default function Creditos({ recarga, onRecargada }) {
   const [d, setD] = useState(null);
@@ -101,7 +295,7 @@ export default function Creditos({ recarga, onRecargada }) {
   useEffect(() => { cargar(); }, [recarga]); // eslint-disable-line react-hooks/exhaustive-deps
   // Con saldo externo: se refresca solo cada 30 s mientras la pestaña esta abierta (por si pagaron).
   useEffect(() => {
-    if (d?.fuente !== 'externo') return undefined;
+    if (d?.fuente !== 'externo' && d?.fuente !== 'marketing') return undefined;
     const id = setInterval(() => cargar(), 30000);
     return () => clearInterval(id);
   }, [d?.fuente]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,6 +303,7 @@ export default function Creditos({ recarga, onRecargada }) {
   if (error) return <div className="ms-errors" style={{ marginTop: 16 }}>{error}</div>;
   if (!d) return <div className="loading"><div className="spinner" /></div>;
   if (d.fuente === 'externo') return <CreditosExterno d={d} onActualizar={actualizar} actualizando={actualizando} />;
+  if (d.fuente === 'marketing') return <CreditosMarketing d={d} onActualizar={actualizar} actualizando={actualizando} />;
 
   return (
     <>

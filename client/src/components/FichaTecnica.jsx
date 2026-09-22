@@ -8,7 +8,7 @@ export const sumarTexto = (antes, texto, max) => (antes?.trim() ? `${antes.trimE
  * "Datos de la ficha técnica": con un producto elegido con Camila, lee su ficha (PDF) y
  * muestra lo pertinente para la foto o el video; "Añadir" lo suma a la descripción.
  */
-export default function FichaTecnica({ codigo, tieneFicha, onAnadir }) {
+export default function FichaTecnica({ codigo, tieneFicha, onAnadir, onCosto }) {
   const [st, setSt] = useState({ fase: 'nada' }); // nada | leyendo | listo | sin | error
   if (!codigo) return null;
 
@@ -16,6 +16,7 @@ export default function FichaTecnica({ codigo, tieneFicha, onAnadir }) {
     setSt({ fase: 'leyendo' });
     try {
       const r = await fichaCamila(codigo);
+      if (r.costoIa > 0) onCosto?.(r.costoIa); // leerla la primera vez cuesta; se suma a la creacion
       setSt(r.sinFicha ? { fase: 'sin' } : { fase: 'listo', r, anadido: false });
     } catch (e) { setSt({ fase: 'error', error: e.message }); }
   };

@@ -165,3 +165,9 @@ export const fetchZernioSetup = () => api('/superadmin/zernio');
 export const elegirPerfilZernio = (id) => api('/superadmin/zernio/perfil', { method: 'PUT', body: JSON.stringify({ id }) });
 export const captionPublicacion = (datos) => api('/publicaciones/caption', { method: 'POST', body: JSON.stringify(datos) });
 export const cambiarPermisoPublicar = (id, valor) => api(`/superadmin/usuarios/${id}/publicar`, { method: 'PUT', body: JSON.stringify({ valor }) });
+export const cambiarPermisoAprobar = (id, valor) => api(`/superadmin/usuarios/${id}/aprobar`, { method: 'PUT', body: JSON.stringify({ valor }) });
+// Saldo de Marketing: pedir recarga y (quien puede aprobar) resolver las solicitudes.
+export const pedirRecarga = (monto, motivo) => api('/creditos/solicitudes', { method: 'POST', body: JSON.stringify({ monto, motivo }) });
+export const aprobarRecarga = (id, nota) => api(`/creditos/solicitudes/${id}/aprobar`, { method: 'POST', body: JSON.stringify({ nota }) });
+export const rechazarRecarga = (id, nota) => api(`/creditos/solicitudes/${id}/rechazar`, { method: 'POST', body: JSON.stringify({ nota }) });
+export const resolverRecarga = (id, aplicada) => api(`/creditos/solicitudes/${id}/revision`, { method: 'POST', body: JSON.stringify({ aplicada }) });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchModelos, costoLibre, crearLibre, autoPrompt, subirImagen } from '../api';
-import { usd, cred, creditos as nCred } from '../precio';
+import { usdFino, usd, cred, creditos as nCred } from '../precio';
 import Dictar from './Dictar';
 import FichaTecnica, { sumarTexto } from './FichaTecnica';
 import EditorGrande, { BotonAmpliar } from './EditorGrande';
@@ -33,6 +33,7 @@ const pasosDe = (tipo) => [
 // formato y el sonido. Si despues se cambia alguno, se avisa y se ofrece reescribirla.
 export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal, inicial, productoListo, onBuscarCamila, onEnviada, onVer, onRecargar }) {
   const [modelos, setModelos] = useState(null);
+  const [iaUsd, setIaUsd] = useState(0); // ayudas de IA ya cobradas (descripcion, ficha): se suman al total
   const [error, setError] = useState(null);
   const [paso, setPaso] = useState(inicial ? 5 : 1); // 'Usar de nuevo' trae todo lleno: se abre en Revisar
   const [tipo, setTipo] = useState(inicial?.tipo || 'video');
@@ -141,6 +142,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
     setMsg(null);
     try {
       const r = await autoPrompt({ imagen: { media_id: imagen.media_id, url: imagen.url }, modelo: modelo.id, tipo, duracion: duracion ? Number(duracion) : null, aspecto, opciones, producto, instrucciones });
+      if (r.costoIa > 0) setIaUsd((x) => x + r.costoIa);
       setPrompt(r.prompt || '');
       setAvisos(r.avisos || []);
       setBase(ajustesActuales);
@@ -433,7 +435,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
                 if (modoPrompt === 'dictar') setDictado((x) => sumarTexto(x, t, 2000));
                 else if (usaIa) setIndicaciones((x) => sumarTexto(x, t, 2000));
                 else setPrompt((x) => sumarTexto(x, t, 5000));
-              }} />
+              }} onCosto={(n) => setIaUsd((x) => x + n)} />
           )}
 
           {modoPrompt === 'dictar' && (
@@ -574,6 +576,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
           {costo.cargando ? <span className="ms-cost">Calculando costo…</span> : costo.error ? <span className="ms-cost">{costo.error}</span> : costo.creditos != null && (
             <>
               <span className="lb-costo-n">{nCred(costo.creditos)}{costo.precio != null && <span> · {usd(costo.precio)}</span>}</span>
+              {cobra && iaUsd > 0 && <span className="lb-costo-ia" title="Descripción automática y lectura de la ficha técnica: ya se cobraron y se suman al total de esta creación">+ {usdFino(iaUsd)} de IA{costo.precio != null && <> · total {usd(costo.precio + iaUsd)}</>}</span>}
               <span className="ms-cost">{cobra ? (saldoUsd != null || saldo != null ? `Tu saldo: ${textoSaldo}` : '') : 'Super admin: no se descuenta del saldo de JH'}</span>
             </>
           )}

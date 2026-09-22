@@ -234,3 +234,43 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .pb-atajos { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .pb-atajo { font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); }
 .pb-atajo.on { border-color: var(--series-1); color: var(--series-1); background: color-mix(in srgb, var(--series-1) 8%, var(--surface-1)); }
+
+/* Saldo de Marketing: pedir y aprobar recargas */
+.cr-pedir { display: flex; flex-direction: column; gap: 10px; }
+.cr-montos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cr-monto { font: inherit; font-weight: 680; font-variant-numeric: tabular-nums; cursor: pointer; padding: 9px 16px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
+.cr-monto:hover, .cr-monto.on { border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 9%, var(--surface-2)); }
+.cr-monto:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+.cr-otro-l { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); }
+.cr-otro, .cr-motivo { font: inherit; font-size: 0.86rem; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
+.cr-otro { width: 110px; }
+.cr-motivo { width: 100%; min-width: 0; }
+.cr-motivo-l { font-size: 0.8rem; font-weight: 620; }
+.cr-ok { font-size: 0.82rem; color: var(--good-ink); }
+.cr-err { font-size: 0.82rem; color: var(--critical); }
+.cr-mias { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.cr-mia { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 0.82rem; padding: 8px 12px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border); }
+.cr-mia .num { font-weight: 700; min-width: 70px; }
+.cr-mia-f { color: var(--text-muted); }
+.cr-mia-n { flex-basis: 100%; color: var(--text-secondary); }
+.cr-aprob { display: flex; flex-direction: column; gap: 16px; }
+.cr-general-act { margin-left: auto; }
+.cr-sols { display: flex; flex-direction: column; gap: 10px; }
+.cr-sol { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.cr-sol.revisar { border-color: var(--warning); }
+.cr-sol-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.cr-sol-monto { font-size: 1.15rem; }
+.cr-sol-quien { font-size: 0.8rem; color: var(--text-secondary); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cr-sol-motivo { font-size: 0.84rem; color: var(--text-secondary); }
+.cr-sol-aviso { font-size: 0.8rem; color: var(--warning); }
+.cr-sol-acc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cr-sol-acc .cr-motivo { flex: 1 1 200px; width: auto; }
+.pill.sol-pendiente { color: var(--series-1); }
+.pill.sol-aprobada { color: var(--good-ink); }
+.pill.sol-rechazada { color: var(--critical); }
+.pill.sol-revisar { color: var(--warning); }
+.pill.mov-ia { color: var(--series-3); }
+.cr-pago-det { margin-top: 12px; }
+.cr-pago-det summary { cursor: pointer; font-weight: 640; font-size: 0.88rem; }
+.cr-pago-det .cr-pago { padding: 14px 0 0; }
+.lb-costo-ia { font-size: 0.78rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }

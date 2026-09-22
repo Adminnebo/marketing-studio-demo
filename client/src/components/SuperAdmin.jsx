@@ -1,6 +1,6 @@
 import RedesSetup from './RedesSetup';
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar, cambiarPermisoAprobar } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, cred } from '../precio';
 
@@ -382,6 +382,11 @@ function Usuarios({ yo }) {
     try { await cambiarPermisoPublicar(u.id, valor); setLista((l) => l.map((x) => (x.id === u.id ? { ...x, puedePublicar: valor } : x))); }
     catch (e) { setMsg({ error: e.message }); } finally { setGuardando(null); }
   };
+  const permisoAprobar = async (u, valor) => {
+    setGuardando(u.id);
+    try { await cambiarPermisoAprobar(u.id, valor); setLista((l) => l.map((x) => (x.id === u.id ? { ...x, aprobarRecargas: valor } : x))); }
+    catch (e) { setMsg({ error: e.message }); } finally { setGuardando(null); }
+  };
   const cambiar = async (u, acceso) => {
     setGuardando(u.id);
     setMsg(null);
@@ -399,13 +404,13 @@ function Usuarios({ yo }) {
         <label className="user-admin-check"><input type="checkbox" checked={solo} onChange={(e) => setSolo(e.target.checked)} /> Solo con acceso</label>
       </div>
       <div className="card-sub" style={{ padding: '0 14px' }}>
-        <strong>Usuario</strong>: genera y descarga. <strong>Admin</strong>: además publica en redes y conecta cuentas. Los super admin de los paneles entran siempre.
+        <strong>Usuario</strong>: genera y descarga. <strong>Admin</strong>: además publica en redes y conecta cuentas. <strong>Aprueba recargas</strong>: ve el saldo general de JH y pasa saldo a Marketing. Los super admin de los paneles entran siempre.
       </div>
       {msg && <div className={`bulk-msg ${msg.ok ? 'ok' : 'err'}`}>{msg.ok || msg.error}</div>}
       {!lista ? <div className="loading"><div className="spinner" /></div> : (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Usuario</th><th>Rol en los paneles</th><th>Acceso a Marketing</th><th>Puede publicar en redes</th><th>Dado por</th></tr></thead>
+            <thead><tr><th>Usuario</th><th>Rol en los paneles</th><th>Acceso a Marketing</th><th>Puede publicar en redes</th><th>Aprueba recargas</th><th>Dado por</th></tr></thead>
             <tbody>
               {visibles.map((u) => (
                 <tr key={u.id}>
@@ -424,6 +429,13 @@ function Usuarios({ yo }) {
                     {u.acceso === 'super_admin' ? <span className="ms-cost">Siempre</span> : !u.acceso ? <span className="ms-cost">—</span> : (
                       <label className="user-admin-check" title="Solo quien tiene este permiso puede publicar o programar en redes">
                         <input type="checkbox" checked={!!u.puedePublicar} disabled={guardando === u.id} onChange={(e) => permisoPublicar(u, e.target.checked)} /> {u.puedePublicar ? 'Sí' : 'No'}
+                      </label>
+                    )}
+                  </td>
+                  <td>
+                    {u.acceso === 'super_admin' ? <span className="ms-cost">Siempre</span> : !u.acceso ? <span className="ms-cost">—</span> : (
+                      <label className="user-admin-check" title="Ve el saldo general de JH y aprueba las recargas del saldo de Marketing">
+                        <input type="checkbox" checked={!!u.aprobarRecargas} disabled={guardando === u.id} onChange={(e) => permisoAprobar(u, e.target.checked)} /> {u.aprobarRecargas ? 'Sí' : 'No'}
                       </label>
                     )}
                   </td>

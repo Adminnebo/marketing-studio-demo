@@ -22,6 +22,7 @@ const saldoExterno = require('./lib/saldo-externo');
 const encolarLib = require('./lib/encolar');
 const zernio = require('./lib/zernio');
 const { conEspanol } = require('./lib/idioma');
+const saldoMarketing = require('./lib/saldo-marketing');
 
 const reglasP = import('../shared/reglas.mjs');
 const PORT = process.env.PORT || 3002;
@@ -111,6 +112,24 @@ app.get('/api/acceso', corsPaneles, auth.sesion, ruta(async (req, res) => {
   res.json({ acceso: !!rol, rol });
 }));
 
+// Costo real de cada busqueda con Camila: lo informa el flujo "Camila Paralela - Costos" de n8n
+// (misma clave que el panel usa para hablarle a Camila). Se descuenta del saldo de Marketing.
+app.post('/api/n8n/costo-camila', ruta(async (req, res) => {
+  const clave = process.env.CAMILA_N8N_TOKEN || '';
+  if (!clave || req.headers['x-panel-token'] !== clave) return res.status(401).json({ error: 'no autorizado' });
+  const b = req.body || {};
+  const conv = /^mkt-(\d+)-/.exec(String(b.contact_id || ''))?.[1];
+  const costo = Number(b.costo_usd);
+  if (!conv || !b.execution_id || !(costo >= 0)) return res.status(400).json({ error: 'faltan datos' });
+  const { rows: [c] } = await pool.query('SELECT email FROM camila_conversaciones WHERE id = $1', [Number(conv)]);
+  if (!c) return res.json({ ok: true, cobrado: 0, motivo: 'conversacion desconocida' });
+  const perfil = (await auth.perfiles().catch(() => [])).find((p) => (p.email || '').toLowerCase() === c.email);
+  if (perfil?.role === 'super_admin') return res.json({ ok: true, cobrado: 0, motivo: 'super admin' });
+  const cobrado = await saldoMarketing.cobrarIa({ por: c.email, clase: 'camila', costoUsd: costo, ref: `camila:${b.execution_id}` });
+  console.log(`[camila] costo de la ejecucion ${b.execution_id} (${c.email}): ${costo} USD -> cobrado ${cobrado}`);
+  res.json({ ok: true, cobrado });
+}));
+
 // ── Con sesion y acceso a este panel ──
 app.use('/api', auth.requireAcceso);
 
@@ -119,16 +138,25 @@ app.get('/api/me', ruta(async (req, res) => {
   res.json({
     email: req.user.email, nombre: req.user.nombre, rol: req.user.rol,
     rolReal: req.user.rolReal, verComo: req.user.rol !== req.user.rolReal ? req.user.rol : null, puedePublicar: !!req.user.puedePublicar,
+    puedeAprobar: !!req.user.puedeAprobar,
     // Precio de 1 credito para JH (costo + ganancia); el costo solo lo ve el super_admin.
     precios: ajustes.precioCredito(a) != null
       ? { precioCredito: ajustes.precioCredito(a), ...(req.user.rol === 'super_admin' ? { usdPorCredito: a.usd_por_credito, margenPct: a.margen_pct } : {}) }
       : null,
-    ...(await saldoDe()),
+    ...(await saldoDe({ user: req.user })),
   });
 }));
 
 // Saldo para el panel: el de la plataforma de pagos (USD) si esta configurada; si no, la billetera local (creditos).
-async function saldoDe({ fresco = false } = {}) {
+async function saldoDe({ fresco = false, user = null } = {}) {
+  // Saldo de Marketing: el equipo solo ve este; el general no sale de aca.
+  if (saldoMarketing.activo()) {
+    const a = await ajustes.leer();
+    return {
+      saldoFuente: 'marketing', saldoUsd: await saldoMarketing.saldo(), saldoNegativoPermitidoUsd: Number(a.saldo_negativo_permitido || 0),
+      ...(user?.puedeAprobar ? { solicitudesPendientes: await saldoMarketing.pendientes() } : {}),
+    };
+  }
   if (!saldoExterno.configurado()) return { saldoFuente: 'local', saldo: await billetera.saldo() };
   if (fresco) saldoExterno.olvidar();
   try {
@@ -197,7 +225,8 @@ app.post('/api/medios', express.raw({ type: Object.keys(EXT), limit: '20mb' }), 
 
 // ── Generaciones ──
 const COLS = `id, creado_por, estado, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-  precio_usd, resultados, error, creado, enviado, terminado`;
+  precio_usd, resultados, error, creado, enviado, terminado,
+  (SELECT COALESCE(-SUM(s.usd), 0) FROM saldo_marketing s WHERE s.generacion_id = generaciones.id AND s.tipo = 'ia') AS ia_usd`;
 
 // Encolar (tope diario, precio, cobro local o en la plataforma central): lib/encolar.js
 const encolar = (req, datos) => encolarLib.encolar(req.user, datos);
@@ -325,13 +354,17 @@ app.post('/api/libre/autoprompt', ruta(async (req, res) => {
   if (!b.imagen?.url) return res.status(400).json({ error: 'Sube una imagen para autogenerar el prompt.' });
   const op = b.opciones || {};
   const conAudio = op.generate_audio === true || op.sound === true || op.sound === 'on';
+  if (!(await saldoMarketing.puedeGastarIa(req.user))) return res.status(402).json({ error: 'No hay saldo de Marketing para usar la IA. Pide una recarga en Créditos.', sinSaldo: true });
   try {
     const r = await promptAuto.generar({
       imagenUrl: b.imagen.url, tipo: modelo.tipo, duracion: b.duracion, conAudio, aspecto: b.aspecto,
       producto: b.producto, instrucciones: b.instrucciones,
     });
     console.log(`[autoprompt] ${req.user.email} ${modelo.id} ${r.modelo} tokens ${r.tokens.entrada}/${r.tokens.salida} avisos ${r.avisos.length}`);
-    res.json({ prompt: r.prompt, avisos: r.avisos });
+    // Costo de la IA al saldo de Marketing (se suma al total de la creacion que se haga con esta descripcion).
+    const costoIa = saldoMarketing.exento(req.user) ? 0 : await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'descripcion', modelo: r.modelo, entrada: r.tokens.entrada, salida: r.tokens.salida })
+      .catch((e) => { console.error('[autoprompt] cobro IA', e.message); return 0; });
+    res.json({ prompt: r.prompt, avisos: r.avisos, costoIa });
   } catch (e) {
     if (e instanceof promptAuto.ErrorDePrompt) {
       console.error('[autoprompt]', e.message, e.detalle || '');
@@ -359,6 +392,9 @@ app.post('/api/libre', ruta(async (req, res) => {
   if (r.error) return res.status(r.status).json(r.error);
   res.status(201).json(r.g);
 }));
+
+// Saldo de Marketing (solicitudes de recarga); si no esta activo, sigue a la ruta de abajo.
+app.use('/api', require('./creditos-marketing').router);
 
 // Billetera de JH: saldo, precio por credito, paquetes con ganancia y movimientos.
 app.get('/api/creditos', ruta(async (req, res) => {
@@ -414,6 +450,7 @@ async function arrancar() {
   await migrar();
   await require('./lib/camila').migrar();
   await require('./lib/permisos').migrar();
+  await require('./lib/saldo-marketing').migrar();
   require('./lib/jh-catalogo').calentar();
   if (await hf.sembrarToken()) console.log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   // Webhook de Zernio: se registra solo en cuanto hay clave y secreto.

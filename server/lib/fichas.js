@@ -126,7 +126,7 @@ async function extraer(codigo, { fetch: pedir = globalThis.fetch } = {}) {
     [codigo, ficha, JSON.stringify(datos), j.model || MODELO, j.usage?.input_tokens || null, j.usage?.output_tokens || null]
   );
   console.log(`[fichas] ${codigo} ${j.model || MODELO} ${j.usage?.input_tokens || 0}/${j.usage?.output_tokens || 0} tok · ${datos.datos.length} datos`);
-  return { ...datos, guardada: false };
+  return { ...datos, guardada: false, uso: { modelo: j.model || MODELO, entrada: j.usage?.input_tokens || 0, salida: j.usage?.output_tokens || 0 } };
 }
 
 module.exports = { extraer, migrar, pedido, leer, ErrorDeFicha, INSTRUCCIONES };

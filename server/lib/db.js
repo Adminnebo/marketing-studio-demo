@@ -172,6 +172,8 @@ const MIGRACIONES = [
   // Saldo externo (lib/saldo-externo.js): la generacion se cobra contra el saldo de la plataforma de
   // pagos; gasto_informado marca cuando ya se descontó alla con el endpoint de gasto.
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS cobro_externo BOOLEAN NOT NULL DEFAULT false`,
+  // Pagada con el saldo de Marketing (lib/saldo-marketing.js): esa plata ya salio del saldo general al aprobar la recarga.
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS cobro_interno BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS gasto_informado TIMESTAMPTZ`,
   `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,

@@ -11,3 +11,7 @@ export const cred = (n) => Number(n || 0).toLocaleString('es-MX', { maximumFract
 export const creditos = (n) => `${cred(n)} ${Number(n) === 1 ? 'crédito' : 'créditos'}`;
 // La clausula de idioma que agrega el servidor a cada creacion no se muestra (server/lib/idioma.js).
 export const sinClausula = (p) => String(p || '').replace(/\s*LANGUAGE: Spanish \(Dominican Republic\)[\s\S]*$/, '').trim();
+// Montos chicos (ayudas de IA, centavos): con hasta 4 decimales para que no se vean como $0.00.
+export const usdFino = (n) => (Math.abs(Number(n)) > 0 && Math.abs(Number(n)) < 0.1
+  ? (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+  : usd(n));

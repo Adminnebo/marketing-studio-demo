@@ -56,8 +56,8 @@ async function perfiles() {
 async function rolMarketing(userId) {
   const p = await perfil(userId);
   if (p?.role === 'super_admin') return { rol: 'super_admin', perfil: p };
-  const { rows } = await pool.query('SELECT rol, puede_publicar FROM accesos WHERE user_id = $1', [userId]);
-  return { rol: rows[0]?.rol || null, perfil: p, puedePublicar: !!rows[0]?.puede_publicar };
+  const { rows } = await pool.query('SELECT rol, puede_publicar, aprobar_recargas FROM accesos WHERE user_id = $1', [userId]);
+  return { rol: rows[0]?.rol || null, perfil: p, puedePublicar: !!rows[0]?.puede_publicar, puedeAprobar: !!rows[0]?.aprobar_recargas };
 }
 
 // Solo verifica la sesion (sin exigir acceso al panel): req.user = { id, email }.
@@ -78,7 +78,7 @@ async function sesion(req, res, next) {
 function requireAcceso(req, res, next) {
   sesion(req, res, async () => {
     try {
-      const { rol, perfil: p, puedePublicar } = await rolMarketing(req.user.id);
+      const { rol, perfil: p, puedePublicar, puedeAprobar } = await rolMarketing(req.user.id);
       if (!rol) return res.status(403).json({ error: 'Tu usuario no tiene acceso a Marketing. Pídeselo a un super admin.', sinAcceso: true });
       req.user.rol = rol;
       req.user.rolReal = rol;
@@ -89,6 +89,8 @@ function requireAcceso(req, res, next) {
       if (rol === 'super_admin' && ['admin', 'usuario'].includes(verComo)) req.user.rol = verComo;
       // Publicar en redes: permiso puntual; los super admin siempre (menos en "Ver como").
       req.user.puedePublicar = rol === 'super_admin' ? req.user.rol === 'super_admin' : puedePublicar;
+      // Aprobar recargas del saldo de Marketing (y ver el saldo general de JH): mismo criterio.
+      req.user.puedeAprobar = rol === 'super_admin' ? req.user.rol === 'super_admin' : puedeAprobar;
       next();
     } catch (e) {
       console.error('[auth]', e.message);

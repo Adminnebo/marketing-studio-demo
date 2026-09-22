@@ -120,7 +120,7 @@ async function informarConsumo(generacionId, { forzar = false } = {}) {
   if (!configurado()) return false;
   const superAdmin = forzar || Number((await ajustes.leer()).informar_super_admin) === 1;
   const { rows: [g] } = await pool.query(
-    `SELECT * FROM generaciones WHERE id = $1 AND estado = 'completado' AND gasto_informado IS NULL AND (cobro_externo OR $2)`, [generacionId, superAdmin]
+    `SELECT * FROM generaciones WHERE id = $1 AND estado = 'completado' AND gasto_informado IS NULL AND NOT cobro_interno AND (cobro_externo OR $2)`, [generacionId, superAdmin]
   );
   if (!g || !(Number(g.precio_usd) > 0)) return false;
   // Se descuenta en centavos: lo mismo que JH ve en el panel ($2.18, no $2.184).
@@ -193,7 +193,7 @@ async function historialSinInformar() {
   const { rows } = await pool.query(
     `SELECT g.id, g.creado_por, g.preset_nombre, g.preset_tipo, g.precio_usd, g.cobro_externo, g.creado
      FROM generaciones g
-     WHERE g.estado = 'completado' AND g.gasto_informado IS NULL
+     WHERE g.estado = 'completado' AND g.gasto_informado IS NULL AND NOT g.cobro_interno -- las del saldo de Marketing ya se pagaron con la recarga
        AND NOT EXISTS (SELECT 1 FROM pagos_eventos e WHERE e.generacion_id = g.id)
      ORDER BY g.id`
   );

@@ -206,12 +206,15 @@ export default function App() {
 
   const enCurso = gens.items.filter((g) => EN_CURSO.has(g.estado)).length;
   // Saldo: el de la plataforma de pagos (USD) o, si no esta configurada, la billetera local (creditos).
+  // Con saldo de Marketing: saldo propio del departamento (USD), recargado por solicitud desde el general.
+  const marketing = me.saldoFuente === 'marketing';
   const externo = me.saldoFuente === 'externo';
-  const sinSaldo = me.rolReal !== 'super_admin' && (externo
-    ? me.saldoDisponibleUsd != null && me.saldoDisponibleUsd <= -(me.saldoNegativoPermitidoUsd || 0)
+  const saldoUsd = marketing ? me.saldoUsd : externo ? me.saldoDisponibleUsd : null;
+  const sinSaldo = me.rolReal !== 'super_admin' && (marketing || externo
+    ? saldoUsd != null && saldoUsd <= -(me.saldoNegativoPermitidoUsd || 0)
     : Number(me.saldo) <= 0);
-  const saldoValor = externo ? me.saldoDisponibleUsd : Number(me.saldo);
-  const saldoProps = { saldo: me.saldo, saldoUsd: externo ? me.saldoDisponibleUsd : null, negativoUsd: me.saldoNegativoPermitidoUsd || 0 };
+  const saldoValor = marketing || externo ? saldoUsd : Number(me.saldo);
+  const saldoProps = { saldo: me.saldo, saldoUsd, negativoUsd: me.saldoNegativoPermitidoUsd || 0 };
   const desconectado = estado && !estado.conectado;
 
   const repetir = (g) => (g.entrada?.libre ? (() => {
@@ -250,23 +253,24 @@ export default function App() {
             <button key={t.id} className={`hd-tab ${tab === t.id ? 'on' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
               {t.label}
               {t.id === 'generaciones' && enCurso > 0 && <span className="hd-n">{enCurso}</span>}
+              {t.id === 'creditos' && me.solicitudesPendientes > 0 && <span className="hd-n" title="Solicitudes de recarga por aprobar">{me.solicitudesPendientes}</span>}
               {t.id === 'redes' && cuentas?.length > 0 && <span className="hd-n gris">{cuentas.length}</span>}
             </button>
           ))}
         </nav>
         <div className="hd-r">
           <button className={`hd-saldo ${saldoValor != null && saldoValor < 0 ? 'neg' : ''}`} onClick={() => setTab('creditos')}
-            title={externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
+            title={marketing ? 'Saldo de Marketing' : externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
             <span className="hd-saldo-l">Saldo</span>
-            {externo ? (
-              <b className="num">{me.saldoDisponibleUsd != null ? usd(me.saldoDisponibleUsd) : '—'}</b>
+            {marketing || externo ? (
+              <b className="num">{saldoUsd != null ? usd(saldoUsd) : '—'}</b>
             ) : (
               <>
                 <b className="num">{cred(me.saldo)} cr</b>
                 {me.precios?.precioCredito != null && <span className="hd-saldo-usd num">≈ {usd(Number(me.saldo) * me.precios.precioCredito)}</span>}
               </>
             )}
-            {tab !== 'creditos' && <span className="hd-saldo-r">Recargar</span>}
+            {tab !== 'creditos' && <span className="hd-saldo-r">{marketing ? 'Pedir recarga' : 'Recargar'}</span>}
           </button>
           <button className="hd-ib" onClick={toggleTheme} title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'} aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}>
             {theme === 'dark' ? <IconoSol /> : <IconoLuna />}
@@ -297,10 +301,12 @@ export default function App() {
 
       {sinSaldo && tab !== 'creditos' && (
         <div className="aviso-saldo">
-          <span>💳 {externo
+          <span>💳 {marketing
+            ? <><strong>El saldo de Marketing está en {usd(saldoUsd)}.</strong> Puedes explorar todo; para crear, pide una recarga en Créditos (la aprueba una persona autorizada de JH).</>
+            : externo
             ? <><strong>Tu saldo está en {usd(me.saldoDisponibleUsd)}.</strong> Puedes explorar todo, pero para crear primero hay que recargar.</>
             : <><strong>Todavía no tienes créditos.</strong> Puedes explorar todo, pero para generar primero hay que recargar saldo.</>}</span>
-          <button className="btn" onClick={() => setTab('creditos')}>Recargar</button>
+          <button className="btn" onClick={() => setTab('creditos')}>{marketing ? 'Pedir recarga' : 'Recargar'}</button>
         </div>
       )}
       {externo && me.errorSaldo && <div className="banner-off">{me.errorSaldo}</div>}

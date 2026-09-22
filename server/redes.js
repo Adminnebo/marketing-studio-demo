@@ -9,6 +9,7 @@ const zernio = require('./lib/zernio');
 const auth = require('./lib/auth');
 const { requirePublicar } = require('./lib/permisos');
 const captions = require('./lib/captions');
+const saldoMarketing = require('./lib/saldo-marketing');
 const soloAdmin = auth.requireRol('admin');
 
 const redesP = import('../shared/redes.mjs');
@@ -111,7 +112,12 @@ router.post('/publicaciones/caption', requirePublicar, async (req, res) => {
     // Deja lugar para los hashtags dentro del limite de la red mas corta.
     const limite = redes.length ? Math.min(...redes.map((r) => limiteDe(r, tipo))) : 2200;
     const largo = Math.max(120, Math.min(1200, limite - (limite <= 300 ? 60 : 180)));
-    res.json(await captions.generar({ generacion: g, indice: Number(b.indice) || 0, redes: redes.map((r) => REDES[r].nombre), tono: b.tono, indicaciones: b.indicaciones, largo }));
+    if (!(await saldoMarketing.puedeGastarIa(req.user))) return res.status(402).json({ error: 'No hay saldo de Marketing para usar la IA. Pide una recarga en Créditos.', sinSaldo: true });
+    const { uso, ...out } = await captions.generar({ generacion: g, indice: Number(b.indice) || 0, redes: redes.map((r) => REDES[r].nombre), tono: b.tono, indicaciones: b.indicaciones, largo });
+    // El caption se suma al total de esa creacion.
+    const costoIa = saldoMarketing.exento(req.user) ? 0 : await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'caption', modelo: uso.modelo, entrada: uso.entrada, salida: uso.salida, generacionId: g.id })
+      .catch((e) => { console.error('[captions] cobro IA', e.message); return 0; });
+    res.json({ ...out, costoIa });
   } catch (e) {
     if (e instanceof captions.ErrorDeCaption) { console.error('[captions]', e.message, e.detalle || ''); return res.status(e.status).json({ error: e.message }); }
     console.error('[captions]', e.message);

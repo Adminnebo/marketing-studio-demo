@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { TIPOS, TIPOS_VIDEO } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import { descargar } from '../api';
-import { usd, sinClausula } from '../precio';
+import { usd, usdFino, sinClausula } from '../precio';
 import Tamano, { useTamano } from './Tamano';
 
 const ESTADOS = {
@@ -57,7 +57,8 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
         </div>
         <div className="ms-gen-meta">
           {TIPOS[g.preset_tipo] || g.preset_tipo} · {fecha(g.creado)}
-          {g.precio_usd != null && ` · ≈${usd(g.precio_usd)}`}
+          {g.precio_usd != null && ` · ≈${usd(Number(g.precio_usd) + Number(g.ia_usd || 0))}`}
+          {Number(g.ia_usd) > 0 && <span title="Ayudas de IA (descripción automática, ficha técnica, Camila, textos para redes) incluidas en el total"> (incluye {usdFino(g.ia_usd)} de IA)</span>}
           {g.creditos_estimados != null && (g.precio_usd == null || rol === 'super_admin') && ` · ≈${Number(g.creditos_estimados).toLocaleString('es-MX', { maximumFractionDigits: 1 })} cr`}
         </div>
         {rol !== 'usuario' && <div className="ms-gen-meta">Por {g.creado_por}</div>}

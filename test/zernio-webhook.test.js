@@ -19,7 +19,7 @@ if (!process.env.TEST_DATABASE_URL) {
 
   test.before(async () => {
     await migrar();
-    await pool.query('TRUNCATE pagos_eventos, billetera, publicaciones, generaciones, zernio_eventos RESTART IDENTITY');
+    await pool.query('TRUNCATE pagos_eventos, billetera, publicaciones, generaciones, zernio_eventos RESTART IDENTITY CASCADE');
     const { rows: [g] } = await pool.query(`INSERT INTO generaciones (creado_por, preset_id, preset_tipo, entrada, estado) VALUES ('t@x','p','ads','{}','completado') RETURNING id`);
     await pool.query(`INSERT INTO publicaciones (generacion_id, creado_por, medio, cuentas, estado, zernio_post_id) VALUES ($1, 't@x', '{}', '[]', 'publicando', 'post-1')`, [g.id]);
     await new Promise((r) => { srv = app.listen(0, r); });

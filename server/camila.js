@@ -7,6 +7,7 @@ const camila = require('./lib/camila');
 const catalogo = require('./lib/jh-catalogo');
 const hf = require('./lib/higgsfield');
 const fichas = require('./lib/fichas');
+const saldoMarketing = require('./lib/saldo-marketing');
 
 const router = express.Router();
 
@@ -87,9 +88,16 @@ router.post('/camila/ficha', async (req, res) => {
   if (!codigo) return res.status(400).json({ error: 'Falta el producto.' });
   try {
     if (!(await camila.productoMostrado(req.user.email, codigo))) return res.status(404).json({ error: 'Ese producto no aparece en tus búsquedas con Camila.' });
-    const r = await fichas.extraer(codigo);
+    if (!(await saldoMarketing.puedeGastarIa(req.user))) return res.status(402).json({ error: 'No hay saldo de Marketing para usar la IA. Pide una recarga en Créditos.', sinSaldo: true });
+    const { uso, ...r } = await fichas.extraer(codigo);
     if (r.sinFicha) return res.json({ sinFicha: true });
-    res.json(r);
+    // Solo se cobra la primera lectura (despues queda guardada y no cuesta).
+    let costoIa = 0;
+    if (uso && !saldoMarketing.exento(req.user)) {
+      costoIa = await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'ficha', detalle: `cód. ${codigo}`, modelo: uso.modelo, entrada: uso.entrada, salida: uso.salida, ref: `ficha:${codigo}` })
+        .catch((e) => { console.error('[fichas] cobro IA', e.message); return 0; });
+    }
+    res.json({ ...r, costoIa });
   } catch (e) { errorDe(res, e); }
 });
 

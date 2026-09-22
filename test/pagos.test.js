@@ -52,7 +52,7 @@ if (!URL_BD) {
     await new Promise((r) => mock.server.listen(0, r));
     process.env.SALDO_API_URL = `http://localhost:${mock.server.address().port}/api/credits/balance`;
     await migrar();
-    await pool.query('TRUNCATE pagos_eventos, billetera, publicaciones, generaciones RESTART IDENTITY');
+    await pool.query('TRUNCATE pagos_eventos, billetera, publicaciones, generaciones RESTART IDENTITY CASCADE');
     await ajustes.guardar({ costo_auto: 0, usd_por_credito: 0.052, margen_pct: 20, saldo_negativo_permitido: 0 }, 'test');
   });
   test.beforeEach(() => saldoExterno.olvidar());

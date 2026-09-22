@@ -15,6 +15,7 @@ const { pool, migrar } = require('./lib/db');
 const hf = require('./lib/higgsfield');
 const zernio = require('./lib/zernio');
 const billetera = require('./lib/billetera');
+const saldoMarketing = require('./lib/saldo-marketing');
 const modelos = require('./lib/modelos');
 const catalogo = require('./lib/catalogo');
 const clasificar = require('./lib/clasificar');
@@ -65,6 +66,8 @@ async function enviar(g) {
 async function devolver(id) {
   const cr = await billetera.reembolsar(id).catch((e) => { log(`#${id} no se pudo reembolsar: ${e.message}`); return 0; });
   if (cr) log(`#${id} reembolso de ${cr} creditos a la billetera`);
+  const usd = await saldoMarketing.reembolsar(id).catch((e) => { log(`#${id} no se pudo devolver al saldo de Marketing: ${e.message}`); return 0; });
+  if (usd) log(`#${id} devolucion de ${usd} USD al saldo de Marketing`);
 }
 
 // Costo por credito automatico (lib/costo.js), cada 6 h.
@@ -273,6 +276,7 @@ async function ciclo() {
 let parar = false;
 async function main() {
   await migrar();
+  await saldoMarketing.migrar().catch((e) => log(`migracion del saldo de Marketing: ${e.message}`));
   if (await hf.sembrarToken()) log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   if (await hfCli.sembrar().catch((e) => log('HF_CLI_SESION invalida:', e.message))) log('Sesion de la CLI sembrada desde HF_CLI_SESION.');
   log(`Worker Marketing Studio arrancado (cada ${POLL_MS} ms)`);

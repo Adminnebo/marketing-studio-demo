@@ -138,7 +138,7 @@ async function generar({ generacion, indice = 0, redes = [], tono = 'cercano', i
   const j = await resp.json();
   const out = leer(j, largo);
   console.log(`[captions] gen ${generacion.id} ${j.model || MODELO} ${j.usage?.input_tokens || 0}/${j.usage?.output_tokens || 0} tok · ficha ${ctx.ficha ? 'si' : 'no'}`);
-  return { ...out, usoFicha: !!ctx.ficha, producto: ctx.producto };
+  return { ...out, usoFicha: !!ctx.ficha, producto: ctx.producto, uso: { modelo: j.model || MODELO, entrada: j.usage?.input_tokens || 0, salida: j.usage?.output_tokens || 0 } };
 }
 
 module.exports = { generar, pedido, leer, contexto, limpiarTag, ErrorDeCaption, TONOS, INSTRUCCIONES };

@@ -10,6 +10,7 @@ const hf = require('./higgsfield');
 const ajustes = require('./config');
 const billetera = require('./billetera');
 const saldoExterno = require('./saldo-externo');
+const saldoMarketing = require('./saldo-marketing');
 
 // Creditos de la cuenta del generador (cache 30 s). null si no se pudo leer: no se bloquea por eso.
 let _saldoProv = { v: null, exp: 0 };
@@ -50,8 +51,11 @@ async function encolar(user, { presetId, presetNombre, presetTipo, portada, entr
   if (cobra && !(Number(creditos) > 0)) {
     return { status: 400, error: { error: 'No se pudo calcular el costo. Espera a que cargue e intenta de nuevo.' } };
   }
-  // Con saldo externo se cobra contra el saldo de la plataforma de pagos; si no, contra la billetera del panel.
-  const externo = cobra && saldoExterno.configurado();
+  // Con saldo de Marketing (lib/saldo-marketing.js) se cobra de ahi; si no, contra el saldo de la
+  // plataforma de pagos o la billetera del panel.
+  const interno = cobra && saldoMarketing.activo();
+  const externo = cobra && !interno && saldoExterno.configurado();
+  if (interno && !(Number(pr.precio) > 0)) return { status: 400, error: { error: 'Todavía no hay precio configurado para cobrar esta creación. Avísale al administrador.' } };
   let saldoLeido = null;
   if (externo) {
     if (!(Number(pr.precio) > 0)) return { status: 400, error: { error: 'Todavía no hay precio configurado para cobrar esta creación. Avísale al administrador.' } };
@@ -63,6 +67,14 @@ async function encolar(user, { presetId, presetNombre, presetTipo, portada, entr
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
+    if (interno) {
+      await saldoMarketing.bloquear(cli);
+      const disponible = await saldoMarketing.saldo(cli);
+      if (disponible - Number(pr.precio) < -Number(a.saldo_negativo_permitido || 0)) {
+        await cli.query('ROLLBACK');
+        return { status: 402, error: { sinSaldo: true, error: `No te alcanza el saldo de Marketing: tienes ${formatoUsd(disponible)} y esto cuesta ${formatoUsd(pr.precio)}. Pide una recarga en Créditos.` } };
+      }
+    }
     if (externo) {
       // Un solo cobro a la vez: dos creaciones simultaneas no gastan la misma plata.
       await cli.query('SELECT pg_advisory_xact_lock(4711)');
@@ -75,12 +87,13 @@ async function encolar(user, { presetId, presetNombre, presetTipo, portada, entr
     }
     const { rows: [g] } = await cli.query(
       `INSERT INTO generaciones (creado_por, user_id, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-         usd_por_credito, margen_pct, costo_usd, precio_usd, cobro_externo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+         usd_por_credito, margen_pct, costo_usd, precio_usd, cobro_externo, cobro_interno)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
       [user.email, user.id, presetId, presetNombre, presetTipo, portada, entrada, creditos,
-        a.usd_por_credito || null, pr.margen, pr.costo, pr.precio, externo]
+        a.usd_por_credito || null, pr.margen, pr.costo, pr.precio, externo, interno]
     );
-    if (cobra && !externo) await billetera.cobrar(cli, { generacionId: g.id, creditos: Number(creditos), usd: pr.precio, por: user.email });
+    if (interno) await saldoMarketing.cobrarGeneracion(cli, { generacionId: g.id, usd: pr.precio, por: user.email, concepto: presetNombre });
+    else if (cobra && !externo) await billetera.cobrar(cli, { generacionId: g.id, creditos: Number(creditos), usd: pr.precio, por: user.email });
     await cli.query('COMMIT');
     // Al navegador no le llegan el costo ni el margen (solo lo ve el super_admin en Consumo).
     const { costo_usd: _c, margen_pct: _m, usd_por_credito: _u, error_detalle: _e, ...publico } = g; // eslint-disable-line no-unused-vars
