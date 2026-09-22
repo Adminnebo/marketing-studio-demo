@@ -45,3 +45,22 @@ test('formato: bloques cortos, emojis y saltos de linea (limpios)', () => {
   }) }] }] };
   assert.equal(c.leer(r, 500).caption, '⚡ Ilumina tu obra\n\nMás luz, menos consumo.\n\n✅ 40 W\n✅ Luz blanca\n\n👉 Escríbenos por WhatsApp');
 });
+
+test('imagenes: a la IA nunca le llega un video (plantilla de video, desde cero y foto)', () => {
+  const producto = 'https://cdn/producto.jpg';
+  const video = c.imagenesDe({
+    resultados: [{ url: 'https://cdn/r.mp4', miniatura: null }],
+    portada: { url: 'https://cdn/plantilla.mp4', type: 'video', poster_url: 'https://cdn/poster.webp' },
+    entrada: { producto: { url: producto } },
+  });
+  assert.deepEqual(video.map((i) => i.url), [producto, 'https://cdn/poster.webp']);
+  assert.match(video[0].que, /foto real del producto/);
+  const libre = c.imagenesDe({ resultados: [{ url: 'https://cdn/r.mp4?x=1' }], portada: { url: producto }, entrada: { producto: { url: producto } } });
+  assert.deepEqual(libre.map((i) => i.url), [producto], 'sin repetir la misma foto');
+  const foto = c.imagenesDe({ resultados: [{ url: 'https://cdn/r.png', miniatura: 'https://cdn/r_min.webp' }], portada: { url: 'https://cdn/plantilla.mp4' } });
+  assert.deepEqual(foto.map((i) => i.url), ['https://cdn/r_min.webp']);
+  const b = c.pedido({ imagenes: video, ctx: {}, redes: [], tono: 'cercano', indicaciones: '', largo: 500 });
+  assert.equal(b.input[0].content.filter((x) => x.type === 'input_image').length, 2);
+  assert.ok(!JSON.stringify(b).includes('.mp4'));
+  assert.match(b.input[0].content.at(-1).text, /Imágenes adjuntas, en orden: 1\) la foto real del producto/);
+});

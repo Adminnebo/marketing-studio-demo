@@ -82,8 +82,33 @@ async function contexto(g) {
   };
 }
 
+// La IA solo acepta imagenes (jpg, png, gif, webp): nunca se le manda un video.
+const ES_VIDEO = /\.(mp4|mov|webm|m4v)($|\?)/i;
+const imagenValida = (u) => (typeof u === 'string' && /^https:\/\//.test(u) && !ES_VIDEO.test(u) ? u : null);
+
+/**
+ * Las imagenes que ve la IA para escribir el caption, con que es cada una.
+ * Foto: el resultado. Video: la foto real del producto y la vista previa (poster) de la
+ * plantilla o la miniatura del resultado, si es imagen. Maximo 2.
+ */
+function imagenesDe(generacion, indice = 0) {
+  const ok = (generacion.resultados || []).filter((r) => r.url);
+  const r = ok[Math.min(indice, ok.length - 1)];
+  const portada = generacion.portada || {};
+  const cands = r && !ES_VIDEO.test(r.url)
+    ? [[imagenValida(r.miniatura) || imagenValida(r.url), 'la imagen que se va a publicar']]
+    : [
+      [imagenValida(r?.miniatura), 'un cuadro del video que se va a publicar'],
+      [imagenValida(generacion.entrada?.producto?.url), 'la foto real del producto que aparece en el video'],
+      [imagenValida(portada.poster_url) || imagenValida(portada.url), 'la vista previa del estilo del video (la plantilla)'],
+    ];
+  const vistas = new Set();
+  return cands.filter(([u]) => u && !vistas.has(u) && vistas.add(u)).slice(0, 2).map(([url, que]) => ({ url, que }));
+}
+
 /** El cuerpo de la llamada (exportado para las pruebas). */
-function pedido({ imagenUrl, ctx, redes, tono, indicaciones, largo }) {
+function pedido({ imagenUrl, imagenes, ctx, redes, tono, indicaciones, largo }) {
+  const fotos = imagenes || (imagenValida(imagenUrl) ? [{ url: imagenUrl, que: 'la imagen que se va a publicar' }] : []);
   const lineas = [
     `Redes donde se publica: ${redes.length ? redes.join(', ') : 'Instagram y Facebook'}.`,
     `Tono: ${TONOS[tono] || TONOS.cercano}`,
@@ -93,11 +118,12 @@ function pedido({ imagenUrl, ctx, redes, tono, indicaciones, largo }) {
     ctx.ficha ? `Datos de la ficha técnica: ${JSON.stringify(ctx.ficha)}` : 'No hay ficha técnica: no des datos técnicos que no se vean en la imagen.',
     ctx.descripcion ? `Así se describió la escena al crear la imagen o video (en inglés, solo como contexto): ${ctx.descripcion}` : '',
     indicaciones ? `Indicaciones del equipo (mandan sobre lo demás, salvo las reglas de no inventar): ${indicaciones}` : '',
+    fotos.length ? `Imágenes adjuntas, en orden: ${fotos.map((f, i) => `${i + 1}) ${f.que}`).join('; ')}.` : 'No hay imagen: escribe a partir de los datos del producto.',
   ].filter(Boolean);
   return {
     model: MODELO, instructions: INSTRUCCIONES, store: false, temperature: 0.7, max_output_tokens: 1200,
     input: [{ role: 'user', content: [
-      ...(imagenUrl ? [{ type: 'input_image', image_url: imagenUrl, detail: 'low' }] : []),
+      ...fotos.map((f) => ({ type: 'input_image', image_url: f.url, detail: 'low' })),
       { type: 'input_text', text: lineas.join('\n') },
     ] }],
     text: { format: ESQUEMA },
@@ -126,16 +152,13 @@ function leer(r, largo) {
 
 async function generar({ generacion, indice = 0, redes = [], tono = 'cercano', indicaciones = '', largo = 1200 }, { fetch: pedir = globalThis.fetch } = {}) {
   if (!API_KEY) throw new ErrorDeCaption('El generador de captions no está configurado.', { status: 503 });
-  const ok = (generacion.resultados || []).filter((r) => r.url);
-  const r = ok[Math.min(indice, ok.length - 1)];
-  const esImagen = r && !/\.(mp4|mov|webm)($|\?)/i.test(r.url);
-  const imagenUrl = (esImagen && (r.miniatura || r.url)) || generacion.portada?.url || generacion.entrada?.producto?.url || null;
+  const imagenes = imagenesDe(generacion, indice);
   const ctx = await contexto(generacion);
   let resp;
   try {
     resp = await pedir(URL_OPENAI, {
       method: 'POST', headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(pedido({ imagenUrl: /^https:\/\//.test(imagenUrl || '') ? imagenUrl : null, ctx, redes, tono, indicaciones: String(indicaciones || '').slice(0, 500), largo })),
+      body: JSON.stringify(pedido({ imagenes, ctx, redes, tono, indicaciones: String(indicaciones || '').slice(0, 500), largo })),
       signal: AbortSignal.timeout(60000),
     });
   } catch (e) {
@@ -148,4 +171,4 @@ async function generar({ generacion, indice = 0, redes = [], tono = 'cercano', i
   return { ...out, usoFicha: !!ctx.ficha, producto: ctx.producto, uso: { modelo: j.model || MODELO, entrada: j.usage?.input_tokens || 0, salida: j.usage?.output_tokens || 0 } };
 }
 
-module.exports = { generar, pedido, leer, contexto, limpiarTag, ErrorDeCaption, TONOS, INSTRUCCIONES };
+module.exports = { generar, pedido, leer, contexto, limpiarTag, imagenesDe, ErrorDeCaption, TONOS, INSTRUCCIONES };
