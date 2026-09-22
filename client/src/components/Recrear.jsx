@@ -4,6 +4,7 @@ import { TIPOS, TIPOS_VIDEO, entradasDe, faltantes, formatoDe, creditosDe } from
 import Portada from './Portada';
 import Avatares from './Avatares';
 import Dictar from './Dictar';
+import Personalizar from './Personalizar';
 import FichaTecnica, { sumarTexto } from './FichaTecnica';
 import EditorGrande, { BotonAmpliar } from './EditorGrande';
 import { precioDe, usd, usdFino, cred, creditos as nCred } from '../precio';
@@ -28,6 +29,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
   const [avatar, setAvatar] = useState(inicial?.avatar || null);
   const [eligiendoAvatar, setEligiendoAvatar] = useState(false);
   const [prompt, setPrompt] = useState(inicial?.prompt || '');
+  const [personalizacion, setPersonalizacion] = useState(inicial?.personalizacion || {});
   const [grande, setGrande] = useState(false);
   const [url, setUrl] = useState(inicial?.url || '');
   const [duracion, setDuracion] = useState(null);
@@ -78,7 +80,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
       const g = await crearGeneracion({
         preset, categoria,
         producto: producto && { media_id: producto.media_id, url: producto.url, nombre: producto.nombre },
-        avatar, prompt, url, duracion,
+        avatar, prompt, url, duracion, personalizacion,
       });
       setEnviada(g);
       onEnviada?.(g);
@@ -205,6 +207,8 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
                   </div>
                 )}
               </div>
+
+              <Personalizar tipo={preset.type} valor={personalizacion} onCambio={setPersonalizacion} desactivado={!!enviada} />
 
               {error && <div className="ms-errors">{error}</div>}
 

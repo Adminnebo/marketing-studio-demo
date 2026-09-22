@@ -236,7 +236,8 @@ export default function App() {
     inicial: {
       producto: g.entrada.args.product_media_id ? { media_id: g.entrada.args.product_media_id, url: g.entrada.producto?.url, nombre: g.entrada.producto?.nombre || 'Producto' } : null,
       avatar: g.entrada.avatar || null,
-      prompt: sinClausula(g.entrada.args.prompt),
+      prompt: g.entrada.texto_usuario ?? sinClausula(g.entrada.args.prompt),
+      personalizacion: g.entrada.personalizacion || null,
       url: g.entrada.args.brand_url || '',
     },
   }));

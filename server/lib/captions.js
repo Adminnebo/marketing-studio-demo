@@ -24,13 +24,18 @@ const TONOS = {
 
 const INSTRUCCIONES = `Eres el community manager de JH Electro Alambres, ferretería y distribuidora de material eléctrico, plomería, iluminación y herramientas en República Dominicana (sucursales en La Vega, Santo Domingo, Pontón y Bávaro). Escribes el texto de una publicación para redes sociales a partir de la foto o video que se va a publicar y de los datos del producto.
 
-Reglas del caption:
+Reglas del caption (contenido):
 - Español dominicano neutro, tuteo. Frases cortas.
-- Empieza con un gancho de una línea. Luego 1 a 3 frases con el beneficio o uso del producto.
 - Usa datos concretos (potencia, medidas, amperaje, marca…) SOLO si vienen en los datos del producto. Nunca inventes datos, precios, descuentos, fechas, teléfonos, direcciones ni links.
-- Cierra con una llamada a la acción sin datos inventados: "Escríbenos por WhatsApp", "Visítanos en cualquiera de nuestras sucursales", "Pregunta por el tuyo".
-- De 0 a 3 emojis, bien puestos. Sin hashtags dentro del caption (van aparte).
+- La llamada a la acción no lleva datos inventados: "Escríbenos por WhatsApp", "Visítanos en cualquiera de nuestras sucursales", "Pregunta por el tuyo".
+- Sin hashtags dentro del caption (van aparte).
 - Respeta el largo máximo que se indica.
+
+Formato del caption (muy importante: tiene que leerse de un vistazo en el celular, nunca un párrafo largo):
+- Bloques de 1 o 2 líneas como máximo, separados por una línea en blanco (\n\n).
+- Orden: 1) un gancho de una sola línea con un emoji; 2) el beneficio o uso en 1 o 2 líneas; 3) si hay datos concretos o usos claros, de 2 a 4 viñetas cortas, una por línea (\n), cada una empezando con un emoji relacionado (⚡ 💡 🔌 ✅ 🛠️ 💧 🏠 🏗️…); 4) la llamada a la acción sola en su línea, empezando con 👉, 📍 o 💬.
+- Entre 3 y 6 emojis en total, relacionados con el producto o el uso; nunca dos o más seguidos, nunca en medio de una frase, nunca emojis genéricos de relleno.
+- Para TikTok o X: solo el gancho, una línea de beneficio y la llamada a la acción, cada uno en su línea, con 2 o 3 emojis.
 
 Hashtags (van aparte, en "hashtags"): de 12 a 15 sugerencias, de la más a la menos relevante, cada una con su "tipo":
 - "marca": #JHElectroAlambres siempre primero.
@@ -114,7 +119,9 @@ function leer(r, largo) {
   const marca = hashtags.findIndex((h) => h.tag.toLowerCase() === '#jhelectroalambres');
   if (marca > 0) hashtags.unshift(...hashtags.splice(marca, 1));
   if (marca === -1) hashtags.unshift({ tag: '#JHElectroAlambres', tipo: 'marca' });
-  return { caption: String(d.caption || '').trim().slice(0, largo), hashtags: hashtags.slice(0, 15) };
+  // Respeta los saltos de linea del formato, sin espacios sueltos ni mas de una linea en blanco seguida.
+  const caption = String(d.caption || '').replace(/\r/g, '').split('\n').map((l) => l.trimEnd()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { caption: caption.slice(0, largo), hashtags: hashtags.slice(0, 15) };
 }
 
 async function generar({ generacion, indice = 0, redes = [], tono = 'cercano', indicaciones = '', largo = 1200 }, { fetch: pedir = globalThis.fetch } = {}) {

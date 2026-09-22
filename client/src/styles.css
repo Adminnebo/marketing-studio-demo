@@ -715,3 +715,36 @@ button.badge:hover { background: var(--surface-2); color: var(--text-primary); }
 .saldo-chip.neg .saldo-chip-v { color: var(--critical); }
 .saldo-chip-r { font-size: 0.76rem; font-weight: 700; color: var(--series-1); }
 @media (max-width: 640px) { .saldo-chip-l, .saldo-chip-r { display: none; } .saldo-chip { padding: 5px 10px; } .saldo-chip-v { font-size: 0.92rem; } }
+
+/* Personalizar plantilla (colores, fondo, luz, estilo, textos) */
+.pz { border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); overflow: hidden; }
+.pz-cab { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 14px; font: inherit; font-size: 0.9rem; font-weight: 700; background: none; border: 0; color: var(--text-primary); cursor: pointer; text-align: left; }
+.pz-cab:hover { background: var(--surface-2); }
+.pz-sub { font-weight: 500; font-size: 0.78rem; color: var(--text-muted); margin-left: 4px; }
+.pz-cab-d { display: inline-flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-muted); }
+.pz-n { background: var(--series-1); color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 0.72rem; font-weight: 800; }
+.pz-cuerpo { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--grid); }
+.pz-grupo { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
+.pz-lbl { font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); }
+.pz-paletas { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.pz-paleta { font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface-1); color: var(--text-primary); text-align: left; }
+.pz-paleta:hover:not(:disabled) { border-color: color-mix(in srgb, var(--series-1) 50%, transparent); }
+.pz-paleta.on { border-color: var(--series-1); box-shadow: 0 0 0 2px color-mix(in srgb, var(--series-1) 20%, transparent); }
+.pz-muestra { display: flex; width: 100%; height: 22px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+.pz-muestra i { flex: 1; }
+.pz-muestra-libre { align-items: center; justify-content: center; font-weight: 800; color: var(--text-muted); background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 6px, var(--surface-1) 6px, var(--surface-1) 12px); }
+.pz-pn { font-size: 0.78rem; font-weight: 700; }
+.pz-pu { font-size: 0.68rem; color: var(--text-muted); }
+.pz-propios { display: flex; gap: 16px; flex-wrap: wrap; }
+.pz-color { display: inline-flex; align-items: center; gap: 8px; font-size: 0.78rem; cursor: pointer; }
+.pz-color input[type=color] { width: 40px; height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 2px; background: var(--surface-1); cursor: pointer; }
+.pz-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.pz-chip { font: inherit; font-size: 0.78rem; font-weight: 620; cursor: pointer; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); }
+.pz-chip:hover:not(:disabled) { color: var(--text-primary); }
+.pz-chip.on { background: var(--series-1); color: #fff; border-color: transparent; }
+.pz-textos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.pz-textos .filter-field { min-width: 0; }
+.pz-nota { font-size: 0.74rem; color: var(--text-muted); }
+.pz-pie { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pz-quitar { color: var(--critical); }
+.pz-texto { margin: 0; white-space: pre-wrap; font-size: 0.74rem; background: var(--surface-2); border-radius: 8px; padding: 10px; color: var(--text-secondary); }

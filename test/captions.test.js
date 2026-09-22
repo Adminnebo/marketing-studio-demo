@@ -35,3 +35,13 @@ test('pedido: imagen, tono, largo, ficha y reglas de no inventar', () => {
   assert.match(c.INSTRUCCIONES, /Nunca inventes datos, precios/);
   assert.equal(b.text.format.strict, true);
 });
+
+test('formato: bloques cortos, emojis y saltos de linea (limpios)', () => {
+  assert.match(c.INSTRUCCIONES, /nunca un párrafo largo/);
+  assert.match(c.INSTRUCCIONES, /Entre 3 y 6 emojis/);
+  const r = { output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({
+    caption: '⚡ Ilumina tu obra   \n\n\n\nMás luz, menos consumo.\n\n✅ 40 W\n✅ Luz blanca  \n\n\n👉 Escríbenos por WhatsApp',
+    hashtags: [],
+  }) }] }] };
+  assert.equal(c.leer(r, 500).caption, '⚡ Ilumina tu obra\n\nMás luz, menos consumo.\n\n✅ 40 W\n✅ Luz blanca\n\n👉 Escríbenos por WhatsApp');
+});

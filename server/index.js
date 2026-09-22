@@ -25,6 +25,7 @@ const { conEspanol } = require('./lib/idioma');
 const saldoMarketing = require('./lib/saldo-marketing');
 
 const reglasP = import('../shared/reglas.mjs');
+const personalizarP = import('../shared/personalizar.mjs');
 const PORT = process.env.PORT || 3002;
 
 const app = express();
@@ -242,7 +243,12 @@ app.post('/api/generaciones', ruta(async (req, res) => {
   const e = entradasDe(preset, { formatSlug, formato });
   const producto = e.producto && b.producto?.media_id ? b.producto : null;
   const avatar = e.avatar && b.avatar?.id ? b.avatar : null;
-  const prompt = String(b.prompt || '').trim().slice(0, 5000);
+  const { validar: validarPers, textoDe: textoPers } = await personalizarP;
+  const personalizacion = validarPers(b.personalizacion, preset.type);
+  const extra_ = textoPers(personalizacion, preset.type);
+  const textoUsuario = String(b.prompt || '').trim().slice(0, 5000);
+  // Lo que escribio el usuario + la personalizacion (colores, luz, fondo, estilo, textos), sin pasar de 5000.
+  const prompt = (extra_ ? `${textoUsuario.slice(0, 4990 - extra_.length)}\n\n${extra_}` : textoUsuario).trim();
   const url = e.aceptaUrl ? String(b.url || '').trim().slice(0, 4096) : '';
   const errores = faltantes(e, { producto, avatar, prompt, url });
   if (errores.length) return res.status(400).json({ error: errores.join(' ') });
@@ -264,6 +270,9 @@ app.post('/api/generaciones', ruta(async (req, res) => {
     ...(url ? { brand_url: url } : {}),
   };
   const extra = {
+    // Para 'Usar de nuevo': el texto propio y la personalizacion por separado (no el prompt ya armado).
+    texto_usuario: textoUsuario || null,
+    ...(Object.keys(personalizacion).length ? { personalizacion } : {}),
     categoria,
     preset: {
       id: preset.id, type: preset.type, name: preset.name || null, cover_image: preset.cover_image || null,
