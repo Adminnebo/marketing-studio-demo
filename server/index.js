@@ -11,6 +11,8 @@ const { pool, migrar } = require('./lib/db');
 const hf = require('./lib/higgsfield');
 const auth = require('./lib/auth');
 const ajustes = require('./lib/config');
+const { filtrosGeneraciones } = require('./lib/filtros-gen');
+const conciliacion = require('./lib/conciliacion');
 const catalogo = require('./lib/catalogo');
 const billetera = require('./lib/billetera');
 const modelos = require('./lib/modelos');
@@ -297,14 +299,20 @@ app.post('/api/generaciones', ruta(async (req, res) => {
   res.status(201).json(g);
 }));
 
+// Mis creaciones, con busqueda y filtros (lib/filtros-gen.js).
 app.get('/api/generaciones', ruta(async (req, res) => {
   const limite = Math.min(Number(req.query.limite) || 30, 100);
-  const antes = Number(req.query.antes) || null;
+  const { where, vals } = filtrosGeneraciones(req.query, { email: req.user.email, vals: [limite] });
   const { rows } = await pool.query(
-    `SELECT ${COLS} FROM generaciones ${antes ? 'WHERE id < $2' : ''} ORDER BY id DESC LIMIT $1`,
-    antes ? [limite, antes] : [limite]
+    `SELECT ${COLS} FROM generaciones ${where} ORDER BY id DESC LIMIT $1`, vals
   );
   res.json({ items: rows, siguiente: rows.length === limite ? rows.at(-1).id : null });
+}));
+
+// Quienes han creado (para el filtro "Quién").
+app.get('/api/generaciones-autores', ruta(async (req, res) => {
+  const { rows } = await pool.query(`SELECT creado_por, COUNT(*)::int AS n FROM generaciones GROUP BY creado_por ORDER BY n DESC LIMIT 50`);
+  res.json({ autores: rows.map((r) => ({ email: r.creado_por, n: r.n })) });
 }));
 
 // Descarga via el panel, con nombre de archivo propio (el original trae el
@@ -465,6 +473,7 @@ async function arrancar() {
   await require('./lib/camila').migrar();
   await require('./lib/permisos').migrar();
   await require('./lib/saldo-marketing').migrar();
+  await conciliacion.migrar();
   require('./lib/jh-catalogo').calentar();
   if (await hf.sembrarToken()) console.log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   // Webhook de Zernio: se registra solo en cuanto hay clave y secreto.
@@ -475,6 +484,17 @@ async function arrancar() {
   }
   if (!auth.configurado()) console.warn('AVISO: faltan SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_KEY; nadie podrá entrar.');
   app.listen(PORT, () => console.log(`Panel Marketing Studio en :${PORT}`));
+  // Conciliacion (lib/conciliacion.js): Camila cada 30 min, Higgsfield cada 6 h (arranca a los 5 min).
+  const esSuperAdmin = async (email) => (await auth.perfiles().catch(() => [])).some((p) => p.role === 'super_admin' && (p.email || '').toLowerCase() === email);
+  const camilaCada = () => conciliacion.conciliarCamila({ esSuperAdmin })
+    .then((r) => r.faltantes && console.log(`[conciliacion] Camila: ${r.faltantes} sin costo de n8n, ${r.cobrados} cobradas estimadas ($${r.usd})`))
+    .catch((e) => console.error('[conciliacion] Camila', e.message));
+  const hfCada = () => conciliacion.conciliarHiggsfield({ llamar: hf.llamar })
+    .then((r) => console.log(`[conciliacion] Higgsfield 24 h: ${r.panel.creaciones} creaciones, ${r.emparejadas} emparejadas, ${r.diferencias.length} con otro costo, ${r.sinGasto.length} sin gasto, ${r.fueraDelPanel.n} gastos fuera del panel (${r.fueraDelPanel.creditos} cr)`))
+    .catch((e) => console.error('[conciliacion] Higgsfield', e.message));
+  setTimeout(() => { camilaCada(); hfCada(); }, 5 * 60e3);
+  setInterval(camilaCada, 30 * 60e3);
+  setInterval(hfCada, 6 * 60 * 60e3);
 }
 
 if (require.main === module) arrancar().catch((e) => { console.error(e); process.exit(1); });

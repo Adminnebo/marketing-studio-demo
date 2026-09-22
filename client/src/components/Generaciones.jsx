@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TIPOS, TIPOS_VIDEO } from '@shared/reglas.mjs';
 import Portada from './Portada';
-import { descargar } from '../api';
+import { descargar, fetchGeneraciones, fetchAutores } from '../api';
 import { usd, usdFino, sinClausula } from '../precio';
 import Tamano, { useTamano } from './Tamano';
 
@@ -77,12 +77,70 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
   );
 }
 
-export default function Generaciones({ items, cargando, error, hayMas, onMas, onRepetir, onPublicar, rol, onCrear }) {
+const FILTROS_VACIOS = { q: '', medio: '', dias: '', autor: '', publicadas: '' };
+
+// Busqueda en el servidor (todas las creaciones, no solo las cargadas): se pide sola al escribir o cambiar un filtro.
+function useBusqueda(f) {
+  const activa = Object.values(f).some(Boolean);
+  const [r, setR] = useState({ items: [], cargando: false, error: null, siguiente: null });
+  const pedido = useRef(0);
+  useEffect(() => {
+    if (!activa) return undefined;
+    const n = ++pedido.current;
+    setR((x) => ({ ...x, cargando: true }));
+    const t = setTimeout(() => {
+      fetchGeneraciones(null, f)
+        .then((d) => n === pedido.current && setR({ items: d.items, cargando: false, error: null, siguiente: d.siguiente }))
+        .catch((e) => n === pedido.current && setR((x) => ({ ...x, cargando: false, error: e.message })));
+    }, f.q ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [activa, f.q, f.medio, f.dias, f.autor, f.publicadas]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mas = async () => {
+    if (!r.siguiente) return;
+    setR((x) => ({ ...x, cargando: true }));
+    try { const d = await fetchGeneraciones(r.siguiente, f); setR((x) => ({ items: [...x.items, ...d.items], cargando: false, error: null, siguiente: d.siguiente })); }
+    catch (e) { setR((x) => ({ ...x, cargando: false, error: e.message })); }
+  };
+  return { activa, ...r, mas };
+}
+
+export default function Generaciones({ items: todas, cargando: cargandoTodas, error: errorTodas, hayMas: hayMasTodas, onMas, onRepetir, onPublicar, rol, onCrear }) {
   const [filtro, setFiltro] = useState('');
+  const [f, setF] = useState(FILTROS_VACIOS);
+  const [autores, setAutores] = useState([]);
   const [tam, setTam] = useTamano('ms_tam_creaciones', 250);
+  const b = useBusqueda(f);
+  useEffect(() => { if (rol !== 'usuario') fetchAutores().then((d) => setAutores(d.autores)).catch(() => {}); }, [rol]);
+  // Lo que esta en curso se actualiza en la lista general; en la busqueda se toma de ahi.
+  const frescas = new Map(todas.map((g) => [g.id, g]));
+  const items = b.activa ? b.items.map((g) => frescas.get(g.id) || g) : todas;
+  const cargando = b.activa ? b.cargando : cargandoTodas;
+  const error = b.activa ? b.error : errorTodas;
+  const hayMas = b.activa ? !!b.siguiente : hayMasTodas;
   const visibles = items.filter((g) => !filtro || (filtro === 'curso' ? EN_CURSO.has(g.estado) : g.estado === filtro));
+  const cambiar = (k, v) => setF((x) => ({ ...x, [k]: v }));
   return (
     <>
+      <div className="gn-filtros" role="search">
+        <div className="gn-buscar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input id="gn-q" type="search" value={f.q} onChange={(e) => cambiar('q', e.target.value)} maxLength={80}
+            placeholder="Buscar por producto, código, descripción, plantilla o #número…" aria-label="Buscar creaciones" />
+          {f.q && <button className="gn-x" onClick={() => cambiar('q', '')} aria-label="Borrar búsqueda">✕</button>}
+        </div>
+        <select id="gn-medio" className="gn-sel" value={f.medio} onChange={(e) => cambiar('medio', e.target.value)} aria-label="Tipo">
+          <option value="">Fotos y videos</option><option value="foto">Solo fotos</option><option value="video">Solo videos</option>
+        </select>
+        <select id="gn-dias" className="gn-sel" value={f.dias} onChange={(e) => cambiar('dias', e.target.value)} aria-label="Fecha">
+          <option value="">Cualquier fecha</option><option value="1">Últimas 24 h</option><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option>
+        </select>
+        <select id="gn-autor" className="gn-sel" value={f.autor} onChange={(e) => cambiar('autor', e.target.value)} aria-label="Quién la creó">
+          <option value="">De todos</option><option value="yo">Solo mías</option>
+          {autores.map((a) => <option key={a.email} value={a.email}>{a.email} ({a.n})</option>)}
+        </select>
+        <label className="gn-check"><input id="gn-pub" type="checkbox" checked={f.publicadas === '1'} onChange={(e) => cambiar('publicadas', e.target.checked ? '1' : '')} /> Publicadas</label>
+        {b.activa && <button className="linklike gn-limpiar" onClick={() => setF(FILTROS_VACIOS)}>Quitar filtros</button>}
+      </div>
       <div className="pl-barra">
         <div className="pl-cats">
           {FILTROS.map(([k, l]) => {
@@ -97,7 +155,7 @@ export default function Generaciones({ items, cargando, error, hayMas, onMas, on
         <div className="loading"><div className="spinner" />Cargando generaciones…</div>
       ) : !visibles.length ? (
         <div className="empty-state">
-          {items.length ? 'Nada con este filtro.' : (
+          {items.length || b.activa ? (b.activa && !items.length ? 'No hay creaciones que coincidan con la búsqueda.' : 'Nada con este filtro.') : (
             <>
               <div style={{ fontSize: '2rem' }}>🎨</div>
               <strong>Todavía no has creado nada.</strong><br />Lo que crees aparece aquí para verlo y descargarlo.
@@ -111,7 +169,7 @@ export default function Generaciones({ items, cargando, error, hayMas, onMas, on
         </div>
       )}
       {hayMas && (
-        <div className="ms-more"><button className="btn secondary" onClick={onMas} disabled={cargando}>Cargar más</button></div>
+        <div className="ms-more"><button className="btn secondary" onClick={b.activa ? b.mas : onMas} disabled={cargando}>Cargar más</button></div>
       )}
     </>
   );

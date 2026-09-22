@@ -81,7 +81,12 @@ export const fetchAvatares = (c = {}) => {
   return api('/catalogo/avatares?' + q);
 };
 export const crearGeneracion = (datos) => api('/generaciones', { method: 'POST', body: JSON.stringify(datos) });
-export const fetchGeneraciones = (antes) => api('/generaciones?limite=30' + (antes ? `&antes=${antes}` : ''));
+export const fetchGeneraciones = (antes, filtros = {}) => {
+  const p = new URLSearchParams({ limite: '30', ...(antes ? { antes: String(antes) } : {}) });
+  for (const [k, v] of Object.entries(filtros)) if (v) p.set(k, String(v));
+  return api('/generaciones?' + p);
+};
+export const fetchAutores = () => api('/generaciones-autores');
 
 // Subida con progreso (XHR): el servidor la reenvia a Higgsfield.
 export function subirImagen(archivo, onProgreso) {
@@ -172,3 +177,5 @@ export const aprobarRecarga = (id, nota) => api(`/creditos/solicitudes/${id}/apr
 export const rechazarRecarga = (id, nota) => api(`/creditos/solicitudes/${id}/rechazar`, { method: 'POST', body: JSON.stringify({ nota }) });
 export const resolverRecarga = (id, aplicada) => api(`/creditos/solicitudes/${id}/revision`, { method: 'POST', body: JSON.stringify({ aplicada }) });
 export const fijarSaldoMarketing = (saldo, motivo) => api('/creditos/fijar', { method: 'POST', body: JSON.stringify({ saldo, motivo }) });
+export const fetchConciliacion = () => api('/superadmin/conciliacion');
+export const correrConciliacion = () => api('/superadmin/conciliacion', { method: 'POST' });

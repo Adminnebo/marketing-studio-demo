@@ -1,8 +1,8 @@
 import RedesSetup from './RedesSetup';
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar, cambiarPermisoAprobar } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar, cambiarPermisoAprobar, fetchConciliacion, correrConciliacion } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
-import { usd, cred } from '../precio';
+import { usd, usdFino, cred } from '../precio';
 
 const num = (n, d = 1) => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: d });
 const ROLES_PANELES = { super_admin: 'Super admin', admin: 'Admin', agent: 'Agente' };
@@ -452,6 +452,73 @@ function Usuarios({ yo }) {
 
 const SECCIONES = [['ajustes', 'Ganancia y ajustes'], ['consumo', 'Consumo'], ['usuarios', 'Usuarios y acceso']];
 
+// Conciliacion: lo registrado en el panel contra lo gastado de verdad (n8n y Higgsfield).
+const horaCorta = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+function Conciliacion() {
+  const [d, setD] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const [corriendo, setCorriendo] = useState(false);
+  useEffect(() => { fetchConciliacion().then(setD).catch((e) => setMsg(e.message)); }, []);
+  const correr = async () => {
+    setCorriendo(true); setMsg(null);
+    try { const r = await correrConciliacion(); setD(r); if (r.higgsfield?.error) setMsg(r.higgsfield.error); } catch (e) { setMsg(e.message); }
+    setCorriendo(false);
+  };
+  const h = d?.higgsfield; const c = d?.camila; const est = d?.camilaEstimadasTotal;
+  const cr = (n) => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 });
+  return (
+    <div className="card cn-card">
+      <div className="cn-top">
+        <div>
+          <h3>Conciliación de costos</h3>
+          <div className="card-sub">Revisa que nada se escape: cada búsqueda de Camila con su cobro, y cada creación con lo que Higgsfield descontó. Corre sola (Camila cada 30 min, Higgsfield cada 6 h).</div>
+        </div>
+        <button className="btn secondary" onClick={correr} disabled={corriendo}>{corriendo ? 'Revisando…' : '↻ Revisar ahora'}</button>
+      </div>
+      {msg && <div className="ms-errors">{msg}</div>}
+      {!d ? <div className="spinner" /> : (
+        <div className="cn-grid">
+          <section>
+            <h4>Camila</h4>
+            {c ? <p className="ms-cost">Última revisión {horaCorta(c.corrida)}: {c.faltantes ? `${c.faltantes} respuesta(s) sin costo de n8n; se cobraron estimadas (${usdFino(c.usd)}, a ${usdFino(c.costoEstimado)} c/u).` : 'todas las respuestas tenían su cobro.'}</p>
+              : <p className="ms-cost">Sin faltantes hasta ahora: cada respuesta de Camila tuvo su cobro.</p>}
+            {est?.n > 0 && <p className="ms-cost">En total se han cobrado {est.n} búsqueda(s) estimadas ({usdFino(est.usd)}). Si son muchas, revisar el flujo de costos en n8n.</p>}
+          </section>
+          <section>
+            <h4>Higgsfield · últimas 24 h</h4>
+            {!h ? <p className="ms-cost">Todavía no se ha revisado.</p> : (
+              <>
+                <p className="ms-cost">Revisado {horaCorta(h.corrida)}.</p>
+                <div className="cn-nums">
+                  <div><span>Estimado por el panel</span><b className="num">{cr(h.panel.estimado)} cr</b><em>{h.panel.creaciones} creación(es)</em></div>
+                  <div><span>Descontado en Higgsfield</span><b className="num">{cr(h.higgsfield.gastado)} cr</b><em>{h.higgsfield.devuelto ? `${cr(h.higgsfield.devuelto)} cr devueltos` : `${h.higgsfield.movimientos} movimiento(s)`}</em></div>
+                  <div className={h.diferencias.length ? 'alerta' : ''}><span>Con otro costo</span><b className="num">{h.diferencias.length}</b><em>{h.diferencias.length ? `${h.diferenciaCreditos > 0 ? '+' : ''}${cr(h.diferenciaCreditos)} cr vs lo estimado` : 'todo cuadra'}</em></div>
+                  <div className={h.fueraDelPanel.n ? 'alerta' : ''}><span>Gasto fuera del panel</span><b className="num">{cr(h.fueraDelPanel.creditos)} cr</b><em>{h.fueraDelPanel.n} movimiento(s)</em></div>
+                </div>
+                {h.diferencias.length > 0 && (
+                  <details><summary>Creaciones con otro costo</summary>
+                    <ul className="cn-lista">{h.diferencias.map((x) => <li key={x.id}>#{x.id} {x.nombre} · {x.por}: estimado {cr(x.estimado)} cr, real {cr(x.real)} cr</li>)}</ul>
+                  </details>
+                )}
+                {h.sinGasto.length > 0 && (
+                  <details><summary>{h.sinGasto.length} creación(es) sin gasto en Higgsfield</summary>
+                    <ul className="cn-lista">{h.sinGasto.map((x) => <li key={x.id}>#{x.id} {x.nombre} ({x.estado}) · estimado {cr(x.estimado)} cr</li>)}</ul>
+                  </details>
+                )}
+                {h.fueraDelPanel.n > 0 && (
+                  <details><summary>Gastos de la cuenta que no salieron del panel</summary>
+                    <ul className="cn-lista">{h.fueraDelPanel.muestras.map((x, i) => <li key={i}>{horaCorta(x.hora)} · {x.nombre} · {cr(x.creditos)} cr</li>)}</ul>
+                  </details>
+                )}
+              </>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SuperAdmin({ yo, onAjustes }) {
   const [sec, setSec] = useState('ajustes');
   return (
@@ -462,7 +529,7 @@ export default function SuperAdmin({ yo, onAjustes }) {
         </div>
       </div>
       {sec === 'ajustes' && <Ajustes onGuardado={onAjustes} />}
-      {sec === 'consumo' && <Consumo />}
+      {sec === 'consumo' && <><Conciliacion /><Consumo /></>}
       {sec === 'usuarios' && <Usuarios yo={yo} />}
     </>
   );

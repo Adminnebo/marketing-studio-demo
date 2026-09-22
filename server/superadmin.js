@@ -21,6 +21,7 @@ const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
 const saldoExterno = require('./lib/saldo-externo');
 const saldoMarketing = require('./lib/saldo-marketing');
+const conciliacion = require('./lib/conciliacion');
 
 const router = express.Router();
 router.use('/superadmin', auth.requireRol('super_admin'));
@@ -273,6 +274,17 @@ router.put('/superadmin/usuarios/:id/aprobar', ruta(async (req, res) => {
   if (!r.rowCount) throw errPublico('Primero dale acceso a Marketing.');
   console.log(`[accesos] ${req.user.email} -> ${p.email}: ${valor ? 'puede' : 'no puede'} aprobar recargas`);
   res.json({ ok: true, aprobarRecargas: valor });
+}));
+
+// Conciliacion: ultimo resultado de cada una, y correrla ya.
+router.get('/superadmin/conciliacion', ruta(async (req, res) => res.json(await conciliacion.ultimas())));
+router.post('/superadmin/conciliacion', ruta(async (req, res) => {
+  const esSuperAdmin = async (email) => (await auth.perfiles().catch(() => [])).some((p) => p.role === 'super_admin' && (p.email || '').toLowerCase() === email);
+  const [camila, higgsfield] = await Promise.all([
+    conciliacion.conciliarCamila({ esSuperAdmin }).catch((e) => ({ error: e.message })),
+    conciliacion.conciliarHiggsfield({ llamar: hf.llamar }).catch((e) => ({ error: `No se pudo leer Higgsfield: ${e.message}` })),
+  ]);
+  res.json({ camila, higgsfield, ...(await conciliacion.ultimas()) });
 }));
 
 // Consumo del mes (YYYY-MM, hora de Santo Domingo). Solo cuenta lo completado;
