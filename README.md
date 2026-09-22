@@ -114,6 +114,8 @@ navegador ──► panel (Express + React)      ──► Postgres ◄── wo
   descargar; en las programadas se puede **mover la fecha** (`POST /api/publicaciones/:id/reprogramar`, que edita la
   programación en Zernio) o **cancelarla**. Lo ya publicado o fallido solo se muestra.
 - El modo agendadas y las acciones de publicar solo aparecen para quien puede publicar en redes.
+- **En pruebas**: la pestaña solo la ven los super admins (y no aparece en "Ver como"). Quitar el `min` en
+  `client/src/App.jsx` cuando se abra al resto del equipo.
 
 ## Pagos: saldo de la plataforma de pagos de Nebo
 
