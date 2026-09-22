@@ -333,6 +333,8 @@ body {
 .ms-gen-name { font-weight: 650; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-gen-meta { font-size: 0.74rem; color: var(--text-muted); }
 .ms-gen-err { font-size: 0.76rem; color: var(--critical); line-height: 1.4; }
+.ms-gen-nota { font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; }
+.ms-gen-nota-q { font-style: italic; }
 .ms-gen-prompt { font-size: 0.78rem; color: var(--text-secondary); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .ms-gen-actions { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; flex-wrap: wrap; }
 .ms-gen-actions .mini-btn { margin-right: 0; text-decoration: none; }

@@ -72,7 +72,9 @@ if (!URL_BD) {
     await w.revisarEnProceso();
     const g = await fila(id);
     assert.equal(g.estado, 'fallido');
-    assert.match(g.error, /filtro de seguridad/);
+    assert.match(g.error, /filtro de contenido/);
+    // Sin el corrector configurado no se reintenta: la creacion queda fallida y ya.
+    assert.equal(g.reintento_id, null);
     assert.equal(g.error_detalle, "estados: nsfw");
   });
 

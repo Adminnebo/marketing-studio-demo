@@ -123,7 +123,7 @@ async function reembolsar(generacionId) {
   return r.rowCount ? r4(-Number(c.usd)) : 0;
 }
 
-const CLASES_IA = { descripcion: 'Descripción automática', ficha: 'Lectura de ficha técnica', caption: 'Caption y hashtags', camila: 'Búsqueda con Camila', clasificar: 'Clasificación de plantillas' };
+const CLASES_IA = { descripcion: 'Descripción automática', ficha: 'Lectura de ficha técnica', caption: 'Caption y hashtags', camila: 'Búsqueda con Camila', clasificar: 'Clasificación de plantillas', correccion: 'Corrección del prompt rechazado' };
 
 /**
  * Cobra una ayuda de IA: costo real (USD) + el margen de las creaciones. Idempotente por `ref`.

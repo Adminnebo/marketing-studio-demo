@@ -245,7 +245,7 @@ app.post('/api/medios/importar', ruta(async (req, res) => {
 
 // ── Generaciones ──
 const COLS = `id, creado_por, estado, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-  precio_usd, resultados, error, creado, enviado, terminado,
+  precio_usd, resultados, error, creado, enviado, terminado, reintento_id,
   (SELECT COALESCE(-SUM(s.usd), 0) FROM saldo_marketing s WHERE s.generacion_id = generaciones.id AND s.tipo = 'ia') AS ia_usd`;
 
 // Encolar (tope diario, precio, cobro local o en la plataforma central): lib/encolar.js

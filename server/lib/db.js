@@ -178,6 +178,8 @@ const MIGRACIONES = [
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS eliminada TIMESTAMPTZ`,
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS eliminada_por TEXT`,
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS gasto_informado TIMESTAMPTZ`,
+  // Reintento automatico tras un rechazo del filtro de contenido (lib/reintento.js): la creacion nueva.
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS reintento_id BIGINT`,
   `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,

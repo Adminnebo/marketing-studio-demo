@@ -209,6 +209,10 @@ function Ajustes({ onGuardado }) {
             <input className="search" type="number" min="0" step="1" value={f.limite_diario_creditos} onChange={(e) => setF({ ...f, limite_diario_creditos: e.target.value })} />
           </label>
         </div>
+        <label className="user-admin-check" style={{ margin: '10px 0 0' }}>
+          <input type="checkbox" checked={Number(f.reintento_moderacion) > 0} onChange={(e) => setF({ ...f, reintento_moderacion: e.target.checked ? 1 : 0 })} />
+          Reintentar solo cuando el filtro de contenido rechace una creación: la descripción se corrige y se vuelve a generar una vez. La rechazada se devuelve y el reintento se cobra como una creación nueva.
+        </label>
 
         <div className="sa-calc">
           <span className="filter-lbl">Precios del proveedor:</span>

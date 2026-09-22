@@ -47,3 +47,44 @@ test('leer: prompt y avisos; rechazo y respuesta cortada dan error claro', () =>
   assert.throws(() => pa.leer({ output: [{ content: [{ type: 'refusal', refusal: 'no' }] }] }), /no quiso/);
   assert.throws(() => pa.leer({ output: [{ content: [{ type: 'output_text', text: '{"prompt":"corto","avisos":[]}' }] }] }), /incompleto/);
 });
+
+test('modo guiado: el pedido manda y los tramos pasan a ser sugeridos', () => {
+  const guiado = pa.pedido({ imagenUrl: 'https://cdn/x.png', tipo: 'video', duracion: 10, instrucciones: 'arranca en una obra, un obrero se pone el casco' });
+  const t = guiado.input[0].content[1].text;
+  assert.match(t, /MODO GUIADO/);
+  assert.match(t, /Tramos por defecto/);
+  assert.match(t, /repartí esos mismos 10 segundos/);
+  assert.match(t, /no lo conviertas en un plano de catálogo/i);
+  const producto = pa.pedido({ imagenUrl: 'https://cdn/x.png', tipo: 'video', duracion: 10 });
+  const tp = producto.input[0].content[1].text;
+  assert.match(tp, /MODO PRODUCTO/);
+  assert.match(tp, /Tramos de SHOT SEQUENCE: 00:00-00:04/);
+  assert.doesNotMatch(tp, /por defecto de SHOT SEQUENCE/);
+});
+
+test('corrección: lleva el prompt rechazado, el motivo y sus reglas', () => {
+  const b = pa.pedido({
+    imagenUrl: 'https://cdn/x.png', tipo: 'video', duracion: 5, instrucciones: 'un técnico prueba el breaker',
+    correccion: { prompt: 'PRODUCT: "Pretul" ... No bare skin.', motivo: 'nsfw' },
+  });
+  const t = b.input[0].content[1].text;
+  assert.match(t, /CORRECCIÓN/);
+  assert.match(t, /contenido sensible/);
+  assert.match(t, /No bare skin\./);              // el prompt rechazado va completo
+  assert.match(t, /"bare skin"/);                  // y las palabras a reemplazar
+  assert.match(t, /prompt corregido/);
+  assert.match(t, /misma duración/);
+  const c = pa.pedido({ imagenUrl: 'https://cdn/x.png', tipo: 'imagen', correccion: { prompt: 'Siemens 5SX1', motivo: 'copyright' } });
+  assert.match(c.input[0].content[1].text, /marcas registradas/);
+  assert.match(c.input[0].content[1].text, /without transcribing them/);
+});
+
+test('corrección de texto de plantilla: sin foto y con las reglas del motivo', () => {
+  const b = pa.pedidoDeTexto({ texto: 'un electricista sin camisa instala el breaker', motivo: 'nsfw' });
+  assert.equal(b.instructions, pa.INSTRUCCIONES_TEXTO);
+  assert.equal(b.input[0].content.length, 1);
+  assert.equal(b.input[0].content[0].type, 'input_text');
+  assert.match(b.input[0].content[0].text, /sin camisa/);
+  assert.match(b.input[0].content[0].text, /piel descubierta/);
+  assert.throws(() => pa.pedidoDeTexto({ texto: '  ', motivo: 'nsfw' }), /No hay texto/);
+});

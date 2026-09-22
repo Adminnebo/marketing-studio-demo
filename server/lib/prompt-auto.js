@@ -481,8 +481,54 @@ function bloqueDePedido(pedido, esVideo) {
   ].filter(Boolean).join('\n');
 }
 
+// Por que lo rechazo el filtro del generador de video/imagen, y que hay que cambiar en cada caso.
+// Los productos electricos disparan falsos positivos: "bare", "stripped", "exposed", "insert",
+// "hard" son tecnicos aca y sensibles para el filtro; las marcas impresas disparan copyright.
+const MOTIVOS = {
+  nsfw: {
+    nombre: 'contenido sensible',
+    reglas: [
+      '- Sacá a las personas del primer plano y la piel descubierta: si había alguien, dejalo de espaldas, en segundo plano o fuera de cuadro, o reemplazalo por una mano con guante de trabajo.',
+      '- Nada de torsos, piernas, caras en primer plano, ropa ajustada ni descripciones del cuerpo.',
+      '- Cambiá las palabras que el filtro lee como sensibles aunque acá sean técnicas: "naked", "bare", "bare skin", "flesh", "stripped", "exposed", "hard", "wet", "tight", "insert", "penetrate", "deep". Usá el equivalente técnico: "uninsulated copper conductor", "the plug seats fully into the socket", "dry, clean surfaces", "firmly seated".',
+      '- Revisá también los negativos: "No bare skin." o "No exposed live wires." se reescriben sin esas palabras.',
+    ],
+  },
+  copyright: {
+    nombre: 'derechos de autor o marcas registradas',
+    reglas: [
+      '- No escribas ninguna marca, nombre comercial ni código de modelo en el texto del prompt: donde estaban, pedí "the printed markings preserved exactly as in the reference, without transcribing them".',
+      '- Sacá nombres de empresas, personajes, películas, series, canciones y cualquier "in the style of <artista o estudio>".',
+      '- Sacá del fondo logos, carteles, envases y pantallas con contenido reconocible.',
+      '- El producto no cambia: sigue siendo el de la foto y sus marcas impresas se conservan en la imagen; lo que se saca es el texto de la marca dentro del prompt, no la marca del producto.',
+    ],
+  },
+};
+
+// El prompt anterior fue rechazado: se reescribe el mismo video, cambiando solo lo que lo disparo.
+function bloqueDeCorreccion({ prompt, motivo }, esVideo) {
+  const m = MOTIVOS[motivo] || { nombre: 'contenido no permitido', reglas: [] };
+  return [
+    `CORRECCIÓN. Este prompt ya se mandó al generador y su filtro de contenido lo rechazó por ${m.nombre}. Reescribilo completo para que pase el filtro.`,
+    '',
+    'Prompt rechazado:',
+    '"""',
+    limpio(prompt, 12000),
+    '"""',
+    '',
+    'Cómo corregirlo:',
+    esVideo
+      ? '- Mantené la misma idea, la misma escena, los mismos momentos y sus tiempos, la misma duración y el mismo formato. No empieces de cero ni lo hagas más pobre.'
+      : '- Mantené la misma idea, la misma escena y el mismo formato. No empieces de cero ni lo hagas más pobre.',
+    '- Cambiá lo mínimo necesario: solo lo que pudo disparar el filtro.',
+    ...m.reglas,
+    '- El prompt corregido sale completo, con todos sus bloques y siguiendo todas las reglas de arriba.',
+    '- En "avisos", una sola línea diciendo qué cambiaste para que pase el filtro.',
+  ].join('\n');
+}
+
 /** El cuerpo de la llamada a la Responses API. */
-function pedido({ imagenUrl, tipo, duracion = 5, conAudio = false, aspecto = '9:16', producto = '', instrucciones = '' }) {
+function pedido({ imagenUrl, tipo, duracion = 5, conAudio = false, aspecto = '9:16', producto = '', instrucciones = '', correccion = null }) {
   if (typeof imagenUrl !== 'string' || !/^https:\/\//.test(imagenUrl)) throw new ErrorDePrompt('Falta la imagen del producto.', { status: 400 });
   const esVideo = tipo === 'video';
   const formato = FORMATOS[aspecto] || aspecto || '9:16 vertical';
@@ -504,7 +550,8 @@ function pedido({ imagenUrl, tipo, duracion = 5, conAudio = false, aspecto = '9:
   lineas.push(pedidoUsuario ? bloqueDePedido(pedidoUsuario, esVideo) : esVideo
     ? 'MODO PRODUCTO. Sin indicaciones del usuario: centrate en el producto y en lo que se ve en la foto, con los valores por defecto de las reglas.'
     : 'MODO PRODUCTO. Sin indicaciones del usuario: centrate en el producto, con la escena por defecto.');
-  lineas.push(esVideo ? 'Escribí el prompt para esta foto.' : 'Escribí el prompt para esta foto.');
+  if (correccion?.prompt) lineas.push(bloqueDeCorreccion(correccion, esVideo));
+  lineas.push(correccion?.prompt ? 'Escribí el prompt corregido para esta foto.' : 'Escribí el prompt para esta foto.');
   return {
     model: MODELO_PROMPT,
     instructions: esVideo ? INSTRUCCIONES_VIDEO : INSTRUCCIONES_FOTO,
@@ -514,7 +561,7 @@ function pedido({ imagenUrl, tipo, duracion = 5, conAudio = false, aspecto = '9:
   };
 }
 
-function leer(respuesta) {
+function leer(respuesta, { minimo = 200 } = {}) {
   if (respuesta?.status === 'incomplete') {
     throw new ErrorDePrompt('La IA no terminó el prompt. Prueba de nuevo o escríbelo a mano.', { detalle: respuesta.incomplete_details?.reason });
   }
@@ -524,7 +571,7 @@ function leer(respuesta) {
   let d;
   try { d = JSON.parse(texto); } catch { throw new ErrorDePrompt('La IA devolvió el prompt con un formato inesperado.', { detalle: texto.slice(0, 300) }); }
   const prompt = typeof d?.prompt === 'string' ? d.prompt.trim() : '';
-  if (prompt.length < 200) throw new ErrorDePrompt('La IA devolvió un prompt incompleto. Prueba de nuevo.');
+  if (prompt.length < minimo) throw new ErrorDePrompt('La IA devolvió un prompt incompleto. Prueba de nuevo.');
   return {
     prompt,
     avisos: Array.isArray(d.avisos) ? d.avisos.filter((a) => typeof a === 'string' && a.trim()).map((a) => a.trim()) : [],
@@ -533,14 +580,14 @@ function leer(respuesta) {
   };
 }
 
-async function generar(datos, { fetch: pedir = globalThis.fetch } = {}) {
+async function llamar(cuerpo, { fetch: pedir = globalThis.fetch, minimo } = {}) {
   if (!API_KEY) throw new ErrorDePrompt('El prompt automático no está configurado.', { status: 503 });
   let r;
   try {
     r = await pedir(URL_OPENAI, {
       method: 'POST',
       headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(pedido(datos)),
+      body: JSON.stringify(cuerpo),
       signal: AbortSignal.timeout(TIEMPO_MAX_MS),
     });
   } catch (e) {
@@ -554,8 +601,46 @@ async function generar(datos, { fetch: pedir = globalThis.fetch } = {}) {
     throw new ErrorDePrompt('La IA está saturada o no respondió. Prueba de nuevo en un rato.', { status: 503, detalle });
   }
   const j = await r.json();
-  try { return leer(j); } catch (e) { e.uso = usoDe(j); throw e; } // la IA respondio: esos tokens se gastaron igual
+  try { return leer(j, { minimo }); } catch (e) { e.uso = usoDe(j); throw e; } // la IA respondio: esos tokens se gastaron igual
 }
 const usoDe = (j) => ({ modelo: j?.model || MODELO_PROMPT, entrada: j?.usage?.input_tokens || 0, salida: j?.usage?.output_tokens || 0 });
 
-module.exports = { generar, pedido, leer, tramos, ritmo, configurado, ErrorDePrompt, INSTRUCCIONES_VIDEO, INSTRUCCIONES_FOTO };
+const generar = (datos, opciones) => llamar(pedido(datos), opciones);
+
+/** Reescribe el prompt que el filtro del generador rechazó (motivo: 'nsfw' | 'copyright'). */
+const corregir = ({ promptRechazado, motivo, ...datos }, opciones) =>
+  llamar(pedido({ ...datos, correccion: { prompt: promptRechazado, motivo } }), opciones);
+
+// Las plantillas no llevan un prompt cinematografico sino el texto corto que el usuario le
+// pide a la plantilla, en español: ahi se corrige el texto, sin las reglas de video.
+const INSTRUCCIONES_TEXTO = `Corregís las indicaciones que un usuario le da a una plantilla de video o imagen para publicidad de JH Electro Alambres, un distribuidor de material eléctrico, iluminación, ferretería, plomería y piscinas, cuando el filtro de contenido del generador las rechazó.
+
+Devolvés en "prompt" el texto corregido, en español, listo para mandar, y en "avisos" una sola línea diciendo qué cambiaste.
+
+- Mantené la misma idea, el mismo largo aproximado y el mismo tono. No empieces de cero ni lo hagas más pobre.
+- Cambiá lo mínimo necesario: solo lo que pudo disparar el filtro.
+- El producto no cambia.
+- No agregues explicaciones, comillas ni títulos: solo el texto corregido.`;
+
+function pedidoDeTexto({ texto, motivo }) {
+  const m = MOTIVOS[motivo] || { nombre: 'contenido no permitido', reglas: [] };
+  const t = limpio(texto, 6000);
+  if (!t) throw new ErrorDePrompt('No hay texto para corregir.', { status: 400 });
+  return {
+    model: MODELO_PROMPT,
+    instructions: INSTRUCCIONES_TEXTO,
+    max_output_tokens: 4000,
+    input: [{ role: 'user', content: [{ type: 'input_text', text: [
+      `El filtro rechazó este texto por ${m.nombre}:`, '"""', t, '"""', '', 'Cómo corregirlo:', ...m.reglas,
+    ].join('\n') }] }],
+    text: { format: { type: 'json_schema', name: 'texto_corregido', strict: true, schema: ESQUEMA } },
+  };
+}
+
+/** Igual que corregir, para el texto de una plantilla (no lleva foto ni reglas de video). */
+const corregirTexto = (datos, opciones) => llamar(pedidoDeTexto(datos), { minimo: 10, ...opciones });
+
+module.exports = {
+  generar, corregir, corregirTexto, pedido, pedidoDeTexto, leer, tramos, ritmo, configurado, ErrorDePrompt,
+  MOTIVOS, INSTRUCCIONES_VIDEO, INSTRUCCIONES_FOTO, INSTRUCCIONES_TEXTO,
+};

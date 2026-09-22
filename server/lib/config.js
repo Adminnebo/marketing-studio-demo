@@ -9,6 +9,8 @@
  *    (0 = solo con saldo positivo que cubra el costo).
  *  - informar_super_admin: 1 = las creaciones de super admins tambien se descuentan del saldo de JH en la
  *    plataforma de pagos (con la marca "super admin" en la nota; por defecto). 0 = no se informan.
+ *  - reintento_moderacion: cuantas veces se reintenta sola una creacion que el filtro de contenido
+ *    rechazo (nsfw o copyright), corrigiendo el prompt (lib/reintento.js). 0 = apagado.
  */
 const { pool } = require('./db');
 
@@ -20,8 +22,9 @@ const DEFECTOS = {
   limite_diario_creditos: 0,
   saldo_negativo_permitido: 0,
   informar_super_admin: 1, // todo lo de super admins tambien se cobra a JH (pedido 2026-09-22)
+  reintento_moderacion: 1, // un reintento con el prompt corregido si el filtro rechaza (pedido 2026-09-22)
 };
-const NUMEROS = ['costo_auto', 'usd_por_credito', 'margen_pct', 'limite_diario_creditos', 'saldo_negativo_permitido', 'informar_super_admin'];
+const NUMEROS = ['costo_auto', 'usd_por_credito', 'margen_pct', 'limite_diario_creditos', 'saldo_negativo_permitido', 'informar_super_admin', 'reintento_moderacion'];
 
 let _cache = null;
 async function leer() {
@@ -42,6 +45,7 @@ function validar(k, valor) {
     const n = Number(valor);
     if (!Number.isFinite(n) || n < 0) throw new Error(`Valor inválido para ${k}`);
     if (k === 'margen_pct' && n > 1000) throw new Error('El margen no puede pasar de 1000 %');
+    if (k === 'reintento_moderacion' && n > 3) throw new Error('Como máximo 3 reintentos automáticos');
     return k === 'costo_auto' || k === 'informar_super_admin' ? (n ? 1 : 0) : n;
   }
   if (k === 'costo_info') return valor;

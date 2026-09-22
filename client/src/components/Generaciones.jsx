@@ -75,6 +75,13 @@ function Tarjeta({ g, rol, onRepetir, onPublicar, onBase, onBorrar }) {
         {sinClausula(g.entrada?.args?.prompt || g.entrada?.params?.prompt) && (
           <div className="ms-gen-prompt" title={sinClausula(g.entrada.args?.prompt || g.entrada.params?.prompt)}>“{sinClausula(g.entrada.args?.prompt || g.entrada.params?.prompt)}”</div>
         )}
+        {g.entrada?.reintento && (
+          <div className="ms-gen-nota">
+            ↻ Reintento de la creación #{g.entrada.reintento.de}: el filtro de contenido la rechazó
+            {g.entrada.reintento.motivo === 'copyright' ? ' por marcas' : ' por contenido sensible'} y la descripción se corrigió sola.
+            {g.entrada.reintento.avisos?.[0] && <> <span className="ms-gen-nota-q">{g.entrada.reintento.avisos[0]}</span></>}
+          </div>
+        )}
         {g.error && <div className="ms-gen-err">{g.error}{g.estado === 'fallido' && g.precio_usd != null && !/administrador/.test(g.error) && ' Los créditos se devolvieron a tu saldo.'}</div>}
         {errBaja && <div className="ms-gen-err">{errBaja}</div>}
         <div className="ms-gen-actions">

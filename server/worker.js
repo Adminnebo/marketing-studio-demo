@@ -22,6 +22,7 @@ const clasificar = require('./lib/clasificar');
 const costo = require('./lib/costo');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
+const reintento = require('./lib/reintento');
 
 const redesP = import('../shared/redes.mjs');
 
@@ -61,6 +62,23 @@ async function enviar(g) {
   return ids;
 }
 
+const AVISO_FILTRO = 'El filtro de contenido del generador rechazó esta creación. Prueba con otra imagen o descripción.';
+
+// Rechazo del filtro de contenido (nsfw o marcas): se corrige el prompt y se vuelve a
+// encolar sola (lib/reintento.js). Si no se pudo, la creacion queda fallida como siempre.
+async function reintentarCorregido(id, filtro) {
+  try {
+    const fila = await reintento.fila(id);
+    const r = fila && (await reintento.intentar(fila, filtro, { log }));
+    if (!r) return;
+    await pool.query(`UPDATE generaciones SET error = $2 WHERE id = $1`,
+      [id, `${AVISO_FILTRO} Se reintentó solo con la descripción corregida (creación #${r.id}).`]);
+    log(`#${id} rechazada por ${filtro}: reintento corregido #${r.id} (intento ${r.intento})`);
+  } catch (e) {
+    log(`#${id} no se pudo reintentar corregido: ${e.message}`);
+  }
+}
+
 // Devuelve a la billetera lo cobrado por una generacion que no salio.
 // (Las 'enviando' atascadas NO se devuelven solas: puede que si se haya generado.)
 async function devolver(id) {
@@ -94,9 +112,11 @@ async function tomarPendientes() {
     } catch (e) {
       // Si el error es de conexion (token), la dejamos pendiente para cuando vuelva.
       const estado = e.desconectado ? 'pendiente' : 'fallido';
+      const filtro = e.desconectado ? null : reintento.motivoDe({ mensaje: e.message });
       const aviso = e.desconectado ? null
         : SIN_CREDITOS.test(e.message)
           ? 'La cuenta del generador se quedó sin créditos. Avísale al administrador; los créditos de esta creación se devolvieron.'
+        : filtro ? AVISO_FILTRO
         : /sin job_ids/.test(e.message)
           ? 'El pedido se recibió pero no se confirmó. Avísale al administrador antes de repetir (puede que sí se haya generado).'
           : 'No se pudo enviar la generación. Revisa la imagen y la descripción e intenta de nuevo.';
@@ -104,6 +124,7 @@ async function tomarPendientes() {
         [g.id, estado, aviso, e.message.slice(0, 1000)]);
       log(`#${g.id} no se pudo enviar: ${e.message}`);
       if (estado === 'fallido') await devolver(g.id);
+      if (filtro) await reintentarCorregido(g.id, filtro);
     }
   }
 }
@@ -145,11 +166,13 @@ async function revisarEnProceso() {
         // Lo cobrado se informa a la plataforma central con el detalle completo (va por la cola).
         if (await pagos.informarConsumo(g.id).catch((e) => { log(`#${g.id} no se pudo encolar el descuento: ${e.message}`); return false; })) log(`#${g.id} descuento encolado para la plataforma de pagos`);
       } else {
-        const motivo = st.includes('nsfw') ? 'El contenido fue rechazado por el filtro de seguridad. Prueba con otra imagen o descripción.' : 'La generación falló. Intenta de nuevo o prueba otra plantilla.';
+        const filtro = reintento.motivoDe({ estados: st });
+        const motivo = filtro ? AVISO_FILTRO : 'La generación falló. Intenta de nuevo o prueba otra plantilla.';
         await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, error_detalle = $4, terminado = now(), revisado = now() WHERE id = $1`,
           [g.id, JSON.stringify(resultados), motivo, 'estados: ' + st.join(', ')]);
         log(`#${g.id} fallida: ${st.join(',')}`);
-        await devolver(g.id);
+        await devolver(g.id); // primero se devuelve: el reintento se cobra igual que una creacion nueva
+        if (filtro) await reintentarCorregido(g.id, filtro);
       }
     } else if (Date.now() - new Date(g.enviado).getTime() > TIMEOUT_MIN * 60e3) {
       await pool.query(`UPDATE generaciones SET estado = 'fallido', resultados = $2, error = $3, terminado = now() WHERE id = $1`,
@@ -303,4 +326,4 @@ for (const s of ['SIGTERM', 'SIGINT']) process.on(s, () => { parar = true; });
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { ciclo, tomarPendientes, revisarEnProceso, liberarAtascadas, revisarPublicaciones, actualizarCosto, devolver };
+module.exports = { ciclo, tomarPendientes, revisarEnProceso, liberarAtascadas, revisarPublicaciones, actualizarCosto, devolver, reintentarCorregido };
