@@ -310,3 +310,20 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .ms-gen-abrir { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(0, 0, 0, 0.55); color: #fff; opacity: 0.85; transition: opacity 0.15s, background 0.15s; }
 .ms-gen-abrir:hover, .ms-gen-abrir:focus-visible { opacity: 1; background: rgba(0, 0, 0, 0.75); }
 .ms-gen-borrar:hover:not(:disabled) { border-color: color-mix(in srgb, var(--critical) 45%, var(--border)); color: var(--critical); }
+
+/* Crear desde cero: las dos formas de tener la descripción, y el botón de crear */
+.lb-modos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 4px 0 14px; }
+.lb-modo { font: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
+.lb-modo:hover:not(:disabled) { border-color: color-mix(in srgb, var(--series-1) 45%, var(--border)); }
+.lb-modo.on { border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 10%, var(--surface-2)); }
+.lb-modo:disabled { opacity: 0.55; cursor: not-allowed; }
+.lb-modo-t { font-weight: 680; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lb-modo-d { font-size: 0.79rem; color: var(--text-secondary); }
+.lb-estado { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border-radius: 11px; font-size: 0.82rem; background: var(--surface-2); border: 1px solid var(--border); }
+.lb-estado.ok { background: color-mix(in srgb, var(--good) 8%, var(--surface-2)); border-color: color-mix(in srgb, var(--good) 30%, var(--border)); }
+.lb-estado.pendiente { background: color-mix(in srgb, var(--series-1) 7%, var(--surface-2)); border-color: color-mix(in srgb, var(--series-1) 28%, var(--border)); }
+.lb-estado > span { flex: 1; min-width: 180px; }
+.lb-generar { font-size: 0.95rem; padding: 11px 20px; display: inline-flex; align-items: center; gap: 10px; }
+.lb-generar-p { font-variant-numeric: tabular-nums; font-weight: 700; padding-left: 10px; border-left: 1px solid rgba(255, 255, 255, 0.35); }
+.lb-cuerpo-paso > .eg-envol { width: 100%; }
+.lb-cuerpo-paso > .eg-envol > .lb-textarea { width: 100%; }
