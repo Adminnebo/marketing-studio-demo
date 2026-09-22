@@ -8,7 +8,7 @@ import Redes from './components/Redes';
 import SuperAdmin from './components/SuperAdmin';
 import Creditos from './components/Creditos';
 import Libre from './components/Libre';
-import { cred, usd } from './precio';
+import { cred, usd, sinClausula } from './precio';
 import Publicar from './components/Publicar';
 import Camila from './components/Camila';
 import { Ayuda } from './components/Guia';
@@ -219,7 +219,7 @@ export default function App() {
     setLibre((x) => ({
       n: x.n + 1,
       inicial: {
-        tipo: g.preset_tipo === 'libre_imagen' ? 'imagen' : 'video', modelo: l.modelo, prompt: g.entrada.params?.prompt || '',
+        tipo: g.preset_tipo === 'libre_imagen' ? 'imagen' : 'video', modelo: l.modelo, prompt: sinClausula(g.entrada.params?.prompt),
         aspecto: l.aspecto, duracion: l.duracion ? String(l.duracion) : '', opciones: l.opciones || {},
         imagen: g.entrada.producto?.media_id ? { media_id: g.entrada.producto.media_id, url: g.entrada.producto.url, nombre: g.entrada.producto.nombre || 'Imagen' } : null,
       },
@@ -233,7 +233,7 @@ export default function App() {
     inicial: {
       producto: g.entrada.args.product_media_id ? { media_id: g.entrada.args.product_media_id, url: g.entrada.producto?.url, nombre: g.entrada.producto?.nombre || 'Producto' } : null,
       avatar: g.entrada.avatar || null,
-      prompt: g.entrada.args.prompt || '',
+      prompt: sinClausula(g.entrada.args.prompt),
       url: g.entrada.args.brand_url || '',
     },
   }));

@@ -21,6 +21,7 @@ const pagos = require('./lib/pagos');
 const saldoExterno = require('./lib/saldo-externo');
 const encolarLib = require('./lib/encolar');
 const zernio = require('./lib/zernio');
+const { conEspanol } = require('./lib/idioma');
 
 const reglasP = import('../shared/reglas.mjs');
 const PORT = process.env.PORT || 3002;
@@ -230,7 +231,7 @@ app.post('/api/generaciones', ruta(async (req, res) => {
     ...(preset.required_inputs !== undefined ? { required_inputs: preset.required_inputs } : {}),
     ...(producto ? { product_media_id: producto.media_id } : {}),
     ...(avatar && preset.type === 'ugc' ? { avatar: { id: avatar.id, type: avatar.type } } : {}),
-    ...(prompt ? { prompt } : {}),
+    prompt: conEspanol(prompt), // todo en español (lib/idioma.js)
     ...(url ? { brand_url: url } : {}),
   };
   const extra = {
@@ -304,7 +305,7 @@ async function leerLibre(b, { conPrompt = true } = {}) {
   const mediaId = b.imagen?.media_id ? String(b.imagen.media_id) : null;
   if (mediaId && !modelo.aceptaImagen) return { error: `${modelo.nombre} no acepta imagen de referencia.` };
   if (!mediaId && modelo.pideImagen) return { error: `${modelo.nombre} necesita una imagen.` };
-  return { modelo, armado: modelos.armar(modelo, { prompt: prompt || 'preview', aspecto: b.aspecto, duracion: b.duracion, opciones: b.opciones || {}, mediaId }) };
+  return { modelo, armado: modelos.armar(modelo, { prompt: conEspanol(prompt || 'preview'), aspecto: b.aspecto, duracion: b.duracion, opciones: b.opciones || {}, mediaId }) };
 }
 
 // Costo en creditos sin generar nada (y el precio para JH si hay costo configurado).

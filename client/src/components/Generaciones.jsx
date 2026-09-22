@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { TIPOS, TIPOS_VIDEO } from '@shared/reglas.mjs';
 import Portada from './Portada';
 import { descargar } from '../api';
-import { usd } from '../precio';
+import { usd, sinClausula } from '../precio';
 import Tamano, { useTamano } from './Tamano';
 
 const ESTADOS = {
@@ -61,8 +61,8 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
           {g.creditos_estimados != null && (g.precio_usd == null || rol === 'super_admin') && ` · ≈${Number(g.creditos_estimados).toLocaleString('es-MX', { maximumFractionDigits: 1 })} cr`}
         </div>
         {rol !== 'usuario' && <div className="ms-gen-meta">Por {g.creado_por}</div>}
-        {(g.entrada?.args?.prompt || g.entrada?.params?.prompt) && (
-          <div className="ms-gen-prompt" title={g.entrada.args?.prompt || g.entrada.params.prompt}>“{g.entrada.args?.prompt || g.entrada.params.prompt}”</div>
+        {sinClausula(g.entrada?.args?.prompt || g.entrada?.params?.prompt) && (
+          <div className="ms-gen-prompt" title={sinClausula(g.entrada.args?.prompt || g.entrada.params?.prompt)}>“{sinClausula(g.entrada.args?.prompt || g.entrada.params?.prompt)}”</div>
         )}
         {g.error && <div className="ms-gen-err">{g.error}{g.estado === 'fallido' && g.precio_usd != null && !/administrador/.test(g.error) && ' Los créditos se devolvieron a tu saldo.'}</div>}
         {errBaja && <div className="ms-gen-err">{errBaja}</div>}

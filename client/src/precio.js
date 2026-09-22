@@ -9,3 +9,5 @@ export const usd = (n) => (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n)).toL
 export const cred = (n) => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 1 });
 // "1 crédito" / "35 créditos".
 export const creditos = (n) => `${cred(n)} ${Number(n) === 1 ? 'crédito' : 'créditos'}`;
+// La clausula de idioma que agrega el servidor a cada creacion no se muestra (server/lib/idioma.js).
+export const sinClausula = (p) => String(p || '').replace(/\s*LANGUAGE: Spanish \(Dominican Republic\)[\s\S]*$/, '').trim();
