@@ -141,6 +141,33 @@ router.post('/superadmin/plantillas/clasificar', ruta(async (req, res) => {
   res.json({ ok: true, iniciado: true });
 }));
 
+// Setup de redes (Zernio): estado, perfiles de la cuenta con sus redes y perfil elegido.
+router.get('/superadmin/zernio', ruta(async (req, res) => {
+  const wh = await pool.query(`SELECT valor FROM config WHERE clave = 'zernio_webhook_id'`).then((r) => r.rows[0]?.valor || null).catch(() => null);
+  const base = { configurado: zernio.configurado(), webhookListo: zernio.webhookListo(), webhookId: wh, panelUrl: !!process.env.PANEL_URL };
+  if (!zernio.configurado()) return res.json(base);
+  try {
+    // Si no hay perfil elegido, intenta el automatico (el unico con "JH"); si no se puede, queda por elegir.
+    let elegido = await zernio.perfilElegido();
+    if (!elegido) elegido = await zernio.perfilId().catch(() => null);
+    res.json({ ...base, perfilId: elegido, perfiles: await zernio.perfiles() });
+  } catch (e) {
+    throw errPublico('Zernio no respondió bien: ' + e.message.slice(0, 120), 502);
+  }
+}));
+
+router.put('/superadmin/zernio/perfil', ruta(async (req, res) => {
+  const id = String((req.body || {}).id || '');
+  try {
+    const p = await zernio.elegirPerfil(id);
+    console.log(`[redes] ${req.user.email} eligio el perfil de Zernio ${p.nombre} (${p.id})`);
+    res.json({ ok: true, perfil: p });
+  } catch (e) {
+    if (e.codigo === 'perfil_inexistente') throw errPublico('Ese perfil no existe en la cuenta de Zernio.', 404);
+    throw errPublico('Zernio no respondió bien: ' + e.message.slice(0, 120), 502);
+  }
+}));
+
 // Webhook de Zernio: registrar/actualizar y mandar un evento de prueba.
 router.post('/superadmin/zernio/webhook', ruta(async (req, res) => {
   const base = process.env.PANEL_URL || `${req.protocol}://${req.get('host')}`;

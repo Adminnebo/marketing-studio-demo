@@ -1,3 +1,4 @@
+import RedesSetup from './RedesSetup';
 import { useEffect, useMemo, useState } from 'react';
 import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, clasificarPlantillas, registrarWebhookRedes } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
@@ -241,20 +242,7 @@ function Ajustes({ onGuardado }) {
           ) : <div className="card-sub">No se pudo leer el catálogo.</div>}
         </div>
 
-        <div className="card">
-          <h3>Redes (Zernio)</h3>
-          <div className="card-sub">
-            {!datos.conexiones.redes ? 'Falta la clave de Zernio. Todo lo demás está listo: al ponerla se registra solo el webhook.'
-              : datos.conexiones.webhookId ? 'Webhook registrado: las publicaciones se actualizan al momento.'
-                : datos.conexiones.webhookListo ? 'Clave lista; falta registrar el webhook.' : 'Falta ZERNIO_WEBHOOK_SECRET.'}
-          </div>
-          <div className="ms-submit">
-            <span className="ms-cost">{acc?.redes}</span>
-            <button className="mini-btn" disabled={!datos.conexiones.webhookListo} onClick={async () => {
-              try { const r = await registrarWebhookRedes(); setAcc({ redes: `Webhook ${r.creado ? 'registrado' : 'actualizado'}${r.prueba?.success ? ' y probado ✅' : r.prueba?.error ? `, la prueba falló: ${r.prueba.error}` : ''}.` }); cargar(); } catch (e) { setAcc({ redes: e.message }); }
-            }}>🔗 Registrar y probar webhook</button>
-          </div>
-        </div>
+        <RedesSetup />
         {acc?.error && <div className="ms-errors">{acc.error}</div>}
 
         <PagosCentral />

@@ -18,6 +18,7 @@ const ruta = (fn) => async (req, res) => {
     console.error(`[${req.method} ${req.originalUrl}]`, e.message);
     if (e instanceof zernio.ZernioError) {
       if (e.codigo === 'sin_api_key') return res.status(503).json({ error: 'La conexión con redes todavía no está configurada.', sinConfigurar: true });
+      if (e.codigo === 'sin_perfil') return res.status(503).json({ error: 'Falta elegir el perfil de redes: un super admin lo hace en Super Admin → Redes.', sinConfigurar: true });
       if (e.status === 402) return res.status(402).json({ error: 'Esta red requiere un método de pago en la cuenta de redes.' });
       if (e.status === 401 || e.status === 403) return res.status(503).json({ error: 'La conexión con redes no está autorizada. Avísale al administrador.' });
       if (e.status === 429) return res.status(429).json({ error: 'Demasiadas solicitudes a las redes. Espera un momento.' });
@@ -33,7 +34,9 @@ const COLS = `id, generacion_id, indice, creado_por, texto, medio, cuentas, opci
 
 router.get('/redes/estado', (req, res) => res.json({ configurado: zernio.configurado() }));
 
-router.get('/redes/cuentas', ruta(async (req, res) => res.json({ cuentas: await zernio.cuentas() })));
+// Solo las redes en las que el panel sabe publicar (el perfil puede tener otras, p. ej. WhatsApp).
+const cuentasPanel = async () => { const { REDES } = await redesP; return (await zernio.cuentas()).filter((c) => REDES[c.plataforma]); };
+router.get('/redes/cuentas', ruta(async (req, res) => res.json({ cuentas: await cuentasPanel() })));
 
 // Devuelve la URL de autorizacion de la red; al terminar vuelve al panel.
 router.post('/redes/conectar', ruta(async (req, res) => {
@@ -46,7 +49,7 @@ router.post('/redes/conectar', ruta(async (req, res) => {
 }));
 
 router.delete('/redes/cuentas/:id', ruta(async (req, res) => {
-  const lista = await zernio.cuentas();
+  const lista = await cuentasPanel();
   if (!lista.some((c) => c.id === req.params.id)) return res.status(404).json({ error: 'Esa cuenta no está conectada a este panel.' });
   await zernio.desconectar(req.params.id);
   console.log(`[redes] ${req.user.email} desconecto la cuenta ${req.params.id}`);
@@ -101,7 +104,7 @@ router.post('/publicaciones', ruta(async (req, res) => {
   const medio = { url: ok[indice].url, tipo: tipoMedio(ok[indice].url) };
 
   // Las cuentas se validan contra las conectadas de verdad (no se confia en el navegador).
-  const conectadas = new Map((await zernio.cuentas()).map((c) => [c.id, c]));
+  const conectadas = new Map((await cuentasPanel()).map((c) => [c.id, c]));
   const ids = [...new Set((Array.isArray(b.cuentas) ? b.cuentas : []).map(String))];
   const cuentas = ids.map((id) => conectadas.get(id)).filter(Boolean);
   if (cuentas.length !== ids.length) return res.status(400).json({ error: 'Alguna cuenta ya no está conectada. Recarga la página.' });

@@ -177,7 +177,7 @@ borrar.
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
 - **Idempotencia en el descuento**: pedir al equipo de pagos que `/api/credits/adjust` acepte una referencia única y rechace repetidos; hoy un corte a mitad requiere revisión manual.
 - **Política de saldo negativo**: JH está en -$1,018 en la plataforma; con el ajuste en $0 no pueden crear hasta pagar. Definir si se permite un margen.
-- **Clave de Zernio** (`ZERNIO_API_KEY` en panel y worker) para activar las redes sociales.
+- **Redes (Zernio)**: clave cargada el 2026-09-22 (panel y worker). La cuenta de Zernio es compartida con otros proyectos: el panel usa solo el perfil de JH (Super Admin → Redes muestra los perfiles y permite cambiarlo) y nunca crea ni toca perfiles ajenos. Falta conectar Instagram/Facebook/TikTok en ese perfil (hoy solo tiene WhatsApp, que el panel no usa) y probar una publicación real.
 - **Dominio propio** (`panelmarketing.neboaiconsulting.com`): la URL de Railway está fija en los 4 paneles.
 - **Primer usuario de JH**: cargar saldo en la billetera (recarga manual) y darle acceso desde Super Admin.
 - **Cuenta de prueba** `prueba.marketing@neboaiconsulting.com` (agente sin permisos en los otros paneles, rol Usuario en Marketing): borrarla o quitarle el acceso cuando no haga falta.

@@ -159,3 +159,5 @@ export const fetchCamilaConversacion = () => api('/camila/conversacion');
 export const mensajeCamila = (datos) => api('/camila/mensaje', { method: 'POST', body: JSON.stringify(datos) });
 export const usarProductoCamila = (datos) => api('/camila/usar', { method: 'POST', body: JSON.stringify(datos) });
 export const fichaCamila = (codigo) => api('/camila/ficha', { method: 'POST', body: JSON.stringify({ codigo }) });
+export const fetchZernioSetup = () => api('/superadmin/zernio');
+export const elegirPerfilZernio = (id) => api('/superadmin/zernio/perfil', { method: 'PUT', body: JSON.stringify({ id }) });

@@ -3,12 +3,16 @@
  * cuentas de redes (OAuth alojado por Zernio) y publica/programa posts.
  * Todas las cuentas del panel viven en un solo "perfil" de Zernio; su id se
  * guarda en la tabla config (o se fija con ZERNIO_PROFILE_ID).
+ *
+ * La cuenta de Zernio es compartida con otros proyectos (Nebo, otros clientes):
+ * el panel NUNCA crea perfiles ni toca los ajenos. Sin perfil elegido toma el unico
+ * con "JH" en el nombre; si no hay uno claro, se elige en Super Admin.
  */
 const { pool } = require('./db');
 
 const BASE = (process.env.ZERNIO_API_URL || 'https://zernio.com/api/v1').replace(/\/+$/, '');
 const API_KEY = process.env.ZERNIO_API_KEY || '';
-const NOMBRE_PERFIL = process.env.ZERNIO_PROFILE_NAME || 'JH Marketing';
+const PISTA_PERFIL = new RegExp(process.env.ZERNIO_PROFILE_HINT || '\\bJH\\b', 'i');
 
 class ZernioError extends Error {
   constructor(msg, { status = 0, codigo = null, detalle = null } = {}) {
@@ -41,18 +45,47 @@ async function llamar(metodo, ruta, { query, body, headers = {}, timeoutMs = 300
   return j;
 }
 
-// Perfil unico del panel: config -> ZERNIO_PROFILE_ID -> uno existente con el nombre -> se crea.
+const idDe = (x) => (x && typeof x === 'object' ? x._id : x) || null;
+const guardarConfig = (clave, valor) => pool.query(
+  `INSERT INTO config (clave, valor) VALUES ($1, $2) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor`, [clave, valor]);
+
+// Perfiles de la cuenta de Zernio con sus redes (para elegir en Super Admin).
+async function perfiles() {
+  const [{ profiles = [] }, { accounts = [] }] = await Promise.all([llamar('GET', '/profiles'), llamar('GET', '/accounts')]);
+  return profiles.map((p) => ({
+    id: p._id, nombre: p.name,
+    cuentas: accounts.filter((a) => idDe(a.profileId) === p._id).map((a) => ({
+      plataforma: a.platform, usuario: a.username || a.displayName || null, activa: a.isActive !== false, reconectar: !!a.needsReconnection,
+    })),
+  }));
+}
+
+// Perfil del panel: config -> ZERNIO_PROFILE_ID -> el unico con "JH" en el nombre. Nunca crea uno.
 async function perfilId() {
   const { rows } = await pool.query(`SELECT valor FROM config WHERE clave = 'zernio_profile_id'`);
-  if (rows[0]) return rows[0].valor;
+  if (rows[0]?.valor) return rows[0].valor;
   let id = process.env.ZERNIO_PROFILE_ID || null;
   if (!id) {
-    const lista = await llamar('GET', '/profiles');
-    const existente = (lista.profiles || []).find((p) => p.name === NOMBRE_PERFIL);
-    id = existente?._id || (await llamar('POST', '/profiles', { body: { name: NOMBRE_PERFIL } })).profile._id;
+    const { profiles = [] } = await llamar('GET', '/profiles');
+    const candidatos = profiles.filter((p) => PISTA_PERFIL.test(p.name || ''));
+    if (candidatos.length !== 1) throw new ZernioError('Falta elegir el perfil de redes', { codigo: 'sin_perfil' });
+    id = candidatos[0]._id;
   }
-  await pool.query(`INSERT INTO config (clave, valor) VALUES ('zernio_profile_id', $1) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor`, [id]);
+  await guardarConfig('zernio_profile_id', id);
   return id;
+}
+
+async function elegirPerfil(id) {
+  const { profiles = [] } = await llamar('GET', '/profiles');
+  const p = profiles.find((x) => x._id === id);
+  if (!p) throw new ZernioError('Ese perfil no existe en la cuenta de Zernio', { status: 404, codigo: 'perfil_inexistente' });
+  await guardarConfig('zernio_profile_id', id);
+  return { id: p._id, nombre: p.name };
+}
+
+async function perfilElegido() {
+  const { rows } = await pool.query(`SELECT valor FROM config WHERE clave = 'zernio_profile_id'`);
+  return rows[0]?.valor || process.env.ZERNIO_PROFILE_ID || null;
 }
 
 async function cuentas() {
@@ -115,6 +148,6 @@ function firmaValida(cuerpoCrudo, firma) {
 }
 
 module.exports = {
-  configurado, llamar, perfilId, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, ZernioError,
+  configurado, llamar, perfilId, perfiles, elegirPerfil, perfilElegido, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, ZernioError,
   webhookListo, asegurarWebhook, probarWebhook, firmaValida, EVENTOS,
 };

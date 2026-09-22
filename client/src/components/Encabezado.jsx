@@ -44,15 +44,21 @@ export function MenuUsuario({ me, estado, saldoGenerador, onSalir, onSuperAdmin 
           {superAdmin && (
             <>
               <hr />
-              <div className="hd-menu-lbl">Solo super admin</div>
+              <div className="hd-menu-lbl">Solo tú ves esto (super admin)</div>
+              {me.verComo && (
+                <div className="hd-menu-vista">
+                  <b>Vista de prueba:</b> estás viendo el panel como {ROL_ES[me.verComo]}. Un {ROL_ES[me.verComo].toLowerCase()} real no ve esta sección ni el selector.
+                </div>
+              )}
               <div className="hd-menu-info">
                 <span className={`hd-dot ${desconectado ? 'off' : ''}`} />
                 {desconectado ? 'Generador desconectado' : 'Generador conectado'}
                 {saldoGenerador && <span className="hd-menu-sub num">· cuenta: {Number(saldoGenerador.credits).toLocaleString('es-MX', { maximumFractionDigits: 1 })} cr</span>}
               </div>
               {desconectado && <button role="menuitem" onClick={() => { setAbierto(false); onSuperAdmin(); }}>Reconectar en Super Admin</button>}
+              {me.verComo && <button role="menuitem" onClick={() => cambiarVerComo('')}>← Volver a mi vista de super admin</button>}
               <label className="hd-menu-vc">
-                <span>Ver el panel como</span>
+                <span>Probar el panel como</span>
                 <select value={me.verComo || ''} onChange={(e) => cambiarVerComo(e.target.value)}>
                   <option value="">Super admin</option>
                   <option value="admin">Admin</option>
