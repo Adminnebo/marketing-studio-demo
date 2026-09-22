@@ -59,7 +59,18 @@ if (process.env.TEST_DATABASE_URL) {
     assert.deepEqual(r.ejecuciones, ['900']);
     assert.equal(await sm.cobrarIa({ por: 'ana@jh.do', clase: 'camila', costoUsd: 0.006, ref: 'camila:900' }), 0); // el real tardio no cobra de nuevo
     assert.equal((await conc.conciliarCamila({})).faltantes, 0);
+    // Higgsfield de punta a punta con movimientos simulados
+    const { rows: [g] } = await pool.query(`INSERT INTO generaciones (creado_por, preset_id, preset_tipo, preset_nombre, entrada, estado, creditos_estimados, enviado)
+      VALUES ('ana@jh.do', 'p', 'poster', 'Anuncio', '{}', 'completado', 7.5, now() - interval '1 hour') RETURNING id, enviado`);
+    const h = await conc.conciliarHiggsfield({ llamar: async () => ({ items: [
+      { display_name: 'Marketing Studio Image', credits: -9, action: 'spend', created_at: new Date(new Date(g.enviado).getTime() + 30e3).toISOString() },
+      { display_name: 'Otra cosa', credits: -2, action: 'spend', created_at: new Date(Date.now() - 20 * 60e3).toISOString() },
+    ], next_cursor: null }) });
+    assert.equal(h.emparejadas, 1);
+    assert.deepEqual(h.diferencias.map((x) => [x.estimado, x.real]), [[7.5, 9]]);
+    assert.equal(h.fueraDelPanel.creditos, 2);
     const u = await conc.ultimas();
+    assert.equal(u.higgsfield.emparejadas, 1);
     assert.equal(u.camilaEstimadasTotal.n, 1);
     sm._probar();
     await pool.end();

@@ -109,7 +109,7 @@ async function conciliarHiggsfield({ horas = 24, llamar } = {}) {
   const txs = await transaccionesDesde(desde, llamar);
   const { rows: gens } = await pool.query(
     `SELECT id, preset_nombre, creditos_estimados, enviado, estado, creado_por FROM generaciones
-     WHERE enviado IS NOT NULL AND enviado >= $1 AND enviado < $2 - interval '15 minutes' ORDER BY enviado`, [desde, hasta]
+     WHERE enviado IS NOT NULL AND enviado >= $1::timestamptz AND enviado < $2::timestamptz - interval '15 minutes' ORDER BY enviado`, [desde, hasta]
   );
   const { pares, sinGasto, fuera } = emparejar(gens, txs);
   const suma = (l, f) => Math.round(l.reduce((a, x) => a + f(x), 0) * 100) / 100;
