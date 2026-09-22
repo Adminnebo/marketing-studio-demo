@@ -184,7 +184,8 @@ borrar.
 ## Pendiente (detalles y correcciones finales)
 
 - **Saldo de Marketing (activo desde 2026-09-22)**: arranca en $0; nadie de Marketing (salvo super admins) puede crear hasta que se apruebe la primera recarga. Dar el permiso **Aprueba recargas** en Super Admin → Usuarios a quien corresponda.
-- **Camila → saldo de Marketing**: cambiar el flujo n8n "Camila Paralela - Costos" para que mande `{execution_id, contact_id, costo_usd}` a `/api/n8n/costo-camila` (header `x-panel-token`) y registre costo 0 en Sword. Mientras no se cambie, las búsquedas se siguen cobrando aparte en Sword.
+- **Costos de super admins y sistema**: se registran y van al saldo general de JH por lotes (worker, cada 10 min). Falta una pantalla para resolver lotes que queden "A JH · revisar" (hoy solo se marcan en Movimientos y en los logs del worker). Verificar en Super Admin que "Informar creaciones de super admins" esté activado (el valor guardado manda sobre el nuevo defecto).
+- **Conciliación**: comparar a diario las búsquedas de Camila con los cobros recibidos desde n8n, y el precio estimado de cada creación con los créditos que Higgsfield descontó de verdad.
 - **Camila, tono**: pegar la sección de marketing en tuteo en el system message del Agente en n8n y publicar.
 - **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
 - **Idempotencia en el descuento**: pedir al equipo de pagos que `/api/credits/adjust` acepte una referencia única y rechace repetidos; hoy un corte a mitad requiere revisión manual.
