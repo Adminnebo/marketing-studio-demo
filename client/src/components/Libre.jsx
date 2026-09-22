@@ -35,7 +35,8 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
   const [modelos, setModelos] = useState(null);
   const [iaUsd, setIaUsd] = useState(0); // ayudas de IA ya cobradas (descripcion, ficha): se suman al total
   const [error, setError] = useState(null);
-  const [paso, setPaso] = useState(inicial ? 5 : 1); // 'Usar de nuevo' trae todo lleno: se abre en Revisar
+  // 'Usar de nuevo' trae todo lleno: abre en Revisar. 'Usar como base' trae solo la foto: abre en la descripción.
+  const [paso, setPaso] = useState(inicial ? (inicial.prompt ? 5 : 4) : 1);
   const [tipo, setTipo] = useState(inicial?.tipo || 'video');
   const [modeloId, setModeloId] = useState(inicial?.modelo || '');
   const [verModelos, setVerModelos] = useState(false);
@@ -126,7 +127,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
   const elegirArchivo = async (f) => {
     if (!f) return;
     if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { setSubida({ error: 'Usa una imagen PNG, JPG o WEBP.' }); return; }
-    if (f.size > 20 * 1024 * 1024) { setSubida({ error: 'La imagen pesa más de 20 MB.' }); return; }
+    if (f.size > 60 * 1024 * 1024) { setSubida({ error: 'La imagen pesa más de 60 MB.' }); return; }
     const local = URL.createObjectURL(f);
     setImagen(null);
     setSubida({ progreso: 0, nombre: f.name });

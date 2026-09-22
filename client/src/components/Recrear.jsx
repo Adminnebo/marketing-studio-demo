@@ -58,7 +58,7 @@ export default function Recrear({ preset, categoria, categorias, costos, precios
   const elegirArchivo = async (f) => {
     if (!f) return;
     if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { setSubida({ error: 'Usa una imagen PNG, JPG o WEBP.' }); return; }
-    if (f.size > 20 * 1024 * 1024) { setSubida({ error: 'La imagen pesa más de 20 MB.' }); return; }
+    if (f.size > 60 * 1024 * 1024) { setSubida({ error: 'La imagen pesa más de 60 MB.' }); return; }
     const local = URL.createObjectURL(f);
     setProducto(null);
     setSubida({ progreso: 0, nombre: f.name });

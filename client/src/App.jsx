@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { iniciarAuth, sesion, salir, cambiarVerComo, fetchCamilaEstado, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
+import { iniciarAuth, sesion, salir, cambiarVerComo, fetchCamilaEstado, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, usarComoBase, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
 import Login from './components/Login';
 import Plantillas from './components/Plantillas';
 import Recrear from './components/Recrear';
@@ -220,6 +220,15 @@ export default function App() {
   const saldoProps = { saldo: me.saldo, saldoUsd, negativoUsd: me.saldoNegativoPermitidoUsd || 0 };
   const desconectado = estado && !estado.conectado;
 
+  // Partir de una imagen ya creada: la sube al generador y abre "Desde cero" con ella puesta.
+  const usarDeBase = async (g, indice) => {
+    const m = await usarComoBase(g.id, indice);
+    setLibre((x) => ({ n: x.n + 1, inicial: { tipo: 'imagen', prompt: '', imagen: { media_id: m.media_id, url: m.url, nombre: m.nombre } } }));
+    setTab('plantillas');
+    setModoCrear('cero');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const repetir = (g) => (g.entrada?.libre ? (() => {
     const l = g.entrada.libre;
     setLibre((x) => ({
@@ -378,7 +387,7 @@ export default function App() {
 
       {tab === 'generaciones' && (
         <Generaciones items={gens.items} cargando={gens.cargando} error={gens.error} hayMas={!!gens.siguiente}
-          onMas={masGens} onRepetir={repetir} rol={me.rol} onCrear={() => setTab('plantillas')}
+          onMas={masGens} onRepetir={repetir} onBase={usarDeBase} rol={me.rol} onCrear={() => setTab('plantillas')}
           onPublicar={me.puedePublicar ? (g, indice) => setPublicando({ g, indice }) : null} />
       )}
 

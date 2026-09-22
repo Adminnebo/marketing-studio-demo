@@ -206,10 +206,12 @@ app.get('/api/catalogo/avatares', ruta(async (req, res) => {
 // Subida de la imagen del producto: el navegador manda los bytes aqui y el
 // servidor los pasa a Higgsfield (URL prefirmada + confirmacion), como el widget.
 const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
-app.post('/api/medios', express.raw({ type: Object.keys(EXT), limit: '20mb' }), ruta(async (req, res) => {
+// Higgsfield acepta archivos grandes (probado con 58 MB); el tope es por la memoria del servidor.
+const MAX_SUBIDA_MB = Number(process.env.MAX_SUBIDA_MB) || 60;
+app.post('/api/medios', express.raw({ type: Object.keys(EXT), limit: `${MAX_SUBIDA_MB}mb` }), ruta(async (req, res) => {
   const tipo = (req.headers['content-type'] || '').split(';')[0];
   if (!EXT[tipo] || !Buffer.isBuffer(req.body) || !req.body.length) {
-    return res.status(400).json({ error: 'Sube una imagen PNG, JPG o WEBP (máx. 20 MB).' });
+    return res.status(400).json({ error: `Sube una imagen PNG, JPG o WEBP (máx. ${MAX_SUBIDA_MB} MB).` });
   }
   const base = String(req.headers['x-nombre'] || 'producto').replace(/[^\w.-]+/g, '_').replace(/\.[^.]*$/, '').slice(0, 60) || 'producto';
   const nombre = `${base}.${EXT[tipo]}`;
@@ -224,6 +226,21 @@ app.post('/api/medios', express.raw({ type: Object.keys(EXT), limit: '20mb' }), 
   const r = conf.results?.[0];
   if (!r?.media_id) throw new hf.HiggsfieldError('media_confirm no devolvió media_id');
   res.json({ media_id: r.media_id, url: r.url || slot.url || null, nombre: String(req.headers['x-nombre'] || nombre).slice(0, 120) });
+}));
+
+// Una imagen ya creada como punto de partida de otra (la sube al generador y devuelve su media_id).
+// Solo imagenes de creaciones del panel: la URL tiene que estar en los resultados de esa fila.
+app.post('/api/medios/importar', ruta(async (req, res) => {
+  const b = req.body || {};
+  const { rows: [g] } = await pool.query('SELECT id, preset_nombre, resultados FROM generaciones WHERE id = $1', [Number(b.generacionId) || 0]);
+  const ok = (g?.resultados || []).filter((r) => r.url);
+  const r = ok[Math.max(0, Math.min(Number(b.indice) || 0, ok.length - 1))];
+  if (!r) return res.status(404).json({ error: 'Esa creación no tiene una imagen para usar.' });
+  if (/\.(mp4|mov|webm)($|\?)/i.test(r.url)) return res.status(400).json({ error: 'Por ahora solo se puede partir de una foto, no de un video.' });
+  const imp = await hf.llamar('media_import_url', { url: r.url, type: 'image' });
+  if (!imp?.media_id) throw new hf.HiggsfieldError('media_import_url sin media_id');
+  console.log(`[medios] ${req.user.email} parte de la creación #${g.id}`);
+  res.json({ media_id: imp.media_id, url: r.url, nombre: `${g.preset_nombre || 'Creación'} #${g.id}` });
 }));
 
 // ── Generaciones ──

@@ -87,6 +87,8 @@ export const fetchGeneraciones = (antes, filtros = {}) => {
   return api('/generaciones?' + p);
 };
 export const fetchAutores = () => api('/generaciones-autores');
+// Partir de una imagen ya creada: la sube al generador y devuelve su media_id.
+export const usarComoBase = (generacionId, indice) => api('/medios/importar', { method: 'POST', body: JSON.stringify({ generacionId, indice }) });
 
 // Subida con progreso (XHR): el servidor la reenvia a Higgsfield.
 export function subirImagen(archivo, onProgreso) {

@@ -15,12 +15,13 @@ const esVideoGen = (g) => g.preset_tipo === 'libre_video' || TIPOS_VIDEO.has(g.p
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
 
-function Tarjeta({ g, rol, onRepetir, onPublicar }) {
+function Tarjeta({ g, rol, onRepetir, onPublicar, onBase }) {
   const ok = (g.resultados || []).filter((r) => r.url);
   const [i, setI] = useState(0);
   const r = ok[Math.min(i, ok.length - 1)];
   const [bajando, setBajando] = useState(false);
   const [errBaja, setErrBaja] = useState(null);
+  const [base, setBase] = useState(false);
   const bajar = async () => {
     setBajando(true);
     setErrBaja(null);
@@ -78,6 +79,12 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
         <div className="ms-gen-actions">
           {r && <button className="mini-btn" onClick={bajar} disabled={bajando}>{bajando ? 'Descargando…' : '⬇ Descargar'}</button>}
           {r && onPublicar && <button className="mini-btn" onClick={() => onPublicar(g, Math.min(i, ok.length - 1))}>📣 Publicar</button>}
+          {r && !esVideoUrl(r.url) && onBase && (
+            <button className="mini-btn" disabled={base} title="Crear otra foto o un video partiendo de esta imagen, para darle más detalles o cambiarle cosas"
+              onClick={async () => { setBase(true); setErrBaja(null); try { await onBase(g, Math.min(i, ok.length - 1)); } catch (e) { setErrBaja(e.message); } finally { setBase(false); } }}>
+              {base ? 'Preparando…' : '✨ Usar como base'}
+            </button>
+          )}
           {(g.entrada?.preset || g.entrada?.libre) && <button className="mini-btn" onClick={() => onRepetir(g)} title="Abrir de nuevo con la misma foto y descripción para repetir o ajustar">↻ Usar de nuevo</button>}
         </div>
       </div>
@@ -112,7 +119,7 @@ function useBusqueda(f) {
   return { activa, ...r, mas };
 }
 
-export default function Generaciones({ items: todas, cargando: cargandoTodas, error: errorTodas, hayMas: hayMasTodas, onMas, onRepetir, onPublicar, rol, onCrear }) {
+export default function Generaciones({ items: todas, cargando: cargandoTodas, error: errorTodas, hayMas: hayMasTodas, onMas, onRepetir, onPublicar, onBase, rol, onCrear }) {
   const [filtro, setFiltro] = useState('');
   const [f, setF] = useState(FILTROS_VACIOS);
   const [autores, setAutores] = useState([]);
@@ -173,7 +180,7 @@ export default function Generaciones({ items: todas, cargando: cargandoTodas, er
         </div>
       ) : (
         <div className="ms-gens" style={{ '--tam': `${tam}px` }}>
-          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} onRepetir={onRepetir} onPublicar={onPublicar} />)}
+          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} onRepetir={onRepetir} onPublicar={onPublicar} onBase={onBase} />)}
         </div>
       )}
       {hayMas && (
