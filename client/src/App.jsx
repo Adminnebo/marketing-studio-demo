@@ -264,7 +264,10 @@ export default function App() {
             title={marketing ? 'Saldo de Marketing' : externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
             <span className="hd-saldo-l">Saldo</span>
             {marketing || externo ? (
-              <b className="num">{saldoUsd != null ? usd(saldoUsd) : '—'}</b>
+              <>
+                <b className="num">{saldoUsd != null ? usd(saldoUsd) : '—'}</b>
+                {saldoUsd != null && me.precios?.precioCredito > 0 && <span className="hd-saldo-usd num" title="Créditos equivalentes al precio actual">≈ {cred(saldoUsd / me.precios.precioCredito)} cr</span>}
+              </>
             ) : (
               <>
                 <b className="num">{cred(me.saldo)} cr</b>
