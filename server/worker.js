@@ -23,6 +23,8 @@ const costo = require('./lib/costo');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
 const reintento = require('./lib/reintento');
+const ajustes = require('./lib/config');
+const promptAuto = require('./lib/prompt-auto');
 
 const redesP = import('../shared/redes.mjs');
 
@@ -315,6 +317,9 @@ async function main() {
   if (await hf.sembrarToken()) log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   if (await hfCli.sembrar().catch((e) => log('HF_CLI_SESION invalida:', e.message))) log('Sesion de la CLI sembrada desde HF_CLI_SESION.');
   log(`Worker Marketing Studio arrancado (cada ${POLL_MS} ms)`);
+  // Que se vea en los logs si el reintento por filtro de contenido puede funcionar (necesita la IA).
+  const maxReintentos = Number((await ajustes.leer().catch(() => ({}))).reintento_moderacion || 0);
+  log(`reintento por filtro de contenido: ${!promptAuto.configurado() ? 'APAGADO (falta OPENAI_API_KEY)' : maxReintentos > 0 ? `activo (hasta ${maxReintentos})` : 'apagado en ajustes'}`);
   while (!parar) {
     await ciclo();
     await new Promise((r) => setTimeout(r, POLL_MS));
