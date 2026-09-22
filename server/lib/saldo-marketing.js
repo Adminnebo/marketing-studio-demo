@@ -264,7 +264,31 @@ async function resolverRevision(id, { por, aplicada }) {
   }
 }
 
+/**
+ * Fija el saldo de Marketing en un monto (super admin): registra un 'ajuste' por la diferencia.
+ * Solo mueve el registro interno; NO toca el saldo general de JH en la plataforma de pagos.
+ */
+async function fijarSaldo({ objetivoUsd, motivo, por }) {
+  const objetivo = r4(objetivoUsd);
+  if (!Number.isFinite(objetivo) || objetivo < 0 || objetivo > 10000) throw new SaldoMarketingError('El saldo debe estar entre $0 y $10,000.', { status: 400 });
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    await bloquear(cli);
+    const antes = await saldo(cli);
+    const dif = r4(objetivo - antes);
+    if (dif !== 0) {
+      await cli.query(
+        `INSERT INTO saldo_marketing (tipo, usd, concepto, por, datos) VALUES ('ajuste', $1, $2, $3, $4)`,
+        [dif, (String(motivo || '').trim() || 'Saldo fijado a mano (sin tocar el saldo general)').slice(0, 200), por, JSON.stringify({ antes, objetivo })]
+      );
+    }
+    await cli.query('COMMIT');
+    return { antes, saldoUsd: objetivo, ajusteUsd: dif };
+  } catch (e) { await cli.query('ROLLBACK').catch(() => {}); throw e; } finally { cli.release(); }
+}
+
 module.exports = {
   migrar, activo, saldo, bloquear, cobrarGeneracion, reembolsar, cobrarIa, puedeGastarIa, exento, movimientos, gastoDelMes,
-  solicitar, solicitudes, pendientes, aprobar, rechazar, resolverRevision, SaldoMarketingError, CLASES_IA, _probar,
+  solicitar, solicitudes, pendientes, aprobar, rechazar, resolverRevision, fijarSaldo, SaldoMarketingError, CLASES_IA, _probar,
 };

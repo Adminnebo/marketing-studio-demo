@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchCreditos, pedirRecarga, aprobarRecarga, rechazarRecarga, resolverRecarga } from '../api';
+import { fetchCreditos, pedirRecarga, aprobarRecarga, rechazarRecarga, resolverRecarga, fijarSaldoMarketing } from '../api';
 import { usd, usdFino, cred } from '../precio';
 
 const TIPOS = { recarga: 'Recarga', consumo: 'Generación', reembolso: 'Devolución', ajuste: 'Ajuste', ia: 'Ayuda de IA' };
@@ -177,6 +177,36 @@ function detalleMov(m) {
   return `${m.concepto || ''}${m.por && m.por !== 'sistema' ? ` · ${m.por}` : ''}`;
 }
 
+// Solo super admin: fija el saldo de Marketing sin mover plata del saldo general (pruebas, demos, correcciones).
+function FijarSaldo({ actual, onHecho }) {
+  const [valor, setValor] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [ocupado, setOcupado] = useState(false);
+  const n = Number(valor);
+  const fijar = async () => {
+    if (!window.confirm(`¿Fijar el saldo de Marketing en ${usd(n)}? No se descuenta nada del saldo general de JH.`)) return;
+    setOcupado(true); setMsg(null);
+    try { const r = await fijarSaldoMarketing(n, motivo.trim()); setMsg({ ok: true, t: `Listo: ${usd(r.antes)} → ${usd(r.saldoUsd)}.` }); setValor(''); setMotivo(''); onHecho(); }
+    catch (e) { setMsg({ ok: false, t: e.message }); }
+    setOcupado(false);
+  };
+  return (
+    <details className="card cr-pago-det">
+      <summary>Fijar saldo de Marketing a mano (solo super admin)</summary>
+      <div className="cr-pedir" style={{ paddingTop: 12 }}>
+        <div className="ms-cost">Deja el saldo de Marketing en el monto que pongas (hoy {usd(actual)}). Queda como “Ajuste” en los movimientos. No mueve plata del saldo general de JH.</div>
+        <div className="cr-sol-acc">
+          <input id="cr-fijar" type="number" min="0" max="10000" step="0.01" className="cr-otro" placeholder="USD" value={valor} onChange={(e) => setValor(e.target.value)} aria-label="Nuevo saldo en USD" />
+          <input id="cr-fijar-motivo" className="cr-motivo" maxLength={200} placeholder="Motivo (ej. saldo para la demo al equipo)" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+          <button className="btn" disabled={ocupado || valor === '' || !(n >= 0 && n <= 10000)} onClick={fijar}>{ocupado ? 'Guardando…' : 'Fijar saldo'}</button>
+        </div>
+        {msg && <span className={msg.ok ? 'cr-ok' : 'cr-err'}>{msg.t}</span>}
+      </div>
+    </details>
+  );
+}
+
 function CreditosMarketing({ d, onActualizar, actualizando }) {
   const negativo = d.saldoUsd < 0;
   const g = d.general;
@@ -196,6 +226,8 @@ function CreditosMarketing({ d, onActualizar, actualizando }) {
           <div className="kpi-foot">{d.gastoMes.iaUsd > 0 ? `Incluye ${usd(d.gastoMes.iaUsd)} de ayudas de IA (descripciones, fichas, Camila).` : 'Creaciones y ayudas de IA, sin contar lo devuelto.'}</div>
         </div>
       </div>
+
+      {d.puedeFijar && <FijarSaldo actual={d.saldoUsd} onHecho={onActualizar} />}
 
       {d.puedeAprobar && (
         <>

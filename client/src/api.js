@@ -171,3 +171,4 @@ export const pedirRecarga = (monto, motivo) => api('/creditos/solicitudes', { me
 export const aprobarRecarga = (id, nota) => api(`/creditos/solicitudes/${id}/aprobar`, { method: 'POST', body: JSON.stringify({ nota }) });
 export const rechazarRecarga = (id, nota) => api(`/creditos/solicitudes/${id}/rechazar`, { method: 'POST', body: JSON.stringify({ nota }) });
 export const resolverRecarga = (id, aplicada) => api(`/creditos/solicitudes/${id}/revision`, { method: 'POST', body: JSON.stringify({ aplicada }) });
+export const fijarSaldoMarketing = (saldo, motivo) => api('/creditos/fijar', { method: 'POST', body: JSON.stringify({ saldo, motivo }) });

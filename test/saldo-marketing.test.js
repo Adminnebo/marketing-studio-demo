@@ -107,4 +107,14 @@ if (!process.env.TEST_DATABASE_URL) {
     const h = await pagos.historialSinInformar();
     assert.ok(!h.items.some((x) => x.id === Number(g)));
   });
+
+  test('fijar saldo: ajusta por la diferencia sin tocar el saldo general', async () => {
+    const antes = ajustados.length;
+    const r = await sm.fijarSaldo({ objetivoUsd: 50, motivo: 'Demo', por: 'jefe@x' });
+    assert.equal(r.saldoUsd, 50);
+    assert.equal(await sm.saldo(), 50);
+    assert.equal((await sm.fijarSaldo({ objetivoUsd: 50, por: 'jefe@x' })).ajusteUsd, 0);
+    assert.equal(ajustados.length, antes);
+    await assert.rejects(sm.fijarSaldo({ objetivoUsd: -1, por: 'jefe@x' }), /entre \$0/);
+  });
 }

@@ -26,7 +26,7 @@ router.get('/creditos', ruta(async (req, res, next) => {
   const [a, saldo, gasto, movimientos, mias] = await Promise.all([
     ajustes.leer(), saldoMarketing.saldo(), saldoMarketing.gastoDelMes(), saldoMarketing.movimientos(60), saldoMarketing.solicitudes({ por: req.user.email, limite: 10 }),
   ]);
-  const r = { fuente: 'marketing', saldoUsd: saldo, gastoMes: gasto, movimientos, misSolicitudes: mias, precioCredito: ajustes.precioCredito(a), puedeAprobar: !!req.user.puedeAprobar };
+  const r = { fuente: 'marketing', saldoUsd: saldo, gastoMes: gasto, movimientos, misSolicitudes: mias, precioCredito: ajustes.precioCredito(a), puedeAprobar: !!req.user.puedeAprobar, puedeFijar: req.user.rol === 'super_admin' };
   if (req.user.puedeAprobar) {
     if (req.query.fresco) saldoExterno.olvidar();
     r.abiertas = await saldoMarketing.solicitudes({ abiertas: true, limite: 50 });
@@ -54,6 +54,15 @@ router.post('/creditos/solicitudes/:id/rechazar', soloAprobador, ruta(async (req
 
 router.post('/creditos/solicitudes/:id/revision', soloAprobador, ruta(async (req, res) => {
   res.json(await saldoMarketing.resolverRevision(Number(req.params.id), { por: req.user.email, aplicada: req.body?.aplicada === true }));
+}));
+
+// Super admin: fijar el saldo de Marketing (solo el registro interno; no toca el saldo general).
+router.post('/creditos/fijar', ruta(async (req, res) => {
+  if (req.user.rol !== 'super_admin') return res.status(403).json({ error: 'Solo un super admin puede fijar el saldo.' });
+  if (!saldoMarketing.activo()) return res.status(400).json({ error: 'El saldo de Marketing no está activo.' });
+  const r = await saldoMarketing.fijarSaldo({ objetivoUsd: Number(req.body?.saldo), motivo: req.body?.motivo, por: req.user.email });
+  console.log(`[saldo-mkt] ${req.user.email} fijo el saldo de Marketing: ${r.antes} -> ${r.saldoUsd} USD`);
+  res.json(r);
 }));
 
 module.exports = { router };
