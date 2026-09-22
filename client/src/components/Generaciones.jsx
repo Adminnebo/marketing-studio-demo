@@ -30,9 +30,17 @@ function Tarjeta({ g, rol, onRepetir, onPublicar }) {
     <div className="ms-gen">
       <div className={`ms-gen-media ${g.estado === 'completado' && r ? 'done' : ''}`}>
         {g.estado === 'completado' && r ? (
-          esVideoUrl(r.url)
-            ? <video src={r.url} controls playsInline preload="metadata" />
-            : <a href={r.url} target="_blank" rel="noreferrer"><img src={r.miniatura || r.url} alt={g.preset_nombre} loading="lazy" /></a>
+          <>
+            {esVideoUrl(r.url)
+              ? <video src={r.url} controls playsInline preload="metadata" />
+              : onPublicar
+                // Clic en la foto: abre Publicar con esta foto (quien no puede publicar la ve grande).
+                ? <button className="ms-gen-pub" onClick={() => onPublicar(g, Math.min(i, ok.length - 1))} title="Publicar esta foto"><img src={r.miniatura || r.url} alt={g.preset_nombre} loading="lazy" /></button>
+                : <a href={r.url} target="_blank" rel="noreferrer"><img src={r.miniatura || r.url} alt={g.preset_nombre} loading="lazy" /></a>}
+            <a className="ms-gen-abrir" href={r.url} target="_blank" rel="noreferrer" title="Ver en otra pestaña" aria-label="Ver en otra pestaña">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
+            </a>
+          </>
         ) : (
           <>
             {g.portada && <Portada cover={g.portada} alt={g.preset_nombre} />}
