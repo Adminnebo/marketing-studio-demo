@@ -172,8 +172,8 @@ export default function App() {
     return () => clearInterval(id);
   }, [s, cargarCatalogo, recargarGens, cargarRedes]);
 
-  // Mientras haya generaciones en curso, refrescar cada 5 s.
-  const hayEnCurso = gens.items.some((g) => EN_CURSO.has(g.estado));
+  // Mientras haya generaciones en curso —o alguna esperando su logo—, refrescar cada 5 s.
+  const hayEnCurso = gens.items.some((g) => EN_CURSO.has(g.estado) || g.marca_estado === 'pendiente');
   useEffect(() => {
     if (!s || !hayEnCurso) return undefined;
     const id = setInterval(recargarGens, 5000);
