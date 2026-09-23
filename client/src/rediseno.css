@@ -363,3 +363,5 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .cal-col-fila .cal-col-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-col-fila .cal-dot { flex: none; }
 .cal-col-h { font-size: 0.68rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ms-modal__media { position: relative; }
+.pb-conlogo { position: absolute; left: 10px; bottom: 10px; font-size: 0.7rem; font-weight: 640; padding: 4px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; }

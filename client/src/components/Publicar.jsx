@@ -26,6 +26,8 @@ export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, on
   const ok = (generacion.resultados || []).filter((r) => r.url);
   const medio = ok[Math.min(indice, ok.length - 1)];
   const tipo = tipoMedio(medio?.url);
+  // Lo que se publica es la copia con logo (server/redes.js): la previa tiene que mostrar eso mismo.
+  const verUrl = medio?.url_logo || medio?.url;
 
   const [texto, setTexto] = useState('');
   const [sel, setSel] = useState(() => new Set());
@@ -120,7 +122,8 @@ export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, on
     <div className="ms-modal" onMouseDown={(e) => e.target === e.currentTarget && !enviando && onCerrar()}>
       <div className="ms-modal__box" role="dialog" aria-label="Publicar en redes">
         <div className="ms-modal__media">
-          {tipo === 'video' ? <video src={medio?.url} controls playsInline /> : <img src={medio?.url} alt="" />}
+          {tipo === 'video' ? <video src={verUrl} controls playsInline /> : <img src={verUrl} alt="" />}
+          {medio?.url_logo && <span className="pb-conlogo" title="Así sale publicado">🏷️ Con el logo</span>}
         </div>
         <div className="ms-modal__body">
           <div className="ms-modal__head">
