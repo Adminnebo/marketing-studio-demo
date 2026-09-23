@@ -44,6 +44,7 @@ function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
   return (
     <div className="ms-gen">
       <div className={`ms-gen-media ${g.estado === 'completado' && r ? 'done' : ''}`}>
+        {marcando && <div className="ms-gen-overlay"><div className="spinner" />Poniendo el logo…</div>}
         {g.estado === 'completado' && r ? (
           <>
             {esVideoUrl(r.url)
@@ -114,12 +115,12 @@ function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
           </div>
         )}
         {ajustando && (
-          <div className="ms-modal" onMouseDown={(e) => e.target === e.currentTarget && setAjustando(false)}>
+          <div className="ms-modal aj-modal" onMouseDown={(e) => e.target === e.currentTarget && setAjustando(false)}>
             <div className="ms-modal__box aj-box" role="dialog" aria-label="Ajustar el logo">
               <div className="ms-modal__body">
                 <h3 style={{ margin: '0 0 10px' }}>Ajustar el logo</h3>
                 <AjusteLogo gen={g} indice={Math.min(i, ok.length - 1)} onCerrar={() => setAjustando(false)}
-                  onListo={(x) => { setG(x); setAjustando(false); setVerOriginal(false); }} />
+                  onAplicar={(datos) => { setAjustando(false); setVerOriginal(false); marcar(datos); }} />
               </div>
             </div>
           </div>

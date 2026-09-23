@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { publicar, fetchInfoTiktok, captionPublicacion } from '../api';
+import { publicar, fetchInfoTiktok, captionPublicacion, cambiarMarca } from '../api';
 import { REDES, tipoMedio, limiteDe, validarPublicacion } from '@shared/redes.mjs';
 import { Cuenta } from './Redes';
 import AjusteLogo from './AjusteLogo';
@@ -26,6 +26,7 @@ const localInput = (d) => `${d.getFullYear()}-${dosDig(d.getMonth() + 1)}-${dosD
 export default function Publicar({ generacion: genInicial, indice = 0, cuentas, onCerrar, onPublicada }) {
   const [generacion, setGeneracion] = useState(genInicial);
   const [ajustandoLogo, setAjustandoLogo] = useState(false);
+  const [marcando, setMarcando] = useState(null); // { error } mientras se rehace con el logo nuevo
   const ok = (generacion.resultados || []).filter((r) => r.url);
   const medio = ok[Math.min(indice, ok.length - 1)];
   const tipo = tipoMedio(medio?.url);
@@ -126,19 +127,25 @@ export default function Publicar({ generacion: genInicial, indice = 0, cuentas, 
       <div className="ms-modal__box" role="dialog" aria-label="Publicar en redes">
         <div className="ms-modal__media">
           {tipo === 'video' ? <video src={verUrl} controls playsInline /> : <img src={verUrl} alt="" />}
+          {marcando && !marcando.error && <div className="pb-cargando"><div className="spinner" />Poniendo el logo…</div>}
           {medio?.url_logo && (
             <span className="pb-conlogo">🏷️ Con el logo
-              <button className="linklike" onClick={() => setAjustandoLogo(true)}>Ajustar</button>
+              <button className="linklike" onClick={() => setAjustandoLogo(true)} disabled={!!marcando && !marcando.error}>Ajustar</button>
+              {marcando?.error && <em className="pb-err">{marcando.error}</em>}
             </span>
           )}
         </div>
         {ajustandoLogo && (
-          <div className="ms-modal pb-ajuste" onMouseDown={(e) => e.target === e.currentTarget && setAjustandoLogo(false)}>
+          <div className="ms-modal aj-modal pb-ajuste" onMouseDown={(e) => e.target === e.currentTarget && setAjustandoLogo(false)}>
             <div className="ms-modal__box aj-box" role="dialog" aria-label="Ajustar el logo">
               <div className="ms-modal__body">
                 <h3 style={{ margin: '0 0 10px' }}>Ajustar el logo</h3>
                 <AjusteLogo gen={generacion} indice={indice} onCerrar={() => setAjustandoLogo(false)}
-                  onListo={(g) => { setGeneracion(g); setAjustandoLogo(false); }} />
+                  onAplicar={async (datos) => {
+                    setAjustandoLogo(false); setMarcando({});
+                    try { setGeneracion(await cambiarMarca(generacion.id, datos)); setMarcando(null); }
+                    catch (e) { setMarcando({ error: e.message }); }
+                  }} />
               </div>
             </div>
           </div>
@@ -281,8 +288,8 @@ export default function Publicar({ generacion: genInicial, indice = 0, cuentas, 
               {error && <div className="ms-errors">{error}</div>}
               <div className="ms-submit">
                 <span className="ms-cost">{errores[0] || (elegidas.length ? `${elegidas.length} cuenta${elegidas.length > 1 ? 's' : ''}` : '')}</span>
-                <button className="btn" onClick={enviar} disabled={errores.length > 0 || enviando}>
-                  {enviando ? 'Enviando…' : modo === 'programar' ? '🗓️ Programar' : '📣 Publicar'}
+                <button className="btn" onClick={enviar} disabled={errores.length > 0 || enviando || (!!marcando && !marcando.error)}>
+                  {enviando ? 'Enviando…' : marcando && !marcando.error ? 'Poniendo el logo…' : modo === 'programar' ? '🗓️ Programar' : '📣 Publicar'}
                 </button>
               </div>
             </>

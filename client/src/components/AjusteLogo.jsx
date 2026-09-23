@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchLogos, cambiarMarca } from '../api';
+import { fetchLogos } from '../api';
 
 /**
  * Ajustar el logo de una creación: se arrastra sobre la previa y se cambia su tamaño y opacidad.
@@ -28,7 +28,7 @@ const pegar = (v, destinos) => {
   return d == null ? Math.round(v * 10) / 10 : d;
 };
 
-export default function AjusteLogo({ gen, indice = 0, onListo, onCerrar }) {
+export default function AjusteLogo({ gen, indice = 0, onAplicar, onCerrar }) {
   const ok = (gen.resultados || []).filter((r) => r.url);
   const r = ok[Math.min(indice, ok.length - 1)];
   const video = esVideoUrl(r?.url);
@@ -39,7 +39,6 @@ export default function AjusteLogo({ gen, indice = 0, onListo, onCerrar }) {
   const [opacidad, setOpacidad] = useState(marca.opacidad || 90);
   const [pos, setPos] = useState({ cx: marca.cx ?? 85, cy: marca.cy ?? 85 });
   const [arrastrando, setArrastrando] = useState(false);
-  const [aplicando, setAplicando] = useState(false);
   const [error, setError] = useState(null);
   const [tamLogo, setTamLogo] = useState({ w: 1, h: 0.4 }); // proporción real del logo
 
@@ -63,11 +62,8 @@ export default function AjusteLogo({ gen, indice = 0, onListo, onCerrar }) {
     const cy = pegar(((e.clientY - c.top) / c.height) * 100, [altoPct / 2 + 4, 50, 100 - altoPct / 2 - 4]);
     setPos({ cx: Math.max(0, Math.min(100, cx)), cy: Math.max(0, Math.min(100, cy)) });
   };
-  const aplicar = async () => {
-    setAplicando(true); setError(null);
-    try { onListo(await cambiarMarca(gen.id, { cx: pos.cx, cy: pos.cy, tam, opacidad })); }
-    catch (e) { setError(e.message); setAplicando(false); }
-  };
+  // Aplicar cierra al toque: el archivo se rehace mientras tanto y la carga se ve en la foto.
+  const aplicar = () => onAplicar({ cx: pos.cx, cy: pos.cy, tam, opacidad });
 
   const vertical = (marca.alto || 0) > (marca.ancho || 0);
   return (
@@ -101,10 +97,8 @@ export default function AjusteLogo({ gen, indice = 0, onListo, onCerrar }) {
         <div className="aj-nota">Arrastra el logo donde quieras. Se pega solo a las esquinas y al centro.{vertical && ' Las franjas marcan lo que tapan TikTok e Instagram.'}</div>
         {error && <div className="cr-err">{error}</div>}
         <div className="aj-acc">
-          <button className="btn secondary" onClick={onCerrar} disabled={aplicando}>Cancelar</button>
-          <button className="btn" onClick={aplicar} disabled={aplicando || !logo}>
-            {aplicando ? (video ? 'Aplicando… (unos 10 s)' : 'Aplicando… (unos 5 s)') : '✓ Aplicar'}
-          </button>
+          <button className="btn secondary" onClick={onCerrar}>Cancelar</button>
+          <button className="btn" onClick={aplicar} disabled={!logo}>✓ Aplicar</button>
         </div>
       </div>
     </div>

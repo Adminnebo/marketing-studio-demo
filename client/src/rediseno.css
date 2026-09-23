@@ -382,7 +382,12 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .aj-ctrl input[type="range"] { width: 100%; }
 .aj-nota { font-size: 0.78rem; color: var(--text-secondary); }
 .aj-acc { display: flex; gap: 8px; justify-content: flex-end; }
-.aj-box { max-width: 720px; width: min(92vw, 720px); }
+.aj-modal { align-items: center; }
+.aj-box { grid-template-columns: 1fr; max-width: 620px; width: min(94vw, 620px); }
+.aj-box .ms-modal__body { padding: 18px; }
+.pb-cargando { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 0.84rem; }
+.pb-err { font-style: normal; color: #ffb4b4; font-size: 0.74rem; }
 .pb-ajuste { z-index: 60; }
 .pb-conlogo { display: inline-flex; align-items: center; gap: 8px; }
 .pb-conlogo .linklike { color: #cfe3ff; }
