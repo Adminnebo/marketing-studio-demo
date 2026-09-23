@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { TIPOS, TIPOS_VIDEO } from '@shared/reglas.mjs';
 import Portada from './Portada';
-import { descargar, fetchGeneraciones, fetchAutores } from '../api';
+import { descargar, fetchGeneraciones, fetchAutores, cambiarMarca } from '../api';
 import { usd, usdFino, sinClausula } from '../precio';
 import Tamano, { useTamano } from './Tamano';
 
@@ -15,10 +15,23 @@ const esVideoGen = (g) => g.preset_tipo === 'libre_video' || TIPOS_VIDEO.has(g.p
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
 
-function Tarjeta({ g, rol, onRepetir, onPublicar, onBase, onBorrar }) {
+const ESQUINAS = [['arriba-izq', 'Arriba izq.'], ['arriba-der', 'Arriba der.'], ['abajo-izq', 'Abajo izq.'], ['abajo-der', 'Abajo der.'], ['centro', 'Centro']];
+
+function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
+  const [g, setG] = useState(gen);
+  useEffect(() => { setG((x) => (gen.marca_estado === x.marca_estado && gen.resultados === x.resultados ? x : gen)); }, [gen]);
+  const [marcando, setMarcando] = useState(false);
+  const [verOriginal, setVerOriginal] = useState(false);
+  const marcar = async (datos) => {
+    setMarcando(true); setErrBaja(null);
+    try { setG(await cambiarMarca(g.id, datos)); } catch (e) { setErrBaja(e.message); }
+    setMarcando(false);
+  };
   const ok = (g.resultados || []).filter((r) => r.url);
   const [i, setI] = useState(0);
-  const r = ok[Math.min(i, ok.length - 1)];
+  const rr = ok[Math.min(i, ok.length - 1)];
+  // Con marca de agua se ve la copia con logo; el original queda a un clic.
+  const r = rr && { ...rr, url: !verOriginal && rr.url_logo ? rr.url_logo : rr.url, miniatura: !verOriginal && rr.url_logo ? rr.url_logo : rr.miniatura };
   const [bajando, setBajando] = useState(false);
   const [errBaja, setErrBaja] = useState(null);
   const [base, setBase] = useState(false);
@@ -84,6 +97,25 @@ function Tarjeta({ g, rol, onRepetir, onPublicar, onBase, onBorrar }) {
         )}
         {g.error && <div className="ms-gen-err">{g.error}{g.estado === 'fallido' && g.precio_usd != null && !/administrador/.test(g.error) && ' Los créditos se devolvieron a tu saldo.'}</div>}
         {errBaja && <div className="ms-gen-err">{errBaja}</div>}
+        {g.estado === 'completado' && (
+          <div className="ms-gen-logo">
+            {g.marca_estado === 'pendiente' ? <span className="ms-cost">🏷️ Poniéndole el logo…</span>
+              : marcando ? <span className="ms-cost">🏷️ Aplicando el logo…</span>
+              : rr?.url_logo ? (
+                <>
+                  <span className="pill st-completado" title={g.marca ? `${g.marca.logo} · ${g.marca.posicion} · versión ${g.marca.version}` : ''}>🏷️ Con logo</span>
+                  <button className="linklike" onClick={() => setVerOriginal((v) => !v)}>{verOriginal ? 'Ver con logo' : 'Ver original'}</button>
+                  <select className="gn-sel" aria-label="Esquina del logo" value={g.marca?.posicion || ''} onChange={(e) => marcar({ posicion: e.target.value })}>
+                    {!g.marca?.posicion && <option value="">Esquina…</option>}
+                    {ESQUINAS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                  <button className="linklike" onClick={() => marcar({ quitar: true })}>Quitar</button>
+                </>
+              ) : g.marca_estado === 'error' ? (
+                <><span className="ms-cost">No se pudo poner el logo.</span><button className="linklike" onClick={() => marcar({})}>Reintentar</button></>
+              ) : <button className="linklike" onClick={() => marcar({})}>🏷️ Poner el logo</button>}
+          </div>
+        )}
         <div className="ms-gen-actions">
           {r && <button className="mini-btn" onClick={bajar} disabled={bajando}>{bajando ? 'Descargando…' : '⬇ Descargar'}</button>}
           {r && onPublicar && <button className="mini-btn" onClick={() => onPublicar(g, Math.min(i, ok.length - 1))}>📣 Publicar</button>}

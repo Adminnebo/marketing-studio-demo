@@ -1,6 +1,6 @@
 import RedesSetup from './RedesSetup';
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar, cambiarPermisoAprobar, fetchConciliacion, correrConciliacion } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar, cambiarPermisoAprobar, cambiarPermisoLogos, fetchConciliacion, correrConciliacion } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, usdFino, cred } from '../precio';
 
@@ -391,6 +391,11 @@ function Usuarios({ yo }) {
     try { await cambiarPermisoAprobar(u.id, valor); setLista((l) => l.map((x) => (x.id === u.id ? { ...x, aprobarRecargas: valor } : x))); }
     catch (e) { setMsg({ error: e.message }); } finally { setGuardando(null); }
   };
+  const permisoLogos = async (u, valor) => {
+    setGuardando(u.id);
+    try { await cambiarPermisoLogos(u.id, valor); setLista((l) => l.map((x) => (x.id === u.id ? { ...x, subirLogos: valor } : x))); }
+    catch (e) { setMsg({ error: e.message }); } finally { setGuardando(null); }
+  };
   const cambiar = async (u, acceso) => {
     setGuardando(u.id);
     setMsg(null);
@@ -414,7 +419,7 @@ function Usuarios({ yo }) {
       {!lista ? <div className="loading"><div className="spinner" /></div> : (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Usuario</th><th>Rol en los paneles</th><th>Acceso a Marketing</th><th>Puede publicar en redes</th><th>Aprueba recargas</th><th>Dado por</th></tr></thead>
+            <thead><tr><th>Usuario</th><th>Rol en los paneles</th><th>Acceso a Marketing</th><th>Puede publicar en redes</th><th>Aprueba recargas</th><th>Sube logos</th><th>Dado por</th></tr></thead>
             <tbody>
               {visibles.map((u) => (
                 <tr key={u.id}>
@@ -440,6 +445,13 @@ function Usuarios({ yo }) {
                     {u.acceso === 'super_admin' ? <span className="ms-cost">Siempre</span> : !u.acceso ? <span className="ms-cost">—</span> : (
                       <label className="user-admin-check" title="Ve el saldo general de JH y aprueba las recargas del saldo de Marketing">
                         <input type="checkbox" checked={!!u.aprobarRecargas} disabled={guardando === u.id} onChange={(e) => permisoAprobar(u, e.target.checked)} /> {u.aprobarRecargas ? 'Sí' : 'No'}
+                      </label>
+                    )}
+                  </td>
+                  <td>
+                    {u.acceso === 'super_admin' ? <span className="ms-cost">Siempre</span> : !u.acceso ? <span className="ms-cost">—</span> : (
+                      <label className="user-admin-check" title="Sube, cambia y borra los logos de la marca de agua (usarlos puede cualquiera)">
+                        <input type="checkbox" checked={!!u.subirLogos} disabled={guardando === u.id} onChange={(e) => permisoLogos(u, e.target.checked)} /> {u.subirLogos ? 'Sí' : 'No'}
                       </label>
                     )}
                   </td>

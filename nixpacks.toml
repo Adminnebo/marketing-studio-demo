@@ -1,0 +1,3 @@
+# ffmpeg para la marca de agua (lib/marca.js). "..." conserva lo que nixpacks pone solo (Node).
+[phases.setup]
+nixPkgs = ["...", "ffmpeg"]

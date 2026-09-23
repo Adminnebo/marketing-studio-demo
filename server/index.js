@@ -13,6 +13,7 @@ const auth = require('./lib/auth');
 const ajustes = require('./lib/config');
 const { filtrosGeneraciones } = require('./lib/filtros-gen');
 const conciliacion = require('./lib/conciliacion');
+const marcarGen = require('./lib/marcar-generacion');
 const catalogo = require('./lib/catalogo');
 const billetera = require('./lib/billetera');
 const modelos = require('./lib/modelos');
@@ -143,6 +144,7 @@ app.get('/api/me', ruta(async (req, res) => {
     email: req.user.email, nombre: req.user.nombre, rol: req.user.rol,
     rolReal: req.user.rolReal, verComo: req.user.rol !== req.user.rolReal ? req.user.rol : null, puedePublicar: !!req.user.puedePublicar,
     puedeAprobar: !!req.user.puedeAprobar,
+    puedeLogos: !!req.user.puedeLogos,
     // Precio de 1 credito para JH (costo + ganancia); el costo solo lo ve el super_admin.
     precios: ajustes.precioCredito(a) != null
       ? { precioCredito: ajustes.precioCredito(a), ...(req.user.rol === 'super_admin' ? { usdPorCredito: a.usd_por_credito, margenPct: a.margen_pct } : {}) }
@@ -246,7 +248,7 @@ app.post('/api/medios/importar', ruta(async (req, res) => {
 
 // ── Generaciones ──
 const COLS = `id, creado_por, estado, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-  precio_usd, resultados, error, creado, enviado, terminado, reintento_id,
+  precio_usd, resultados, error, creado, enviado, terminado, marca_estado, marca, reintento_id,
   (SELECT COALESCE(-SUM(s.usd), 0) FROM saldo_marketing s WHERE s.generacion_id = generaciones.id AND s.tipo = 'ia') AS ia_usd`;
 
 // Encolar (tope diario, precio, cobro local o en la plataforma central): lib/encolar.js
@@ -339,6 +341,29 @@ app.get('/api/generaciones', ruta(async (req, res) => {
   res.json({ items: rows, siguiente: rows.length === limite ? rows.at(-1).id : null });
 }));
 
+// Marca de agua de una creación: rehacerla (otra esquina u otro logo) o quitarla.
+app.post('/api/generaciones/:id/marca', ruta(async (req, res) => {
+  const { rows: [g] } = await pool.query('SELECT id, creado_por, estado FROM generaciones WHERE id = $1 AND eliminada IS NULL', [Number(req.params.id) || 0]);
+  if (!g) return res.status(404).json({ error: 'Esa creación ya no está.' });
+  const suya = (g.creado_por || '').toLowerCase() === req.user.email.toLowerCase();
+  if (!suya && auth.NIVEL[req.user.rol] < auth.NIVEL.admin) return res.status(403).json({ error: 'Solo puedes cambiar el logo de lo que tú creaste.' });
+  if (g.estado !== 'completado') return res.status(409).json({ error: 'Espera a que termine de crearse.' });
+  const b = req.body || {};
+  if (b.quitar === true) {
+    await marcarGen.quitarMarca(g.id);
+    const { rows: [x] } = await pool.query(`SELECT ${COLS} FROM generaciones WHERE id = $1`, [g.id]);
+    return res.json(x);
+  }
+  try {
+    await marcarGen.marcarGeneracion(g.id, { logoId: Number(b.logoId) || null, posicion: b.posicion || null, rehacer: true });
+  } catch (e) {
+    console.error('[marca]', e.message, e.detalle || '');
+    return res.status(502).json({ error: 'No se pudo poner el logo. Intenta de nuevo.' });
+  }
+  const { rows: [x] } = await pool.query(`SELECT ${COLS} FROM generaciones WHERE id = $1`, [g.id]);
+  res.json(x);
+}));
+
 // Borrar de la galeria: la crea quien la hizo o un admin. No se puede mientras se esta creando.
 // La fila queda (con su costo y su historial); solo deja de verse en Mis creaciones.
 app.delete('/api/generaciones/:id', ruta(async (req, res) => {
@@ -365,7 +390,9 @@ app.get('/api/generaciones/:id/descargar', ruta(async (req, res) => {
   const ok = (g?.resultados || []).filter((r) => r.url);
   const i = Math.max(0, Math.min(Number(req.query.i) || 0, ok.length - 1));
   if (!ok[i]) return res.status(404).json({ error: 'No hay archivo para descargar.' });
-  const r = await fetch(ok[i].url, { signal: AbortSignal.timeout(120000) });
+  // Con marca de agua se baja la copia con logo; con ?original=1, la de siempre.
+  const url = req.query.original === '1' ? ok[i].url : (ok[i].url_logo || ok[i].url);
+  const r = await fetch(url, { signal: AbortSignal.timeout(120000) });
   if (!r.ok || !r.body) return res.status(502).json({ error: 'No se pudo descargar el archivo.' });
   const ext = (new URL(ok[i].url).pathname.match(/\.(png|jpe?g|webp|mp4|mov|webm)$/i) || [, 'bin'])[1].toLowerCase();
   const base = (g.preset_nombre || 'marketing').normalize('NFD').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'marketing';
@@ -532,6 +559,7 @@ app.post('/api/libre', ruta(async (req, res) => {
 
 // Saldo de Marketing (solicitudes de recarga); si no esta activo, sigue a la ruta de abajo.
 app.use('/api', require('./creditos-marketing').router);
+app.use('/api', require('./logos').router);
 
 // Billetera de JH: saldo, precio por credito, paquetes con ganancia y movimientos.
 app.get('/api/creditos', ruta(async (req, res) => {
@@ -589,6 +617,7 @@ async function arrancar() {
   await require('./lib/permisos').migrar();
   await require('./lib/saldo-marketing').migrar();
   await conciliacion.migrar();
+  await require('./lib/logos').migrar();
   require('./lib/jh-catalogo').calentar();
   if (await hf.sembrarToken()) console.log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   // Webhook de Zernio: se registra solo en cuanto hay clave y secreto.

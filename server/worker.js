@@ -16,6 +16,8 @@ const hf = require('./lib/higgsfield');
 const zernio = require('./lib/zernio');
 const billetera = require('./lib/billetera');
 const saldoMarketing = require('./lib/saldo-marketing');
+const marcarGen = require('./lib/marcar-generacion');
+const logos = require('./lib/logos');
 const modelos = require('./lib/modelos');
 const catalogo = require('./lib/catalogo');
 const clasificar = require('./lib/clasificar');
@@ -163,8 +165,11 @@ async function revisarEnProceso() {
     if (st.every((s) => TERMINADOS_OK.has(s) || TERMINADOS_MAL.has(s))) {
       const ok = resultados.filter((r) => TERMINADOS_OK.has(String(r.estado).toLowerCase()) && r.url);
       if (ok.length) {
-        await pool.query(`UPDATE generaciones SET estado = 'completado', resultados = $2, terminado = now(), revisado = now() WHERE id = $1`, [g.id, JSON.stringify(resultados)]);
-        log(`#${g.id} completada (${ok.length} resultado/s)`);
+        // Marca de agua automatica (lib/marcar-generacion.js): queda pendiente y se pone en la proxima vuelta.
+        const conLogo = Number((await ajustes.leer()).logo_auto) === 1 && !!(await logos.porDefecto().catch(() => null));
+        await pool.query(`UPDATE generaciones SET estado = 'completado', resultados = $2, terminado = now(), revisado = now(), marca_estado = $3 WHERE id = $1`,
+          [g.id, JSON.stringify(resultados), conLogo ? 'pendiente' : null]);
+        log(`#${g.id} completada (${ok.length} resultado/s)${conLogo ? ' · le toca el logo' : ''}`);
         // Lo cobrado se informa a la plataforma central con el detalle completo (va por la cola).
         if (await pagos.informarConsumo(g.id).catch((e) => { log(`#${g.id} no se pudo encolar el descuento: ${e.message}`); return false; })) log(`#${g.id} descuento encolado para la plataforma de pagos`);
       } else {
@@ -288,6 +293,20 @@ async function ciclo() {
   } catch (e) {
     log('Error con la plataforma de pagos:', e.message);
   }
+  // Marca de agua de lo recien creado (unas pocas por vuelta para no trancar el worker).
+  try {
+    for (const id of await marcarGen.pendientes(2)) {
+      const r = await marcarGen.marcarGeneracion(id).catch(async (e) => {
+        await pool.query(`UPDATE generaciones SET marca_estado = 'error', marca = $2 WHERE id = $1`, [id, JSON.stringify({ error: e.message.slice(0, 200) })]);
+        log(`#${id} no se pudo poner el logo: ${e.message}`);
+        return null;
+      });
+      if (r) log(`#${id} logo puesto (${r.hechas || 0} archivo/s, ${r.detalle?.posicion || r.motivo || '—'})`);
+    }
+  } catch (e) {
+    log('Error poniendo logos:', e.message);
+  }
+
   // IA de super admins y del sistema: al saldo general de JH, por lotes (cada 10 min).
   try {
     if (Date.now() - ultimoLoteJh > 10 * 60e3) {
@@ -315,6 +334,7 @@ let parar = false;
 async function main() {
   await migrar();
   await saldoMarketing.migrar().catch((e) => log(`migracion del saldo de Marketing: ${e.message}`));
+  await logos.migrar().catch((e) => log(`migracion de logos: ${e.message}`));
   if (await hf.sembrarToken()) log('Token de Higgsfield sembrado desde HF_REFRESH_TOKEN.');
   if (await hfCli.sembrar().catch((e) => log('HF_CLI_SESION invalida:', e.message))) log('Sesion de la CLI sembrada desde HF_CLI_SESION.');
   log(`Worker Marketing Studio arrancado (cada ${POLL_MS} ms)`);

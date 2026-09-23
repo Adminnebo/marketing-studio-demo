@@ -8,6 +8,7 @@ import Generaciones, { EN_CURSO } from './components/Generaciones';
 import Redes from './components/Redes';
 import SuperAdmin from './components/SuperAdmin';
 import Creditos from './components/Creditos';
+import Logos from './components/Logos';
 import Libre from './components/Libre';
 import Calendario from './components/Calendario';
 import { cred, usd, sinClausula } from './precio';
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'generaciones', label: 'Mis creaciones', icon: '🗂️' },
   { id: 'calendario', label: 'Calendario', icon: '📅', min: 'super_admin' }, // en pruebas: oculto para el resto
   { id: 'creditos', label: 'Créditos', icon: '💳' },
+  { id: 'logos', label: 'Logos', icon: '🏷️' },
   { id: 'redes', label: 'Redes', icon: '📣', min: 'admin' },
   { id: 'superadmin', label: 'Super Admin', icon: '🛡️', min: 'super_admin' },
 ];
@@ -207,7 +209,7 @@ export default function App() {
   if (!me) return <div className="app"><div className="loading"><div className="spinner" />Cargando…</div></div>;
   // Redes: admin o quien tiene permiso de publicar.
   const verRedes = NIVEL[me.rol] >= NIVEL.admin || !!me.puedePublicar;
-  const tabs = TABS.filter((t) => !t.min || NIVEL[me.rol] >= NIVEL[t.min] || (t.id === 'redes' && verRedes));
+  const tabs = TABS.filter((t) => (t.id === 'logos' ? me.puedeLogos : !t.min || NIVEL[me.rol] >= NIVEL[t.min] || (t.id === 'redes' && verRedes)));
 
   const enCurso = gens.items.filter((g) => EN_CURSO.has(g.estado)).length;
   // Saldo: el de la plataforma de pagos (USD) o, si no esta configurada, la billetera local (creditos).
@@ -423,6 +425,7 @@ export default function App() {
           onPublicar={me.puedePublicar ? (g, indice) => setPublicando({ g, indice }) : null} />
       )}
 
+      {tab === 'logos' && <Logos />}
       {tab === 'creditos' && <Creditos recarga={me.saldo} onRecargada={() => fetchMe().then(setMe).catch(() => {})} />}
 
       {tab === 'superadmin' && me.rol === 'super_admin' && <SuperAdmin yo={me.email} onAjustes={() => fetchMe().then(setMe).catch(() => {})} />}

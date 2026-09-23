@@ -88,6 +88,30 @@ export const fetchGeneraciones = (antes, filtros = {}) => {
 };
 export const fetchAutores = () => api('/generaciones-autores');
 export const borrarGeneracion = (id) => api(`/generaciones/${id}`, { method: 'DELETE' });
+// Marca de agua: rehacerla con otra esquina u otro logo, o quitarla.
+export const cambiarMarca = (id, datos) => api(`/generaciones/${id}/marca`, { method: 'POST', body: JSON.stringify(datos) });
+
+// ── Logos (marca de agua) ──
+export const fetchLogos = () => api('/logos');
+export const renombrarLogo = (id, nombre) => api(`/logos/${id}`, { method: 'PUT', body: JSON.stringify({ nombre }) });
+export const logoPorDefecto = (id) => api(`/logos/${id}`, { method: 'PUT', body: JSON.stringify({ porDefecto: true }) });
+export const borrarLogo = (id, version) => api(`/logos/${id}` + (version ? `?version=${version}` : ''), { method: 'DELETE' });
+export const guardarAjustesLogo = (cambios) => api('/logos/ajustes', { method: 'PUT', body: JSON.stringify(cambios) });
+export async function subirLogo(archivo, { nombre, version = 'claro', logoId = null, quitarFondo = false } = {}) {
+  const r = await fetch('/api/logos', {
+    method: 'POST',
+    headers: {
+      'content-type': archivo.type, authorization: 'Bearer ' + (token || ''),
+      'x-nombre': encodeURIComponent(nombre || archivo.name || 'Logo'), 'x-version': version,
+      ...(logoId ? { 'x-logo-id': String(logoId) } : {}), ...(quitarFondo ? { 'x-quitar-fondo': '1' } : {}),
+      ...(verComo() ? { 'x-ver-como': verComo() } : {}),
+    },
+    body: archivo,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  return j;
+}
 // Partir de una imagen ya creada: la sube al generador y devuelve su media_id.
 export const usarComoBase = (generacionId, indice) => api('/medios/importar', { method: 'POST', body: JSON.stringify({ generacionId, indice }) });
 
@@ -174,6 +198,7 @@ export const elegirPerfilZernio = (id) => api('/superadmin/zernio/perfil', { met
 export const captionPublicacion = (datos) => api('/publicaciones/caption', { method: 'POST', body: JSON.stringify(datos) });
 export const cambiarPermisoPublicar = (id, valor) => api(`/superadmin/usuarios/${id}/publicar`, { method: 'PUT', body: JSON.stringify({ valor }) });
 export const cambiarPermisoAprobar = (id, valor) => api(`/superadmin/usuarios/${id}/aprobar`, { method: 'PUT', body: JSON.stringify({ valor }) });
+export const cambiarPermisoLogos = (id, valor) => api(`/superadmin/usuarios/${id}/logos`, { method: 'PUT', body: JSON.stringify({ valor }) });
 // Saldo de Marketing: pedir recarga y (quien puede aprobar) resolver las solicitudes.
 export const pedirRecarga = (monto, motivo) => api('/creditos/solicitudes', { method: 'POST', body: JSON.stringify({ monto, motivo }) });
 export const aprobarRecarga = (id, nota) => api(`/creditos/solicitudes/${id}/aprobar`, { method: 'POST', body: JSON.stringify({ nota }) });

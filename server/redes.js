@@ -135,7 +135,8 @@ router.post('/publicaciones', requirePublicar, ruta(async (req, res) => {
   const ok = (g?.resultados || []).filter((r) => r.url);
   if (!g || g.estado !== 'completado' || !ok.length) return res.status(400).json({ error: 'Esa generación no tiene resultado para publicar.' });
   const indice = Math.max(0, Math.min(Number(b.indice) || 0, ok.length - 1));
-  const medio = { url: ok[indice].url, tipo: tipoMedio(ok[indice].url) };
+  // Con marca de agua se publica la copia con logo; si no hay, el original.
+  const medio = { url: ok[indice].url_logo || ok[indice].url, tipo: tipoMedio(ok[indice].url) };
 
   // Las cuentas se validan contra las conectadas de verdad (no se confia en el navegador).
   const conectadas = new Map((await cuentasPanel()).map((c) => [c.id, c]));

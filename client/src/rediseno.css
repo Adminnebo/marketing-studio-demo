@@ -327,3 +327,30 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .lb-generar-p { font-variant-numeric: tabular-nums; font-weight: 700; padding-left: 10px; border-left: 1px solid rgba(255, 255, 255, 0.35); }
 .lb-cuerpo-paso > .eg-envol { width: 100%; }
 .lb-cuerpo-paso > .eg-envol > .lb-textarea { width: 100%; }
+
+/* Logos y marca de agua */
+.lg-card { display: flex; flex-direction: column; gap: 14px; }
+.lg-lista { display: flex; flex-direction: column; gap: 10px; }
+.lg-item { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.lg-item.on { border-color: var(--series-1); }
+.lg-muestras { display: flex; gap: 8px; }
+.lg-muestra { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border); }
+.lg-muestra.osc { background: #1b1b1b; }
+.lg-muestra img { width: 74px; height: 40px; object-fit: contain; display: block; }
+.lg-muestra em { font-style: normal; font-size: 0.65rem; color: var(--text-muted); }
+.lg-muestra.osc em { color: #bbb; }
+.lg-item-t { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 3px; }
+.lg-nombre { max-width: 260px; }
+.lg-item-acc { display: flex; gap: 8px; flex-wrap: wrap; }
+.lg-subir { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lg-auto { align-items: flex-start; gap: 10px; font-size: 0.86rem; }
+.lg-ajustes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 18px; }
+.lg-ajustes input[type="range"] { width: 100%; }
+.lg-previas { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; }
+.lg-previa { margin: 0; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.lg-previa figcaption { font-size: 0.72rem; color: var(--text-secondary); }
+.lg-lienzo { position: relative; border-radius: 8px; border: 1px solid var(--border); overflow: hidden;
+  background: linear-gradient(140deg, #38424f 0%, #6d7b8d 45%, #b6c0cb 100%); }
+.lg-marca { display: block; }
+.ms-gen-logo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 2px; font-size: 0.78rem; }
+.ms-gen-logo .gn-sel { font-size: 0.74rem; padding: 4px 6px; }
