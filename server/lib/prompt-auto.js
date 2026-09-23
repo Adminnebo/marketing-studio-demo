@@ -425,11 +425,13 @@ Sin indicaciones del usuario, la foto es de catálogo y se centra en el producto
 - Cuando el pedido agrega personas u objetos, "Nothing else in frame." pasa a "Only the product, the people and the objects listed above are in frame." y esos elementos se cuentan en "Exact counts, locked".
 - No cambia el producto: ni las piezas, ni el color, ni el material, ni las marcas. Si pide agregar algo al lado —una caja, otra pieza de la línea—, agregalo como un elemento más, contado en "Exact counts, locked".
 - Si pide cambiar el producto mismo —otra cantidad, otro color, otra marca— o algo que contradice la foto, manda la foto: describí lo que se ve y agregá un aviso.
-- Si pide texto, precios o logos agregados en la foto, no los pongas y agregá un aviso: el anuncio los muestra aparte.
+- Si el pedido trae TEXTOS EXACTOS entre comillas (un titular, el nombre del producto, una llamada a la acción), esos sí van escritos en la imagen: es una pieza de diseño, no una foto de catálogo. Ponelos tal cual, sin traducirlos ni cambiarles una palabra, en la zona, el tamaño y el color que diga el pedido, con tipografía sans-serif moderna y bien legible. En el bloque TEXT del prompt van uno por línea, entre comillas, con su posición. Ahí el negativo de texto pasa a ser "No text other than the exact lines listed in TEXT." y se agregan "No misspelled, garbled or duplicated letters." y "No invented logos, QR codes, badges, watermarks, phone numbers or prices."
+- Si pide texto pero no dice cuál —"un titular", "espacio para el precio"—, no inventes palabras ni dejes el hueco vacío: componé la pieza sin ese bloque, con el producto y los adornos ocupando el cuadro, y agregá un aviso de que falta ese texto. Una pieza con áreas vacías reservadas sale como una hoja en blanco.
+- Nunca dibujes logos de otras marcas, códigos QR, sellos de garantía ni datos de contacto, aunque el pedido los mencione: saldrían inventados. El logo de JH lo estampa el panel después; solo dejá la esquina de abajo despejada de texto.
 
 # NEGATIVE CONSTRAINTS, siempre
 
-- "No added text, prices, captions, watermarks or app interface icons."
+- "No added text, prices, captions, watermarks or app interface icons." (solo si el pedido NO trae textos exactos; con textos, el de arriba)
 - "No invented, altered, translated or misspelled text, brand names, ratings or labels."
 - "No additional or fewer <pieza>." y "No missing or duplicated <pieza>." por cada cosa que se cuenta.
 - Los accesorios y objetos de relleno que el modelo tiende a inventar y no están en la foto (menos los que pidió el usuario: eso no es relleno).
@@ -475,7 +477,8 @@ function bloqueDePedido(pedido, esVideo) {
       ? '- No cambia la duración, el formato ni el total de segundos de este pedido. Si pide otra cosa, usá los de este pedido y agregá un aviso.'
       : '- No cambia el formato de este pedido. Si pide otro, usá el de este pedido y agregá un aviso.',
     '- Si contradice la foto —otra cantidad, otro color, otra marca, una pieza que no está—, manda la foto: describí el producto como se ve y agregá un aviso.',
-    '- Si pide texto, precios o logos agregados, no los pongas y agregá un aviso.',
+    '- Si trae textos exactos entre comillas, esos van escritos en la pieza, tal cual, en la zona que diga; si pide un texto sin decir cuál, no lo inventes ni dejes el hueco vacío: componé la pieza sin ese bloque y agregá un aviso.',
+    '- Nunca dibujes logos de otras marcas, códigos QR, sellos ni datos de contacto, aunque los mencione.',
     esVideo ? '- Si pide más momentos o más acción de la que entra en la duración, quedate con los momentos que muestran el producto y agregá un aviso.' : '',
     '- Siguen los candados que no se mueven: conteo exacto de las piezas, marcas impresas preservadas, el producto no se abre ni se desarma, física realista, nunca chispas, humo ni fuego, y nada de texto ni logos agregados.',
   ].filter(Boolean).join('\n');

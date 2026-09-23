@@ -396,11 +396,11 @@ export default function App() {
               </div>
             )}
             {modoCrear === 'propias' ? (
-              <Propias email={me.email} rol={me.rol} onUsar={(p) => {
+              <Propias email={me.email} rol={me.rol} onUsar={(p, pedido) => {
                 setLibre((x) => ({ n: x.n + 1, inicial: {
                   tipo: p.para === 'foto' ? 'imagen' : 'video', aspecto: p.aspecto,
                   duracion: p.para === 'foto' ? '' : String(p.duracion || 10),
-                  indicaciones: p.receta, propia: { id: p.id, nombre: p.nombre }, paso: 3,
+                  indicaciones: pedido || p.receta, propia: { id: p.id, nombre: p.nombre }, paso: 3,
                 } }));
                 setModoCrear('cero');
               }} />

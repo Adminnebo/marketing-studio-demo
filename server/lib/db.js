@@ -203,6 +203,10 @@ const MIGRACIONES = [
      eliminada BOOLEAN NOT NULL DEFAULT false,
      creado TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  // Zonas de texto del diseño: al usar la plantilla se le piden esos textos al usuario
+  // (sin esto la pieza salia con huecos vacios, como una hoja en blanco).
+  `ALTER TABLE plantillas_propias ADD COLUMN IF NOT EXISTS zonas TEXT`,
+  `ALTER TABLE plantillas_propias ADD COLUMN IF NOT EXISTS con_texto BOOLEAN NOT NULL DEFAULT false`,
   `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
   // Cola de debitos al wallet de Marketing de la plataforma central (lib/wallet.js).
   // referencia UNIQUE: ni un reintento nuestro ni un doble evento pueden cobrar dos veces.

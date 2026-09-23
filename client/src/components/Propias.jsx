@@ -6,6 +6,22 @@ import { usdFino } from '../precio';
 // Se sube el diseño, la IA saca la receta (cómo está armado, sin el producto del ejemplo),
 // se revisa y se guarda. Al usarla, abre "Desde cero" con la receta ya puesta.
 
+// Lo que se le manda al generador: la receta, las zonas de texto y los textos exactos.
+// Sin los textos el diseño salia con huecos vacios (como una hoja en blanco).
+export function pedidoDe(p, textos = {}) {
+  const partes = [p.receta];
+  if (p.con_texto && p.zonas) partes.push(`Zonas de texto del diseño: ${p.zonas}`);
+  const puestos = [['Titular', textos.titulo], ['Texto secundario', textos.subtitulo], ['Llamada a la acción', textos.llamada]]
+    .filter(([, v]) => String(v || '').trim());
+  if (puestos.length) {
+    partes.push(['Textos del diseño, escríbelos exactamente así, sin cambiar ni traducir nada:',
+      ...puestos.map(([l, v]) => `- ${l}: "${String(v).trim()}"`)].join('\n'));
+  } else if (p.con_texto) {
+    partes.push('Sin textos esta vez: componé la pieza con el producto y los adornos gráficos llenando el cuadro, sin dejar áreas vacías reservadas para texto.');
+  }
+  return partes.filter(Boolean).join('\n\n');
+}
+
 const FORMATOS = { '9:16': 'Vertical', '16:9': 'Horizontal', '1:1': 'Cuadrado', '4:5': 'Vertical 4:5', '3:4': 'Vertical 3:4', '4:3': 'Horizontal 4:3', '2:3': 'Vertical 2:3', '3:2': 'Horizontal 3:2', '21:9': 'Cine' };
 const MAX_RECETA = 1500;
 
@@ -102,6 +118,11 @@ function Nueva({ onListo, onCancelar }) {
               </label>
             )}
           </div>
+          {r.conTexto && (
+            <label className="filter-field"><span>Zonas de texto que detectó (al usar la plantilla se te piden esos textos)</span>
+              <textarea className="ms-textarea" rows={3} maxLength={MAX_RECETA} value={r.zonas || ''} onChange={(e) => setR({ ...r, zonas: e.target.value })} />
+            </label>
+          )}
           {r.avisos?.length > 0 && (
             <div className="lb-avisos"><strong>Revisa esto:</strong><ul>{r.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul></div>
           )}
@@ -123,6 +144,8 @@ function Tarjeta({ p, onUsar, onBorrada, puedeBorrar }) {
   const [abierta, setAbierta] = useState(false);
   const [editando, setEditando] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [textos, setTextos] = useState(null); // formulario de textos antes de usarla
+  const usar = (t = {}) => onUsar(p, pedidoDe(p, t));
   const guardar = async () => {
     try { await editarPropia(p.id, { nombre: editando.nombre, receta: editando.receta }); setEditando(null); onBorrada(); } catch (e) { setMsg(e.message); }
   };
@@ -151,10 +174,34 @@ function Tarjeta({ p, onUsar, onBorrada, puedeBorrar }) {
               <button className="mini-btn" onClick={() => setEditando(null)}>Cancelar</button>
             </div>
           </div>
-        ) : <div className="pp-card-receta">{p.receta}</div>)}
+        ) : (
+          <div className="pp-card-receta">
+            {p.receta}
+            {p.con_texto && p.zonas && <><br /><br /><strong>Textos:</strong> {p.zonas}</>}
+          </div>
+        ))}
         {msg && <div className="ms-gen-err">{msg}</div>}
+        {textos && (
+          <div className="pp-textos">
+            <div className="pp-lbl">Los textos de esta pieza</div>
+            <div className="pp-nota">Se escriben tal cual en el diseño. Lo que dejes vacío no se pone (no queda hueco).</div>
+            {[['titulo', 'Titular', 'Ej.: Tecnología para el futuro de tu piscina'],
+              ['subtitulo', 'Texto secundario', 'Ej.: Limpieza profunda verificable'],
+              ['llamada', 'Llamada a la acción', 'Ej.: Disponible en JH Electro Alambres']].map(([k, l, ph]) => (
+              <label key={k} className="filter-field"><span>{l}</span>
+                <input className="ms-input" maxLength={90} placeholder={ph} value={textos[k] || ''} onChange={(e) => setTextos({ ...textos, [k]: e.target.value })} />
+              </label>
+            ))}
+            <div className="pp-acc">
+              <button className="btn cal-b" onClick={() => usar(textos)}>✨ Usar con estos textos</button>
+              <button className="btn secondary cal-b" onClick={() => setTextos(null)}>Cancelar</button>
+            </div>
+          </div>
+        )}
         <div className="pp-card-acc">
-          <button className="btn cal-b" onClick={() => onUsar(p)}>✨ Usar</button>
+          <button className="btn cal-b" onClick={() => (p.con_texto && !textos ? setTextos({}) : usar(textos || {}))}>
+            {p.con_texto && !textos ? '✨ Usar (pide tus textos)' : '✨ Usar'}
+          </button>
           <button className="btn secondary cal-b" onClick={() => setAbierta(!abierta)}>{abierta ? 'Ocultar receta' : 'Ver receta'}</button>
           {abierta && !editando && <button className="btn secondary cal-b" onClick={() => setEditando({ nombre: p.nombre, receta: p.receta })}>✏️ Editar</button>}
           {puedeBorrar && <button className="btn secondary cal-b cal-b-danger" onClick={borrar}>🗑 Borrar</button>}

@@ -16,11 +16,19 @@ test('el pedido lleva la imagen, para qué es la plantilla y las reglas', () => 
   assert.equal(b.text.format.strict, true);
   // Las reglas prohíben copiar el producto y las marcas del ejemplo: es lo que hace reutilizable la receta.
   assert.match(propias.INSTRUCCIONES, /no lo nombres, no lo describas/);
-  assert.match(propias.INSTRUCCIONES, /Marcas, logos/);
+  assert.match(propias.INSTRUCCIONES, /Marcas ajenas, logos de otras empresas/);
   const f = propias.pedido({ imagenUrl: 'https://cdn/d.png', para: 'foto' });
   assert.match(f.input[0].content[1].text, /para hacer FOTOS/);
   assert.match(f.input[0].content[1].text, /duracion_s va en null/);
   assert.throws(() => propias.pedido({ imagenUrl: 'ftp://x', para: 'foto' }), /Falta la imagen/);
+});
+
+test('las reglas no permiten pedir huecos vacíos ni copiar marcas del ejemplo', () => {
+  // El fallo real: la receta pedía "reserve blank space only" y la pieza salía como una hoja en blanco.
+  assert.match(propias.INSTRUCCIONES, /NUNCA pidas dejar áreas vacías/);
+  assert.match(propias.INSTRUCCIONES, /las palabras las escribe el usuario/);
+  assert.match(propias.INSTRUCCIONES, /Códigos QR, sellos de garantía/);
+  assert.match(propias.INSTRUCCIONES, /El logo de JH tampoco se dibuja/);
 });
 
 test('valida lo que llega del navegador', () => {
