@@ -183,6 +183,9 @@ const MIGRACIONES = [
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS gasto_informado TIMESTAMPTZ`,
   // Reintento automatico tras un rechazo del filtro de contenido (lib/reintento.js): la creacion nueva.
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS reintento_id BIGINT`,
+  // Pagada con el wallet de Marketing de la plataforma central (lib/wallet.js). Las creaciones
+  // viejas no lo tienen, asi que nunca se les cobra de nuevo al cambiar de modelo de saldo.
+  `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS cobro_wallet BOOLEAN NOT NULL DEFAULT false`,
   // Plantillas propias: los disenos que JH ya publico, convertidos en receta reutilizable
   // (lib/plantillas-propias.js). Compartidas: las crea cualquiera y las usa todo el equipo.
   `CREATE TABLE IF NOT EXISTS plantillas_propias (
@@ -201,6 +204,27 @@ const MIGRACIONES = [
      creado TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
   `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
+  // Cola de debitos al wallet de Marketing de la plataforma central (lib/wallet.js).
+  // referencia UNIQUE: ni un reintento nuestro ni un doble evento pueden cobrar dos veces.
+  `CREATE TABLE IF NOT EXISTS wallet_debitos (
+     id BIGSERIAL PRIMARY KEY,
+     referencia TEXT NOT NULL UNIQUE,
+     usd NUMERIC NOT NULL CHECK (usd > 0),
+     descripcion TEXT NOT NULL,
+     generacion_id BIGINT REFERENCES generaciones(id),
+     movimiento_id BIGINT,
+     por TEXT,
+     estado TEXT NOT NULL DEFAULT 'pendiente',
+     intentos INT NOT NULL DEFAULT 0,
+     proximo TIMESTAMPTZ NOT NULL DEFAULT now(),
+     duplicada BOOLEAN NOT NULL DEFAULT false,
+     ultimo_error TEXT,
+     respuesta TEXT,
+     creado TIMESTAMPTZ NOT NULL DEFAULT now(),
+     hecho TIMESTAMPTZ
+   )`,
+  `CREATE INDEX IF NOT EXISTS wallet_debitos_estado_idx ON wallet_debitos (estado, proximo)`,
+  `CREATE INDEX IF NOT EXISTS wallet_debitos_gen_idx ON wallet_debitos (generacion_id)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,
 ];

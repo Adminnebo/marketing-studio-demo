@@ -788,6 +788,16 @@ button.badge:hover { background: var(--surface-2); color: var(--text-primary); }
 .pp-fila { display: flex; flex-wrap: wrap; gap: 12px; }
 .pp-edit { display: flex; flex-direction: column; gap: 8px; }
 .lb-propia { font-size: 0.8rem; background: var(--surface-2, rgba(127,127,127,0.08)); border-radius: 8px; padding: 8px 10px; }
+
+/* ── Wallet de Marketing (plataforma central) ── */
+.cr-wallet-nota { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: 14px; }
+.cr-wallet-nota p { margin: 0; font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+.cr-deb { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--border); }
+.cr-deb:first-of-type { border-top: 0; }
+.cr-deb-t { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 600; }
+.cr-deb-ref { font-family: ui-monospace, monospace; font-size: 0.76rem; font-weight: 400; background: var(--surface-2, rgba(127,127,127,0.08)); border-radius: 6px; padding: 2px 6px; }
+.cr-deb-f, .cr-deb-d { font-size: 0.78rem; color: var(--text-muted); font-weight: 400; }
+.cr-deb-acc { display: flex; gap: 8px; flex-wrap: wrap; }
 .cal-aviso { font-size: 0.76rem; color: var(--text-muted); background: var(--surface-2, rgba(127,127,127,0.08)); border-radius: 8px; padding: 6px 10px; }
 .cal-cuentas { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .cal-red { white-space: nowrap; }

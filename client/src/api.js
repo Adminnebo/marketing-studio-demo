@@ -211,6 +211,9 @@ export const correrConciliacion = () => api('/superadmin/conciliacion', { method
 // Calendario: creaciones listas y publicaciones (programadas o hechas) en un rango de fechas.
 export const fetchCalGeneraciones = (desde, hasta) => api(`/calendario/generaciones?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
 // Plantillas propias (diseños de JH convertidos en receta reutilizable).
+// Wallet de Marketing: acciones sobre un débito dudoso ('reintentar' | 'hecho').
+export const accionDebito = (id, accion) => api(`/creditos/wallet/${id}/${accion}`, { method: 'POST' });
+
 export const fetchPropias = () => api('/plantillas-propias');
 export const analizarPropia = (datos) => api('/plantillas-propias/analizar', { method: 'POST', body: JSON.stringify(datos) });
 export const crearPropia = (datos) => api('/plantillas-propias', { method: 'POST', body: JSON.stringify(datos) });

@@ -214,9 +214,11 @@ export default function App() {
   const enCurso = gens.items.filter((g) => EN_CURSO.has(g.estado)).length;
   // Saldo: el de la plataforma de pagos (USD) o, si no esta configurada, la billetera local (creditos).
   // Con saldo de Marketing: saldo propio del departamento (USD), recargado por solicitud desde el general.
-  const marketing = me.saldoFuente === 'marketing';
+  // Con wallet: el saldo de Marketing vive en la plataforma central (lo disponible ya resta lo que falta descontar).
+  const walletMkt = me.saldoFuente === 'wallet';
+  const marketing = me.saldoFuente === 'marketing' || walletMkt;
   const externo = me.saldoFuente === 'externo';
-  const saldoUsd = marketing ? me.saldoUsd : externo ? me.saldoDisponibleUsd : null;
+  const saldoUsd = walletMkt ? me.saldoDisponibleUsd : marketing ? me.saldoUsd : externo ? me.saldoDisponibleUsd : null;
   const sinSaldo = me.rolReal !== 'super_admin' && (marketing || externo
     ? saldoUsd != null && saldoUsd <= -(me.saldoNegativoPermitidoUsd || 0)
     : Number(me.saldo) <= 0);

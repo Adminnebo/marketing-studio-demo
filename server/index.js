@@ -19,6 +19,7 @@ const billetera = require('./lib/billetera');
 const modelos = require('./lib/modelos');
 const promptAuto = require('./lib/prompt-auto');
 const propias = require('./lib/plantillas-propias');
+const wallet = require('./lib/wallet');
 const hfOauth = require('./lib/hf-oauth');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
@@ -160,6 +161,21 @@ app.get('/api/me', ruta(async (req, res) => {
 
 // Saldo para el panel: el de la plataforma de pagos (USD) si esta configurada; si no, la billetera local (creditos).
 async function saldoDe({ fresco = false, user = null } = {}) {
+  // Wallet de Marketing en la plataforma central (lib/wallet.js): la unica fuente de gasto.
+  if (wallet.configurado()) {
+    if (fresco) wallet.olvidar();
+    const a = await ajustes.leer();
+    try {
+      const r = await wallet.resumen();
+      return {
+        saldoFuente: 'wallet', saldoUsd: r.saldoUsd, saldoPendienteUsd: r.pendienteUsd, saldoDisponibleUsd: r.disponibleUsd,
+        saldoNegativoPermitidoUsd: Number(a.saldo_negativo_permitido || 0), saldoNombre: r.nombre,
+      };
+    } catch (e) {
+      console.error('[wallet]', e.message);
+      return { saldoFuente: 'wallet', saldoUsd: null, saldoDisponibleUsd: null, errorSaldo: 'No se pudo leer el saldo de Marketing. Intenta de nuevo en un momento.' };
+    }
+  }
   // Saldo de Marketing: el equipo solo ve este; el general no sale de aca.
   if (saldoMarketing.activo()) {
     const a = await ajustes.leer();

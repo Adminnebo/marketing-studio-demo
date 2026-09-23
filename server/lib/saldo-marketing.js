@@ -20,6 +20,7 @@
  */
 const { pool } = require('./db');
 const ajustes = require('./config');
+const wallet = require('./wallet');
 const pagos = require('./pagos');
 const saldoExterno = require('./saldo-externo');
 const costosIa = require('./costos-ia');
@@ -78,6 +79,9 @@ class SaldoMarketingError extends Error {
 // Activo cuando hay saldo general de JH y se puede descontar de el (produccion).
 let _forzar = null; // pruebas
 const activo = () => (_forzar != null ? _forzar : saldoExterno.configurado() && pagos.configurado());
+// Las ayudas de IA se registran aqui tambien en modo wallet: de este registro sale el total de
+// IA de cada creacion y de aqui se encola su debito.
+const registra = () => activo() || wallet.configurado();
 function _probar({ activo: a = null, ajustar = null, resumen = null } = {}) { _forzar = a; _ajustar = ajustar; _resumen = resumen; }
 let _ajustar = null; let _resumen = null;
 const ajustar = (args) => (_ajustar ? _ajustar(args) : pagos.ajustar(args));
@@ -131,24 +135,39 @@ const CLASES_IA = { descripcion: 'Descripción automática', ficha: 'Lectura de 
  * `aJh`: super admin o sistema -> se registra igual pero va al saldo general de JH (enviarAJh).
  */
 async function cobrarIa({ por, clase, costoUsd = null, modelo = null, entrada = 0, salida = 0, generacionId = null, ref = null, detalle = null, aJh = false }) {
-  if (!activo()) return 0;
+  if (!registra()) return 0;
   const costo = costoUsd != null ? Number(costoUsd) : costosIa.costoUsd(modelo, entrada, salida);
   if (!(costo > 0)) return 0;
   const a = await ajustes.leer();
   const cobro = r4(costo * (1 + (Number(a.margen_pct) || 0) / 100));
   if (!(cobro > 0)) return 0;
+  const concepto = detalle ? `${CLASES_IA[clase] || clase} · ${detalle}` : CLASES_IA[clase] || clase;
   const r = await pool.query(
     `INSERT INTO saldo_marketing (tipo, usd, generacion_id, concepto, ref, por, datos, a_jh) VALUES ('ia', $1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT DO NOTHING`,
-    [-cobro, aJh ? null : generacionId, detalle ? `${CLASES_IA[clase] || clase} · ${detalle}` : CLASES_IA[clase] || clase, ref, por,
+     ON CONFLICT DO NOTHING RETURNING id`,
+    [-cobro, aJh ? null : generacionId, concepto, ref, por,
       JSON.stringify({ clase, costo_usd: costo, modelo, entrada, salida, ...(aJh && generacionId ? { generacion: generacionId } : {}) }), !!aJh]
   );
-  return r.rowCount ? cobro : 0;
+  if (!r.rowCount) return 0;
+  // Con el wallet de la plataforma central, cada ayuda de IA se debita alla con su referencia.
+  // Lo de super admins y del sistema (a_jh) solo si el ajuste informar_super_admin esta activo.
+  if (wallet.configurado() && (!aJh || Number(a.informar_super_admin) === 1)) {
+    await wallet.encolar({
+      referencia: `mkt-ia-${r.rows[0].id}`, usd: cobro, descripcion: concepto,
+      generacionId: aJh ? null : generacionId, movimientoId: r.rows[0].id, por,
+    }).catch((e) => console.error('[wallet] no se pudo encolar la IA:', e.message));
+  }
+  return cobro;
 }
 
 // Antes de una ayuda de IA: sin saldo de Marketing no se usa (los super admin no gastan del saldo).
 async function puedeGastarIa(user) {
-  if (!activo() || user?.rolReal === 'super_admin') return true;
+  if (user?.rolReal === 'super_admin') return true;
+  // Con el wallet de la plataforma central, el saldo que manda es el de alla, no este registro.
+  if (wallet.configurado()) {
+    try { const r = await wallet.resumen(); return r.disponibleUsd > 0; } catch { return true; } // si no se puede leer, no se bloquea
+  }
+  if (!activo()) return true;
   return (await saldo()) > 0;
 }
 const exento = (user) => user?.rolReal === 'super_admin';
@@ -316,6 +335,7 @@ async function fijarSaldo({ objetivoUsd, motivo, por }) {
  */
 async function enviarAJh() {
   if (!activo()) return null;
+  if (wallet.configurado()) return null; // en modo wallet ya se debito alla: no se cobra dos veces
   // Un lote que quedo 'enviando' (el proceso se corto a mitad) no se repite solo: pasa a revisar.
   await pool.query(`UPDATE lotes_jh SET estado = 'revisar', error = 'cortado a mitad del envío' WHERE estado = 'enviando' AND creado < now() - interval '5 minutes'`);
   const cli = await pool.connect();
@@ -356,6 +376,6 @@ async function enviarAJh() {
 }
 
 module.exports = {
-  migrar, activo, saldo, bloquear, cobrarGeneracion, reembolsar, cobrarIa, puedeGastarIa, exento, movimientos, gastoDelMes,
+  migrar, activo, registra, saldo, bloquear, cobrarGeneracion, reembolsar, cobrarIa, puedeGastarIa, exento, movimientos, gastoDelMes,
   solicitar, solicitudes, pendientes, aprobar, rechazar, resolverRevision, fijarSaldo, enviarAJh, SaldoMarketingError, CLASES_IA, _probar,
 };

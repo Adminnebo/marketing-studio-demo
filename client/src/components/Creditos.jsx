@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchCreditos, pedirRecarga, aprobarRecarga, rechazarRecarga, resolverRecarga, fijarSaldoMarketing } from '../api';
+import { fetchCreditos, pedirRecarga, aprobarRecarga, rechazarRecarga, resolverRecarga, fijarSaldoMarketing, accionDebito } from '../api';
 import { usd, usdFino, cred } from '../precio';
 
 const TIPOS = { recarga: 'Recarga', consumo: 'Generación', reembolso: 'Devolución', ajuste: 'Ajuste', ia: 'Ayuda de IA' };
@@ -317,6 +317,111 @@ function CreditosMarketing({ d, onActualizar, actualizando }) {
   );
 }
 
+// Un debito dudoso: se comprueba en la plataforma y se decide. Nunca se reintenta solo.
+function DebitoRevisar({ d, onHecho }) {
+  const [ocupado, setOcupado] = useState(null);
+  const [error, setError] = useState(null);
+  const hacer = async (accion) => {
+    setOcupado(accion); setError(null);
+    try { await accionDebito(d.id, accion); onHecho(); } catch (e) { setError(e.message); setOcupado(null); }
+  };
+  return (
+    <div className="cr-deb">
+      <div className="cr-deb-t">
+        <span className="num">{usd(d.usd)}</span>
+        <span className="cr-deb-ref" title="La referencia con la que se mandó: búscala en la plataforma">{d.referencia}</span>
+        <span className="cr-deb-f">{fecha(d.creado)}</span>
+      </div>
+      <div className="cr-deb-d">{d.descripcion}</div>
+      <div className="ms-gen-err">{d.ultimo_error}</div>
+      {error && <div className="ms-errors">{error}</div>}
+      <div className="cr-deb-acc">
+        <button className="mini-btn" disabled={!!ocupado} onClick={() => hacer('reintentar')}>
+          {ocupado === 'reintentar' ? 'Reintentando…' : 'No se debitó: reintentar'}
+        </button>
+        <button className="mini-btn" disabled={!!ocupado} onClick={() => hacer('hecho')}>
+          {ocupado === 'hecho' ? 'Guardando…' : 'Sí se debitó: marcar hecho'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CreditosWallet({ d, onActualizar, actualizando }) {
+  const disp = d.disponibleUsd;
+  const negativo = disp != null && disp <= 0;
+  return (
+    <>
+      <div className="grid kpis cr-kpis" style={{ marginTop: 16 }}>
+        <div className="card kpi">
+          <div className="kpi-accent" style={{ background: negativo ? 'var(--critical)' : 'var(--series-1)' }} />
+          <div className="kpi-label">Saldo de Marketing disponible</div>
+          <div className="kpi-value" style={negativo ? { color: 'var(--critical)' } : undefined}>{d.errorSaldo ? '—' : usd(disp)}</div>
+          <div className="kpi-foot">
+            {d.errorSaldo ? d.errorSaldo
+              : `${usd(d.saldoUsd)} en el wallet${d.pendienteUsd > 0 ? ` · ${usd(d.pendienteUsd)} por descontar` : ''}. Con esto se pagan las creaciones y las ayudas de IA.`}
+          </div>
+        </div>
+        <div className="card kpi">
+          <div className="kpi-accent" style={{ background: 'var(--series-3)' }} />
+          <div className="kpi-label">Gastado este mes</div>
+          <div className="kpi-value">{usd(d.gastoMes.gastoUsd)}</div>
+          <div className="kpi-foot">{d.gastoMes.iaUsd > 0 ? `Incluye ${usd(d.gastoMes.iaUsd)} de ayudas de IA (descripciones, fichas, Camila).` : 'Creaciones y ayudas de IA, sin contar lo devuelto.'}</div>
+        </div>
+      </div>
+
+      <div className="card cr-wallet-nota">
+        <strong>El saldo vive en la plataforma central de Nebo.</strong>
+        <p>Cada creación y cada ayuda de IA se debitan de ahí en el momento, con su propia referencia. Para recargar, pídelo en la plataforma central: el botón de solicitudes desde aquí queda pendiente de que nos entreguen ese endpoint.</p>
+        <button className="btn secondary" onClick={onActualizar} disabled={actualizando}>{actualizando ? 'Actualizando…' : '↻ Actualizar saldo'}</button>
+      </div>
+
+      {d.puedeAprobar && d.porRevisar?.length > 0 && (
+        <>
+          <div className="section-title">Débitos por revisar <span className="hd-n">{d.porRevisar.length}</span></div>
+          <div className="card">
+            <div className="ms-cost" style={{ marginBottom: 10 }}>
+              La plataforma no confirmó estos débitos. Búscalos por su referencia antes de decidir: si no aparece, reintenta; si aparece, márcalo hecho.
+            </div>
+            {d.porRevisar.map((x) => <DebitoRevisar key={x.id} d={x} onHecho={onActualizar} />)}
+          </div>
+        </>
+      )}
+
+      <div className="section-title">¿Qué puedo hacer con el saldo?</div>
+      <div className="cr-ejemplos">
+        {EJEMPLOS.map(([ic, l, cr]) => (
+          <div key={l} className="cr-ej">
+            <span className="cr-ej-ic">{ic}</span>
+            <span className="cr-ej-l">{l}</span>
+            <span className="cr-ej-v"><strong>≈ {d.precioCredito ? usd(cr * d.precioCredito) : '—'}</strong></span>
+          </div>
+        ))}
+      </div>
+      <div className="ms-cost" style={{ margin: '8px 2px 0' }}>Son referencias: antes de crear siempre ves el costo exacto. Si una creación falla, no se cobra.</div>
+
+      <div className="section-title">Movimientos</div>
+      <div className="card" style={{ padding: 0 }}>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th className="num">USD</th></tr></thead>
+            <tbody>
+              {d.movimientos.length ? d.movimientos.map((m) => (
+                <tr key={m.id}>
+                  <td>{fecha(m.creado)}</td>
+                  <td><span className={`pill mov-${m.tipo}`}>{TIPOS[m.tipo] || m.tipo}</span></td>
+                  <td className="trunc">{detalleMov(m)}</td>
+                  <td className="num" style={{ color: m.usd < 0 ? 'var(--critical)' : 'var(--good-ink)' }}>{m.usd > 0 ? '+' : '−'}{usdFino(Math.abs(m.usd))}</td>
+                </tr>
+              )) : <tr><td colSpan={4} className="trunc">Todavía no hay movimientos.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // Billetera de JH: saldo, precio por credito, paquetes para recargar (pago en linea en standby) y movimientos.
 export default function Creditos({ recarga, onRecargada }) {
   const [d, setD] = useState(null);
@@ -328,13 +433,14 @@ export default function Creditos({ recarga, onRecargada }) {
   useEffect(() => { cargar(); }, [recarga]); // eslint-disable-line react-hooks/exhaustive-deps
   // Con saldo externo: se refresca solo cada 30 s mientras la pestaña esta abierta (por si pagaron).
   useEffect(() => {
-    if (d?.fuente !== 'externo' && d?.fuente !== 'marketing') return undefined;
+    if (!['externo', 'marketing', 'wallet'].includes(d?.fuente)) return undefined;
     const id = setInterval(() => cargar(), 30000);
     return () => clearInterval(id);
   }, [d?.fuente]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <div className="ms-errors" style={{ marginTop: 16 }}>{error}</div>;
   if (!d) return <div className="loading"><div className="spinner" /></div>;
+  if (d.fuente === 'wallet') return <CreditosWallet d={d} onActualizar={actualizar} actualizando={actualizando} />;
   if (d.fuente === 'externo') return <CreditosExterno d={d} onActualizar={actualizar} actualizando={actualizando} />;
   if (d.fuente === 'marketing') return <CreditosMarketing d={d} onActualizar={actualizar} actualizando={actualizando} />;
 

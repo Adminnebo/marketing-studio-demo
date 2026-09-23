@@ -11,6 +11,7 @@ const ajustes = require('./config');
 const billetera = require('./billetera');
 const saldoExterno = require('./saldo-externo');
 const saldoMarketing = require('./saldo-marketing');
+const wallet = require('./wallet');
 
 // Creditos de la cuenta del generador (cache 30 s). null si no se pudo leer: no se bloquea por eso.
 let _saldoProv = { v: null, exp: 0 };
@@ -53,8 +54,21 @@ async function encolar(user, { presetId, presetNombre, presetTipo, portada, entr
   }
   // Con saldo de Marketing (lib/saldo-marketing.js) se cobra de ahi; si no, contra el saldo de la
   // plataforma de pagos o la billetera del panel.
-  const interno = cobra && saldoMarketing.activo();
-  const externo = cobra && !interno && saldoExterno.configurado();
+  const conWallet = wallet.configurado();
+  const interno = cobra && !conWallet && saldoMarketing.activo();
+  const externo = cobra && !conWallet && !interno && saldoExterno.configurado();
+  // El gasto de super admins se debita igual si el ajuste informar_super_admin esta activo.
+  const debitaWallet = conWallet && (cobra || Number(a.informar_super_admin) === 1);
+  if (conWallet && cobra && !(Number(pr.precio) > 0)) {
+    return { status: 400, error: { error: 'Todavía no hay precio configurado para cobrar esta creación. Avísale al administrador.' } };
+  }
+  let saldoWallet = null;
+  if (conWallet && cobra) {
+    try { saldoWallet = await wallet.leer(); } catch (e) {
+      console.error('[wallet] no se pudo leer el saldo:', e.message);
+      return { status: 503, error: { error: 'No se pudo verificar el saldo de Marketing. Intenta de nuevo en un momento; no se te cobró nada.' } };
+    }
+  }
   if (interno && !(Number(pr.precio) > 0)) return { status: 400, error: { error: 'Todavía no hay precio configurado para cobrar esta creación. Avísale al administrador.' } };
   let saldoLeido = null;
   if (externo) {
@@ -67,6 +81,16 @@ async function encolar(user, { presetId, presetNombre, presetTipo, portada, entr
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
+    if (saldoWallet) {
+      // Un solo cobro a la vez: dos creaciones simultaneas no gastan la misma plata.
+      await cli.query('SELECT pg_advisory_xact_lock(4711)');
+      const p = await wallet.pendiente(cli);
+      const disponible = r4(saldoWallet.saldoUsd - p.usd);
+      if (disponible - Number(pr.precio) < -Number(a.saldo_negativo_permitido || 0)) {
+        await cli.query('ROLLBACK');
+        return { status: 402, error: { sinSaldo: true, error: `No te alcanza el saldo de Marketing: tienes ${formatoUsd(disponible)} disponibles y esto cuesta ${formatoUsd(pr.precio)}. Pide una recarga en Créditos.` } };
+      }
+    }
     if (interno) {
       await saldoMarketing.bloquear(cli);
       const disponible = await saldoMarketing.saldo(cli);
@@ -87,12 +111,12 @@ async function encolar(user, { presetId, presetNombre, presetTipo, portada, entr
     }
     const { rows: [g] } = await cli.query(
       `INSERT INTO generaciones (creado_por, user_id, preset_id, preset_nombre, preset_tipo, portada, entrada, creditos_estimados,
-         usd_por_credito, margen_pct, costo_usd, precio_usd, cobro_externo, cobro_interno)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+         usd_por_credito, margen_pct, costo_usd, precio_usd, cobro_externo, cobro_interno, cobro_wallet)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
       [user.email, user.id, presetId, presetNombre, presetTipo, portada, entrada, creditos,
-        a.usd_por_credito || null, pr.margen, pr.costo, pr.precio, externo, interno]
+        a.usd_por_credito || null, pr.margen, pr.costo, pr.precio, externo, interno, debitaWallet]
     );
-    if (interno) await saldoMarketing.cobrarGeneracion(cli, { generacionId: g.id, usd: pr.precio, por: user.email, concepto: presetNombre });
+    if (interno || (conWallet && cobra)) await saldoMarketing.cobrarGeneracion(cli, { generacionId: g.id, usd: pr.precio, por: user.email, concepto: presetNombre });
     else if (cobra && !externo) await billetera.cobrar(cli, { generacionId: g.id, creditos: Number(creditos), usd: pr.precio, por: user.email });
     await cli.query('COMMIT');
     // Al navegador no le llegan el costo ni el margen (solo lo ve el super_admin en Consumo).

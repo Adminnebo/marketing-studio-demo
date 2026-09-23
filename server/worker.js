@@ -25,6 +25,7 @@ const costo = require('./lib/costo');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
 const reintento = require('./lib/reintento');
+const wallet = require('./lib/wallet');
 const ajustes = require('./lib/config');
 const promptAuto = require('./lib/prompt-auto');
 
@@ -170,8 +171,13 @@ async function revisarEnProceso() {
         await pool.query(`UPDATE generaciones SET estado = 'completado', resultados = $2, terminado = now(), revisado = now(), marca_estado = $3 WHERE id = $1`,
           [g.id, JSON.stringify(resultados), conLogo ? 'pendiente' : null]);
         log(`#${g.id} completada (${ok.length} resultado/s)${conLogo ? ' · le toca el logo' : ''}`);
-        // Lo cobrado se informa a la plataforma central con el detalle completo (va por la cola).
-        if (await pagos.informarConsumo(g.id).catch((e) => { log(`#${g.id} no se pudo encolar el descuento: ${e.message}`); return false; })) log(`#${g.id} descuento encolado para la plataforma de pagos`);
+        // Lo cobrado se debita del wallet de Marketing en la plataforma central (va por la cola).
+        // Sin wallet configurado sigue el camino viejo (descuento del saldo general de JH).
+        if (wallet.configurado()) {
+          if (await wallet.informarGasto(g.id).catch((e) => { log(`#${g.id} no se pudo encolar el débito: ${e.message}`); return false; })) log(`#${g.id} débito encolado para el wallet de Marketing`);
+        } else if (await pagos.informarConsumo(g.id).catch((e) => { log(`#${g.id} no se pudo encolar el descuento: ${e.message}`); return false; })) {
+          log(`#${g.id} descuento encolado para la plataforma de pagos`);
+        }
       } else {
         const filtro = reintento.motivoDe({ estados: st });
         const motivo = filtro ? AVISO_FILTRO : 'La generación falló. Intenta de nuevo o prueba otra plantilla.';
@@ -282,16 +288,30 @@ async function ciclo() {
   } catch (e) {
     log('No se pudieron clasificar plantillas:', e.message);
   }
-  // Plataforma de pagos: descontar del saldo de JH lo creado (POST /api/credits/adjust).
-  try {
-    const f = await pagos.encolarFaltantes();
-    if (f) log(`pagos: ${f} descuento/s encolado/s que faltaban`);
-    const cortados = await pagos.liberarEnviando();
-    if (cortados) log(`pagos: ${cortados} descuento/s cortado/s a mitad, quedan para revisar`);
-    const r = await pagos.procesarCola();
-    if (r.hechos) log(`pagos: ${r.hechos} descuento/s aplicado/s en la plataforma`);
-  } catch (e) {
-    log('Error con la plataforma de pagos:', e.message);
+  // Wallet de Marketing (plataforma central): debitar lo creado y las ayudas de IA.
+  if (wallet.configurado()) {
+    try {
+      const f = await wallet.encolarFaltantes();
+      if (f) log(`wallet: ${f} débito/s encolado/s que faltaban`);
+      const cortados = await wallet.liberarEnviando();
+      if (cortados) log(`wallet: ${cortados} débito/s cortado/s a mitad, quedan para revisar`);
+      const r = await wallet.procesarCola();
+      if (r.hechos) log(`wallet: ${r.hechos} débito/s aplicado/s${r.duplicados ? ` (${r.duplicados} ya estaban allá)` : ''}`);
+    } catch (e) {
+      log('Error con el wallet de Marketing:', e.message);
+    }
+  } else {
+    // Modelo viejo: descontar del saldo general de JH (POST /api/credits/adjust).
+    try {
+      const f = await pagos.encolarFaltantes();
+      if (f) log(`pagos: ${f} descuento/s encolado/s que faltaban`);
+      const cortados = await pagos.liberarEnviando();
+      if (cortados) log(`pagos: ${cortados} descuento/s cortado/s a mitad, quedan para revisar`);
+      const r = await pagos.procesarCola();
+      if (r.hechos) log(`pagos: ${r.hechos} descuento/s aplicado/s en la plataforma`);
+    } catch (e) {
+      log('Error con la plataforma de pagos:', e.message);
+    }
   }
   // Marca de agua de lo recien creado (unas pocas por vuelta para no trancar el worker).
   try {
@@ -341,6 +361,12 @@ async function main() {
   // Que se vea en los logs si el reintento por filtro de contenido puede funcionar (necesita la IA).
   const maxReintentos = Number((await ajustes.leer().catch(() => ({}))).reintento_moderacion || 0);
   log(`reintento por filtro de contenido: ${!promptAuto.configurado() ? 'APAGADO (falta OPENAI_API_KEY)' : maxReintentos > 0 ? `activo (hasta ${maxReintentos})` : 'apagado en ajustes'}`);
+  if (wallet.configurado()) {
+    const s = await wallet.leer().then((x) => `$${x.saldoUsd}`).catch((e) => `no se pudo leer (${e.message})`);
+    log(`fuente de gasto: wallet de Marketing en la plataforma central · saldo ${s}`);
+  } else {
+    log('fuente de gasto: modelo viejo (saldo general de JH por /api/credits/adjust)');
+  }
   while (!parar) {
     await ciclo();
     await new Promise((r) => setTimeout(r, POLL_MS));
