@@ -348,7 +348,7 @@ app.get('/api/calendario/generaciones', ruta(async (req, res) => {
   if (Number.isNaN(+desde) || Number.isNaN(+hasta) || hasta <= desde || hasta - desde > 45 * 864e5) return res.status(400).json({ error: 'Rango de fechas inválido.' });
   const { rows } = await pool.query(
     `SELECT ${COLS}, COALESCE(terminado, creado) AS fecha FROM generaciones
-     WHERE estado = 'completado' AND COALESCE(terminado, creado) >= $1 AND COALESCE(terminado, creado) < $2
+     WHERE estado = 'completado' AND eliminada IS NULL AND COALESCE(terminado, creado) >= $1 AND COALESCE(terminado, creado) < $2
      ORDER BY fecha LIMIT 500`, [desde, hasta]
   );
   res.json({ items: rows });

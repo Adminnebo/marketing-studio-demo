@@ -354,3 +354,12 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .lg-marca { display: block; }
 .ms-gen-logo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 2px; font-size: 0.78rem; }
 .ms-gen-logo .gn-sel { font-size: 0.74rem; padding: 4px 6px; }
+
+/* Calendario, vista de semana en modo "solo título" */
+.cal-col-items.solo-t { gap: 3px; }
+.cal-col-fila { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; font: inherit; font-size: 0.74rem; cursor: pointer;
+  padding: 5px 7px; border-radius: 8px; border: 1px solid transparent; background: var(--surface-2); color: var(--text-primary); }
+.cal-col-fila:hover { border-color: var(--border); }
+.cal-col-fila .cal-col-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-col-fila .cal-dot { flex: none; }
+.cal-col-h { font-size: 0.68rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }

@@ -6,6 +6,8 @@ import { TIPOS } from '@shared/reglas.mjs';
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MODOS = [['ambos', 'Todo'], ['publicadas', 'Publicadas'], ['agendadas', 'Agendadas'], ['generadas', 'Creadas']];
 const VISTAS = [['dia', 'Día'], ['semana', 'Semana'], ['mes', 'Mes']];
+// En la semana: con la foto de cada cosa, o solo el título (lista compacta).
+const DETALLES = [['previa', '🖼️ Con previa'], ['titulo', '📝 Solo título']];
 const ES_VIDEO = /\.(mp4|mov|webm)($|\?)/i;
 
 // ── Fechas (en la hora local del navegador) ──
@@ -206,12 +208,13 @@ function ListaDia({ dia, items, puedePublicar, onPublicar, onCambio }) {
 export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPublicar, version = 0 }) {
   const [modo, setModo] = useState(() => { try { return localStorage.getItem('cal_modo') || 'ambos'; } catch { return 'ambos'; } });
   const [vista, setVista] = useState(() => { try { return localStorage.getItem('cal_vista') || 'mes'; } catch { return 'mes'; } });
+  const [detalle, setDetalle] = useState(() => { try { return localStorage.getItem('cal_detalle') || 'previa'; } catch { return 'previa'; } });
   const [ancla, setAncla] = useState(() => new Date());
   const [dia, setDia] = useState(null);
   const [datos, setDatos] = useState({ gens: [], pubs: [], cargando: true, error: null, aviso: null });
   const [recarga, setRecarga] = useState(0);
   const modoEf = puedeVerPublicaciones ? modo : 'generadas';
-  useEffect(() => { try { localStorage.setItem('cal_modo', modo); localStorage.setItem('cal_vista', vista); } catch { /* sin storage */ } }, [modo, vista]);
+  useEffect(() => { try { localStorage.setItem('cal_modo', modo); localStorage.setItem('cal_vista', vista); localStorage.setItem('cal_detalle', detalle); } catch { /* sin storage */ } }, [modo, vista, detalle]);
 
   const [desde, hasta] = useMemo(() => rango(vista, ancla), [vista, ancla]);
   useEffect(() => {
@@ -270,6 +273,9 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
             <div className="seg seg-sm">{MODOS.map(([k, l]) => <button key={k} className={modo === k ? 'on' : ''} onClick={() => setModo(k)}>{l}</button>)}</div>
           )}
           <div className="seg seg-sm">{VISTAS.map(([k, l]) => <button key={k} className={vista === k ? 'on' : ''} onClick={() => setVista(k)}>{l}</button>)}</div>
+          {vista === 'semana' && (
+            <div className="seg seg-sm">{DETALLES.map(([k, l]) => <button key={k} className={detalle === k ? 'on' : ''} onClick={() => setDetalle(k)}>{l}</button>)}</div>
+          )}
         </div>
       </div>
       <div className="cal-leyenda">
@@ -319,16 +325,25 @@ export default function Calendario({ puedeVerPublicaciones, puedePublicar, onPub
                   <span>{DIAS[i]}</span><b>{d.getDate()}</b>
                   {(r.g || r.pub || r.ag) ? <span className="cal-col-res">{r.pub ? `📣${r.pub}` : ''} {r.ag ? `🕒${r.ag}` : ''} {r.g ? `🎨${r.g}` : ''}</span> : null}
                 </button>
-                <div className="cal-col-items">
-                  {arr.map((it) => (
-                    <button key={it.id} className="cal-col-item" onClick={() => setDia(d)} title={it.titulo}>
-                      <Vista it={it} size="md" />
-                      <span className="cal-col-t">{it.titulo}</span>
-                      <span className="cal-col-sub">{it.tipo === 'pub'
-                        ? `${it.hecha ? 'Publicada' : 'Agendada'} ${hora(it.fecha)} · ${(it.cuentas || []).map((c) => (c.usuario ? `@${c.usuario}` : REDES[c.plataforma]?.nombre || c.plataforma)).join(', ')}`
-                        : TIPOS[it.g.preset_tipo] || 'Creada'}</span>
-                    </button>
-                  ))}
+                <div className={`cal-col-items ${detalle === 'titulo' ? 'solo-t' : ''}`}>
+                  {arr.map((it) => {
+                    const sub = it.tipo === 'pub'
+                      ? `${it.hecha ? 'Publicada' : 'Agendada'} ${hora(it.fecha)} · ${(it.cuentas || []).map((c) => (c.usuario ? `@${c.usuario}` : REDES[c.plataforma]?.nombre || c.plataforma)).join(', ')}`
+                      : TIPOS[it.g.preset_tipo] || 'Creada';
+                    return detalle === 'titulo' ? (
+                      <button key={it.id} className="cal-col-fila" onClick={() => setDia(d)} title={`${sub}: ${it.titulo}`}>
+                        <i className={`cal-dot ${it.tipo === 'gen' ? 'gen' : `est-${it.estado}`}`} />
+                        <span className="cal-col-t">{it.titulo}</span>
+                        {it.tipo === 'pub' && <span className="cal-col-h">{hora(it.fecha)}</span>}
+                      </button>
+                    ) : (
+                      <button key={it.id} className="cal-col-item" onClick={() => setDia(d)} title={it.titulo}>
+                        <Vista it={it} size="md" />
+                        <span className="cal-col-t">{it.titulo}</span>
+                        <span className="cal-col-sub">{sub}</span>
+                      </button>
+                    );
+                  })}
                   {!arr.length && <span className="cal-vacio">Sin nada</span>}
                 </div>
               </div>

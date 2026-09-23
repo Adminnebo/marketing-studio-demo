@@ -21,7 +21,7 @@ import { REDES, PUB_EN_CURSO } from '@shared/redes.mjs';
 const TABS = [
   { id: 'plantillas', label: 'Crear', icon: '🎨' },
   { id: 'generaciones', label: 'Mis creaciones', icon: '🗂️' },
-  { id: 'calendario', label: 'Calendario', icon: '📅', min: 'super_admin' }, // en pruebas: oculto para el resto
+  { id: 'calendario', label: 'Calendario', icon: '📅' },
   { id: 'creditos', label: 'Créditos', icon: '💳' },
   { id: 'logos', label: 'Logos', icon: '🏷️' },
   { id: 'redes', label: 'Redes', icon: '📣', min: 'admin' },
@@ -416,7 +416,7 @@ export default function App() {
         )
       )}
 
-      {tab === 'calendario' && me.rol === 'super_admin' && (
+      {tab === 'calendario' && (
         <Calendario puedeVerPublicaciones={NIVEL[me.rol] >= NIVEL.admin || !!me.puedePublicar} puedePublicar={!!me.puedePublicar}
           onPublicar={me.puedePublicar ? (g, indice) => { if (cuentas == null) cargarRedes(); setPublicando({ g, indice }); } : null} version={versionCal} />
       )}
