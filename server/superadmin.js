@@ -19,6 +19,7 @@ const clasificar = require('./lib/clasificar');
 const promptAuto = require('./lib/prompt-auto');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
+const resumenGasto = require('./lib/resumen-gasto');
 const saldoExterno = require('./lib/saldo-externo');
 const saldoMarketing = require('./lib/saldo-marketing');
 const conciliacion = require('./lib/conciliacion');
@@ -120,6 +121,18 @@ router.post('/superadmin/pagos/probar', ruta(async (req, res) => {
 
 // Historial sin informar: se revisa el total y se manda a mano (descuenta del saldo de JH).
 router.get('/superadmin/pagos/historial', ruta(async (req, res) => res.json(await pagos.historialSinInformar())));
+
+// Resumen de gasto de un periodo, para cobrarlo a mano en la cuenta principal (lib/resumen-gasto.js).
+// Solo lee: dice cuanto se gasto, cuanto ya se cobro y cuanto falta.
+router.get('/superadmin/resumen-gasto', ruta(async (req, res) => {
+  try {
+    const r = await resumenGasto.resumen({ desde: req.query.desde, hasta: req.query.hasta });
+    res.json({ ...r, texto: resumenGasto.texto(r) });
+  } catch (e) {
+    if (e.status === 400) return res.status(400).json({ error: e.message });
+    throw e;
+  }
+}));
 router.post('/superadmin/pagos/historial', ruta(async (req, res) => {
   if (!pagos.configurado()) throw errPublico('El descuento de saldo no está configurado.');
   const r = await pagos.enviarHistorial(req.body?.total);

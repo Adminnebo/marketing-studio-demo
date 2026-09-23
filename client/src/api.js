@@ -213,6 +213,9 @@ export const correrConciliacion = () => api('/superadmin/conciliacion', { method
 // Calendario: creaciones listas y publicaciones (programadas o hechas) en un rango de fechas.
 export const fetchCalGeneraciones = (desde, hasta) => api(`/calendario/generaciones?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
 // Plantillas propias (diseños de JH convertidos en receta reutilizable).
+// Resumen de gasto de un periodo (super admin), para cobrarlo a mano.
+export const fetchResumenGasto = (desde, hasta) => api(`/superadmin/resumen-gasto?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+
 // Wallet de Marketing: acciones sobre un débito dudoso ('reintentar' | 'hecho').
 export const accionDebito = (id, accion) => api(`/creditos/wallet/${id}/${accion}`, { method: 'POST' });
 

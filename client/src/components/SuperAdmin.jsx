@@ -1,6 +1,6 @@
 import RedesSetup from './RedesSetup';
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar, cambiarPermisoAprobar, cambiarPermisoLogos, fetchConciliacion, correrConciliacion } from '../api';
+import { fetchAjustes, guardarAjustes, fetchUsuarios, cambiarAcceso, fetchConsumo, actualizarCosto, recargaManual, reconectarGenerador, verificarCli, cargarSesionCli, fetchPagosAdmin, probarPagos, reintentarConsumo, marcarDescontado, fetchHistorialPagos, enviarHistorialPagos, clasificarPlantillas, registrarWebhookRedes, cambiarPermisoPublicar, cambiarPermisoAprobar, cambiarPermisoLogos, fetchConciliacion, correrConciliacion, fetchResumenGasto } from '../api';
 import { TIPOS } from '@shared/reglas.mjs';
 import { usd, usdFino, cred } from '../precio';
 
@@ -535,6 +535,63 @@ function Conciliacion() {
   );
 }
 
+// Resumen de gasto de un periodo, para cobrarlo a mano en la cuenta principal.
+// Solo lee: dice cuanto se gasto, cuanto ya se cobro y cuanto falta.
+function ResumenGasto() {
+  const hoy = new Date();
+  const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60e3).toISOString().slice(0, 10);
+  // Por defecto, el periodo del modelo de costos por Marketing (desde el 22 de septiembre).
+  const [desde, setDesde] = useState('2026-09-22');
+  const [hasta, setHasta] = useState(local(hoy));
+  const [d, setD] = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState(null);
+  const [copiado, setCopiado] = useState(false);
+
+  const ver = async () => {
+    setCargando(true); setError(null);
+    try {
+      setD(await fetchResumenGasto(new Date(`${desde}T00:00:00`).toISOString(), new Date(`${hasta}T23:59:59`).toISOString()));
+    } catch (e) { setError(e.message); } finally { setCargando(false); }
+  };
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(d.texto); setCopiado(true); setTimeout(() => setCopiado(false), 2000); } catch { /* sin portapapeles */ }
+  };
+
+  return (
+    <div className="card">
+      <h3>Resumen de gasto para cobrar a mano</h3>
+      <div className="card-sub">Lo que gastó Marketing en un periodo, cuánto ya se cobró a la cuenta principal y cuánto falta. No mueve nada: solo lee.</div>
+      <div className="sa-form">
+        <label className="filter-field"><span>Desde</span><input className="search" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} /></label>
+        <label className="filter-field"><span>Hasta</span><input className="search" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} /></label>
+        <button className="btn" onClick={ver} disabled={cargando}>{cargando ? 'Sumando…' : 'Ver resumen'}</button>
+      </div>
+      {error && <div className="ms-errors">{error}</div>}
+      {d && (
+        <>
+          <div className="grid kpis cr-kpis" style={{ marginTop: 14 }}>
+            <div className="card kpi">
+              <div className="kpi-accent" style={{ background: 'var(--critical)' }} />
+              <div className="kpi-label">Por cobrar a mano</div>
+              <div className="kpi-value">{usd(d.cargo.porCobrarRedondeado)}</div>
+              <div className="kpi-foot">Lo que Marketing usó y todavía no salió de la cuenta principal.</div>
+            </div>
+            <div className="card kpi">
+              <div className="kpi-accent" style={{ background: 'var(--series-3)' }} />
+              <div className="kpi-label">Gasto del equipo en el periodo</div>
+              <div className="kpi-value">{usd(d.equipo.total)}</div>
+              <div className="kpi-foot">{d.equipo.nCreaciones} creación(es) y {d.equipo.nIa} ayuda(s) de IA{d.equipo.devuelto > 0 ? `, menos ${usd(d.equipo.devuelto)} devueltos` : ''}.</div>
+            </div>
+          </div>
+          <pre className="sa-resumen">{d.texto}</pre>
+          <button className="mini-btn" onClick={copiar}>{copiado ? '✓ Copiado' : '📋 Copiar el resumen'}</button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function SuperAdmin({ yo, onAjustes }) {
   const [sec, setSec] = useState('ajustes');
   return (
@@ -545,7 +602,7 @@ export default function SuperAdmin({ yo, onAjustes }) {
         </div>
       </div>
       {sec === 'ajustes' && <Ajustes onGuardado={onAjustes} />}
-      {sec === 'consumo' && <><Conciliacion /><Consumo /></>}
+      {sec === 'consumo' && <><ResumenGasto /><Conciliacion /><Consumo /></>}
       {sec === 'usuarios' && <Usuarios yo={yo} />}
     </>
   );
