@@ -89,6 +89,7 @@ export const fetchGeneraciones = (antes, filtros = {}) => {
 export const fetchAutores = () => api('/generaciones-autores');
 export const borrarGeneracion = (id) => api(`/generaciones/${id}`, { method: 'DELETE' });
 // Marca de agua: rehacerla con otra esquina u otro logo, o quitarla.
+// datos: { cx, cy, tam, opacidad } para moverlo, { quitar: true } para sacarlo, {} para rehacerlo.
 export const cambiarMarca = (id, datos) => api(`/generaciones/${id}/marca`, { method: 'POST', body: JSON.stringify(datos) });
 
 // ── Logos (marca de agua) ──

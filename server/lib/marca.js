@@ -5,6 +5,8 @@
  *  - El tamano y el margen van en % del ancho, para que quede igual en 9:16, 1:1 o 16:9.
  *  - La esquina depende del formato: en vertical las redes tapan abajo (botones de TikTok y el
  *    texto del post), asi que va arriba; en cuadrado y horizontal va abajo a la derecha.
+ *  - En una pieza suelta se puede poner donde sea: `cx` y `cy` son el CENTRO del logo en % del
+ *    ancho y del alto (lo que se arrastra en el panel). Si vienen, mandan sobre la esquina.
  *  - Si hay version clara y oscura del logo, se mide el brillo de esa esquina (varios cuadros en
  *    video) y se usa la que contrasta. Ademas el logo lleva una sombra suave para despegarlo del fondo.
  */
@@ -48,6 +50,20 @@ async function medir(archivo) {
 /** Esquina donde va el logo, segun el formato (vertical = las redes tapan abajo). */
 const posicionPara = ({ ancho, alto }, a = {}) => (alto > ancho ? (a.posVertical || DEFECTOS.posVertical) : (a.posResto || DEFECTOS.posResto));
 
+/** El centro del logo (en % del lienzo) para una esquina dada: lo usa el panel al arrastrar. */
+function centroDe(posicion, { tamPct = DEFECTOS.tamPct, margenPct = DEFECTOS.margenPct, relacion = 1 } = {}) {
+  // `relacion` = ancho/alto del lienzo: el margen se mide en % del ancho, tambien hacia arriba y abajo.
+  const mediaW = tamPct / 2;
+  const mediaH = (tamPct * 0.4 * relacion) / 2; // el alto del logo se estima; el panel lo afina con el real
+  const margenV = margenPct * relacion;
+  if (posicion === 'centro') return { cx: 50, cy: 50 };
+  const [v, h] = String(posicion).split('-');
+  return {
+    cx: h === 'izq' ? margenPct + mediaW : 100 - margenPct - mediaW,
+    cy: v === 'arriba' ? margenV + mediaH : 100 - margenV - mediaH,
+  };
+}
+
 /** Coordenadas (px) de la caja del logo dentro del lienzo. */
 function caja({ ancho, alto }, posicion, anchoLogo, altoLogo, margen) {
   const x = { izq: margen, der: Math.max(0, ancho - anchoLogo - margen), centro: Math.round((ancho - anchoLogo) / 2) };
@@ -86,13 +102,19 @@ async function ponerMarca(entrada, logos, opciones = {}) {
   const anchoLogo = Math.max(24, Math.round(info.ancho * (Number(a.tamPct) || DEFECTOS.tamPct) / 100));
   const margen = Math.round(info.ancho * (Number(a.margenPct) || DEFECTOS.margenPct) / 100);
 
-  // Version del logo: la que contrasta con esa esquina (si subieron las dos).
-  let version = logos.claro && logos.oscuro ? 'claro' : (logos.claro ? 'claro' : 'oscuro');
+  // Donde va el logo: arrastrado (centro en % del lienzo) o en su esquina.
+  const libre = Number.isFinite(Number(a.cx)) && Number.isFinite(Number(a.cy));
+  const altoLogo = Math.round(anchoLogo * 0.45); // estimado, solo para medir el fondo
+  const zona = libre
+    ? { x: Math.max(0, Math.min(info.ancho - anchoLogo, Math.round(info.ancho * Number(a.cx) / 100 - anchoLogo / 2))),
+      y: Math.max(0, Math.min(info.alto - altoLogo, Math.round(info.alto * Number(a.cy) / 100 - altoLogo / 2))) }
+    : caja(info, posicion, anchoLogo, altoLogo, margen);
+
+  // Version del logo: la que contrasta con el fondo de ESE lugar (si subieron las dos).
+  let version = logos.claro ? 'claro' : 'oscuro';
   let brillo = null;
   if (logos.claro && logos.oscuro) {
-    const alto = Math.round(anchoLogo * 0.45);
-    const c = caja(info, posicion, anchoLogo, alto, margen);
-    brillo = await brilloDe(entrada, { x: c.x, y: c.y, w: anchoLogo, h: alto }, { esVideo, duracion: info.duracion });
+    brillo = await brilloDe(entrada, { x: zona.x, y: zona.y, w: anchoLogo, h: altoLogo }, { esVideo, duracion: info.duracion });
     if (brillo != null) version = brillo > 140 ? 'oscuro' : 'claro'; // fondo claro -> logo oscuro
   }
   const logo = logos[version] || logos.claro || logos.oscuro;
@@ -100,8 +122,11 @@ async function ponerMarca(entrada, logos, opciones = {}) {
   const op = Math.min(1, Math.max(0.05, (Number(a.opacidad) ?? DEFECTOS.opacidad) / 100));
   const desenfoque = Math.max(2, Math.round(anchoLogo * 0.02));
   const desplaz = Math.max(1, Math.round(anchoLogo * 0.012));
-  const pos = { 'arriba-izq': [`${margen}`, `${margen}`], 'arriba-der': [`W-w-${margen}`, `${margen}`],
-    'abajo-izq': [`${margen}`, `H-h-${margen}`], 'abajo-der': [`W-w-${margen}`, `H-h-${margen}`], centro: ['(W-w)/2', '(H-h)/2'] }[posicion];
+  // Con cx/cy el logo va donde lo dejaron (centro en % del lienzo), sin salirse del borde.
+  const pos = libre
+    ? [`max(0\\,min(W-w\\,${Math.round(info.ancho * Number(a.cx) / 100)}-w/2))`, `max(0\\,min(H-h\\,${Math.round(info.alto * Number(a.cy) / 100)}-h/2))`]
+    : { 'arriba-izq': [`${margen}`, `${margen}`], 'arriba-der': [`W-w-${margen}`, `${margen}`],
+      'abajo-izq': [`${margen}`, `H-h-${margen}`], 'abajo-der': [`W-w-${margen}`, `H-h-${margen}`], centro: ['(W-w)/2', '(H-h)/2'] }[posicion];
 
   const filtro = [
     `[1:v]scale=${anchoLogo}:-1,format=rgba,colorchannelmixer=aa=${op.toFixed(3)}[lg]`,
@@ -117,7 +142,9 @@ async function ponerMarca(entrada, logos, opciones = {}) {
   if (esVideo) args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-movflags', '+faststart', '-map', '0:a?', '-c:a', 'copy');
   args.push('-frames:v', esVideo ? '99999' : '1', salida);
   await correr(FFMPEG, args);
-  return { salida, posicion, version, brillo, esVideo, ancho: info.ancho, alto: info.alto };
+  return { salida, posicion: libre ? null : posicion, cx: libre ? Number(a.cx) : null, cy: libre ? Number(a.cy) : null,
+    tamPct: Math.round((anchoLogo / info.ancho) * 1000) / 10, opacidad: Math.round(op * 100),
+    version, brillo, esVideo, ancho: info.ancho, alto: info.alto };
 }
 
 /**
@@ -164,4 +191,4 @@ async function quitarFondo(bytes, ext = 'png') {
 async function carpetaTemp() { return fs.mkdtemp(path.join(os.tmpdir(), 'marca-')); }
 const borrarCarpeta = (dir) => fs.rm(dir, { recursive: true, force: true }).catch(() => {});
 
-module.exports = { ponerMarca, quitarFondo, luminanciaDe, medir, brilloDe, posicionPara, caja, disponible, carpetaTemp, borrarCarpeta, POSICIONES, DEFECTOS, ErrorDeMarca };
+module.exports = { ponerMarca, quitarFondo, luminanciaDe, centroDe, medir, brilloDe, posicionPara, caja, disponible, carpetaTemp, borrarCarpeta, POSICIONES, DEFECTOS, ErrorDeMarca };

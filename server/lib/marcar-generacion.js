@@ -41,7 +41,7 @@ async function subir(archivo, { video }) {
  * Marca una generación. Devuelve { estado, hechas } y deja la fila al día.
  * `opciones` permite rehacerla con otra esquina o con otro logo (desde el panel).
  */
-async function marcarGeneracion(id, { logoId = null, posicion = null, rehacer = false } = {}) {
+async function marcarGeneracion(id, { logoId = null, posicion = null, cx = null, cy = null, tamPct = null, opacidad = null, rehacer = false } = {}) {
   const { rows: [g] } = await pool.query('SELECT id, estado, resultados, marca FROM generaciones WHERE id = $1', [id]);
   if (!g || g.estado !== 'completado') return { estado: 'sin_logo', motivo: 'no está terminada' };
   const resultados = (g.resultados || []).map((r) => ({ ...r }));
@@ -65,14 +65,15 @@ async function marcarGeneracion(id, { logoId = null, posicion = null, rehacer = 
       const video = esVideoUrl(r.url);
       const entrada = await bajar(r.url, dir, `orig-${hechas}.${video ? 'mp4' : 'png'}`);
       const hecho = await marca.ponerMarca(entrada, archivos, {
-        tamPct: a.logo_tam, margenPct: a.logo_margen, opacidad: a.logo_opacidad,
-        posVertical: a.logo_pos_vertical, posResto: a.logo_pos_resto, posicion,
+        tamPct: tamPct ?? a.logo_tam, margenPct: a.logo_margen, opacidad: opacidad ?? a.logo_opacidad,
+        posVertical: a.logo_pos_vertical, posResto: a.logo_pos_resto, posicion, cx, cy,
       });
       const sub = await subir(hecho.salida, { video: hecho.esVideo });
       if (!sub.url) throw new Error('la subida no devolvió URL');
       r.url_logo = sub.url;
       r.media_logo = sub.media_id;
-      detalle = { logo_id: logo.id, logo: logo.nombre, posicion: hecho.posicion, version: hecho.version, tam: a.logo_tam, opacidad: a.logo_opacidad };
+      detalle = { logo_id: logo.id, logo: logo.nombre, posicion: hecho.posicion, cx: hecho.cx, cy: hecho.cy,
+        version: hecho.version, tam: hecho.tamPct, opacidad: hecho.opacidad, ancho: hecho.ancho, alto: hecho.alto };
       hechas++;
     }
     await guardarEstado(id, hechas ? 'hecha' : 'sin_logo', detalle, resultados);

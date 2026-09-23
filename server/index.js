@@ -376,8 +376,12 @@ app.post('/api/generaciones/:id/marca', ruta(async (req, res) => {
     const { rows: [x] } = await pool.query(`SELECT ${COLS} FROM generaciones WHERE id = $1`, [g.id]);
     return res.json(x);
   }
+  const num = (v, min, max) => (Number.isFinite(Number(v)) ? Math.max(min, Math.min(max, Number(v))) : null);
   try {
-    await marcarGen.marcarGeneracion(g.id, { logoId: Number(b.logoId) || null, posicion: b.posicion || null, rehacer: true });
+    await marcarGen.marcarGeneracion(g.id, {
+      logoId: Number(b.logoId) || null, posicion: b.posicion || null, rehacer: true,
+      cx: num(b.cx, 0, 100), cy: num(b.cy, 0, 100), tamPct: num(b.tam, 3, 60), opacidad: num(b.opacidad, 5, 100),
+    });
   } catch (e) {
     console.error('[marca]', e.message, e.detalle || '');
     return res.status(502).json({ error: 'No se pudo poner el logo. Intenta de nuevo.' });

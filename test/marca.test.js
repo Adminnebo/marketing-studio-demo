@@ -60,6 +60,27 @@ if (!hay) {
     assert.deepEqual(esquinaLibre.map((c) => c > 240), [true, true, true]);
   });
 
+  test('arrastrado: el logo queda centrado donde lo soltaron, y no se sale del borde', async () => {
+    const lienzo = path.join(dir, 'arr.png');
+    await fs.writeFile(lienzo, png(1000, 1000, [250, 250, 250]));
+    const rojo = path.join(dir, 'arr-logo.png');
+    await fs.writeFile(rojo, png(200, 100, [220, 30, 30]));
+    // Centro del logo al 30% de ancho y 70% de alto, con 20% de ancho -> caja x 200..400, y 650..750
+    const r = await marca.ponerMarca(lienzo, { claro: rojo }, { tamPct: 20, cx: 30, cy: 70 });
+    assert.equal(r.posicion, null);
+    assert.equal(r.cx, 30);
+    const [rr] = await colorEn(r.salida, 295, 695); // dentro del logo
+    assert.ok(rr > 180, `esperaba el logo en el centro pedido, salió ${rr}`);
+    const [fuera] = await colorEn(r.salida, 600, 695); // a la derecha ya no
+    assert.ok(fuera > 240, 'el logo se corrió de donde lo soltaron');
+    // Pegado al borde: no se sale del lienzo
+    const b = await marca.ponerMarca(lienzo, { claro: rojo }, { tamPct: 20, cx: 100, cy: 100 });
+    const info = await marca.medir(b.salida);
+    assert.equal(info.ancho, 1000);
+    const [borde] = await colorEn(b.salida, 950, 960);
+    assert.ok(borde > 180, 'el logo debería quedar pegado a la esquina, sin salirse');
+  });
+
   test('sobre fondo claro usa el logo oscuro (y al revés)', async () => {
     const claro = path.join(dir, 'lienzo-claro.png');
     const oscuro = path.join(dir, 'lienzo-oscuro.png');

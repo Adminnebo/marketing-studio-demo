@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { publicar, fetchInfoTiktok, captionPublicacion } from '../api';
 import { REDES, tipoMedio, limiteDe, validarPublicacion } from '@shared/redes.mjs';
 import { Cuenta } from './Redes';
+import AjusteLogo from './AjusteLogo';
 
 const ZONA = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Santo_Domingo';
 const dosDig = (n) => String(n).padStart(2, '0');
@@ -22,7 +23,9 @@ function elegirAuto(lista, n) {
 const localInput = (d) => `${d.getFullYear()}-${dosDig(d.getMonth() + 1)}-${dosDig(d.getDate())}T${dosDig(d.getHours())}:${dosDig(d.getMinutes())}`;
 
 // Modal para publicar (o programar) un resultado en las cuentas conectadas.
-export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, onPublicada }) {
+export default function Publicar({ generacion: genInicial, indice = 0, cuentas, onCerrar, onPublicada }) {
+  const [generacion, setGeneracion] = useState(genInicial);
+  const [ajustandoLogo, setAjustandoLogo] = useState(false);
   const ok = (generacion.resultados || []).filter((r) => r.url);
   const medio = ok[Math.min(indice, ok.length - 1)];
   const tipo = tipoMedio(medio?.url);
@@ -119,12 +122,27 @@ export default function Publicar({ generacion, indice = 0, cuentas, onCerrar, on
   };
 
   return (
-    <div className="ms-modal" onMouseDown={(e) => e.target === e.currentTarget && !enviando && onCerrar()}>
+    <div className="ms-modal" onMouseDown={(e) => e.target === e.currentTarget && !enviando && !ajustandoLogo && onCerrar()}>
       <div className="ms-modal__box" role="dialog" aria-label="Publicar en redes">
         <div className="ms-modal__media">
           {tipo === 'video' ? <video src={verUrl} controls playsInline /> : <img src={verUrl} alt="" />}
-          {medio?.url_logo && <span className="pb-conlogo" title="Así sale publicado">🏷️ Con el logo</span>}
+          {medio?.url_logo && (
+            <span className="pb-conlogo">🏷️ Con el logo
+              <button className="linklike" onClick={() => setAjustandoLogo(true)}>Ajustar</button>
+            </span>
+          )}
         </div>
+        {ajustandoLogo && (
+          <div className="ms-modal pb-ajuste" onMouseDown={(e) => e.target === e.currentTarget && setAjustandoLogo(false)}>
+            <div className="ms-modal__box aj-box" role="dialog" aria-label="Ajustar el logo">
+              <div className="ms-modal__body">
+                <h3 style={{ margin: '0 0 10px' }}>Ajustar el logo</h3>
+                <AjusteLogo gen={generacion} indice={indice} onCerrar={() => setAjustandoLogo(false)}
+                  onListo={(g) => { setGeneracion(g); setAjustandoLogo(false); }} />
+              </div>
+            </div>
+          </div>
+        )}
         <div className="ms-modal__body">
           <div className="ms-modal__head">
             <div>

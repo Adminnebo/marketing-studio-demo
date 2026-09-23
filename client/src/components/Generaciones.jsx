@@ -4,6 +4,7 @@ import Portada from './Portada';
 import { descargar, fetchGeneraciones, fetchAutores, cambiarMarca } from '../api';
 import { usd, usdFino, sinClausula } from '../precio';
 import Tamano, { useTamano } from './Tamano';
+import AjusteLogo from './AjusteLogo';
 
 const ESTADOS = {
   pendiente: 'En cola', enviando: 'Enviando', en_proceso: 'Creando', completado: 'Lista', fallido: 'No salió',
@@ -15,13 +16,12 @@ const esVideoGen = (g) => g.preset_tipo === 'libre_video' || TIPOS_VIDEO.has(g.p
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
 
-const ESQUINAS = [['arriba-izq', 'Arriba izq.'], ['arriba-der', 'Arriba der.'], ['abajo-izq', 'Abajo izq.'], ['abajo-der', 'Abajo der.'], ['centro', 'Centro']];
-
 function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
   const [g, setG] = useState(gen);
   useEffect(() => { setG((x) => (gen.marca_estado === x.marca_estado && gen.resultados === x.resultados ? x : gen)); }, [gen]);
   const [marcando, setMarcando] = useState(false);
   const [verOriginal, setVerOriginal] = useState(false);
+  const [ajustando, setAjustando] = useState(false);
   const marcar = async (datos) => {
     setMarcando(true); setErrBaja(null);
     try { setG(await cambiarMarca(g.id, datos)); } catch (e) { setErrBaja(e.message); }
@@ -105,15 +105,23 @@ function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
                 <>
                   <span className="pill st-completado" title={g.marca ? `${g.marca.logo} · ${g.marca.posicion} · versión ${g.marca.version}` : ''}>🏷️ Con logo</span>
                   <button className="linklike" onClick={() => setVerOriginal((v) => !v)}>{verOriginal ? 'Ver con logo' : 'Ver original'}</button>
-                  <select className="gn-sel" aria-label="Esquina del logo" value={g.marca?.posicion || ''} onChange={(e) => marcar({ posicion: e.target.value })}>
-                    {!g.marca?.posicion && <option value="">Esquina…</option>}
-                    {ESQUINAS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                  </select>
+                  <button className="linklike" onClick={() => setAjustando(true)}>Mover o cambiar tamaño</button>
                   <button className="linklike" onClick={() => marcar({ quitar: true })}>Quitar</button>
                 </>
               ) : g.marca_estado === 'error' ? (
                 <><span className="ms-cost">No se pudo poner el logo.</span><button className="linklike" onClick={() => marcar({})}>Reintentar</button></>
               ) : <button className="linklike" onClick={() => marcar({})}>🏷️ Poner el logo</button>}
+          </div>
+        )}
+        {ajustando && (
+          <div className="ms-modal" onMouseDown={(e) => e.target === e.currentTarget && setAjustando(false)}>
+            <div className="ms-modal__box aj-box" role="dialog" aria-label="Ajustar el logo">
+              <div className="ms-modal__body">
+                <h3 style={{ margin: '0 0 10px' }}>Ajustar el logo</h3>
+                <AjusteLogo gen={g} indice={Math.min(i, ok.length - 1)} onCerrar={() => setAjustando(false)}
+                  onListo={(x) => { setG(x); setAjustando(false); setVerOriginal(false); }} />
+              </div>
+            </div>
           </div>
         )}
         <div className="ms-gen-actions">
