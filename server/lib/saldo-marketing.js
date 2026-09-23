@@ -238,6 +238,9 @@ async function acreditar(cli, s, por) {
 async function aprobar(id, { por, nota = null }) {
   const cli = await pool.connect();
   try {
+    if (wallet.configurado()) {
+      throw new SaldoMarketingError('El saldo de Marketing ahora vive en la plataforma central: recárgalo allá. Aprobar aquí sacaría el dinero del saldo general sin sumarlo al wallet.', { status: 409 });
+    }
     await cli.query('BEGIN');
     const { rows: [s] } = await cli.query(`SELECT * FROM solicitudes_recarga WHERE id = $1 FOR UPDATE`, [id]);
     if (!s) throw new SaldoMarketingError('Esa solicitud no existe.', { status: 404 });

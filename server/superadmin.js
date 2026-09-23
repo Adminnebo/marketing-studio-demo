@@ -20,6 +20,7 @@ const promptAuto = require('./lib/prompt-auto');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
 const resumenGasto = require('./lib/resumen-gasto');
+const wallet = require('./lib/wallet');
 const saldoExterno = require('./lib/saldo-externo');
 const saldoMarketing = require('./lib/saldo-marketing');
 const conciliacion = require('./lib/conciliacion');
@@ -135,6 +136,9 @@ router.get('/superadmin/resumen-gasto', ruta(async (req, res) => {
 }));
 router.post('/superadmin/pagos/historial', ruta(async (req, res) => {
   if (!pagos.configurado()) throw errPublico('El descuento de saldo no está configurado.');
+  if (wallet.configurado()) {
+    throw errPublico('El gasto ahora se debita del wallet de Marketing. Esto descontaría del saldo general (modelo viejo): usa "Resumen de gasto para cobrar a mano" y hazlo en la plataforma.', 409);
+  }
   const r = await pagos.enviarHistorial(req.body?.total);
   if (r.error) throw errPublico(r.error, 409);
   console.log(`[pagos] ${req.user.email} envio el historial: ${r.encolados} creaciones, $${r.total}`);

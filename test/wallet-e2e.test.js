@@ -133,4 +133,34 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.match(r.error.error, /no se te cobró nada/);
     assert.equal((await pool.query('SELECT count(*)::int n FROM generaciones')).rows[0].n, 0);
   });
+  // Con el wallet activo, NADA debe salir del saldo general: si no, se cobra dos veces
+  // (una en el wallet y otra en el monto global).
+  test('en modo wallet no se mueve el saldo general de JH', async () => {
+    const pagos = require('../server/lib/pagos');
+    const saldos = [];
+    const original = pagos.ajustar;
+    pagos.ajustar = async (a) => { saldos.push(a); return { ok: true }; };
+    try {
+      // Aprobar una recarga sacaria plata del general para un registro que ya no manda nada.
+      const { rows: [sol] } = await pool.query(
+        `INSERT INTO solicitudes_recarga (monto_usd, pedido_por, estado) VALUES (25, 'vendedor@jh.com', 'pendiente') RETURNING id`
+      );
+      await assert.rejects(() => saldoMarketing.aprobar(sol.id, { por: 'jorge@nebo.com' }), /plataforma central/);
+      const { rows: [ahora] } = await pool.query('SELECT estado FROM solicitudes_recarga WHERE id = $1', [sol.id]);
+      assert.equal(ahora.estado, 'pendiente', 'la solicitud queda como estaba');
+
+      // Los lotes de IA al saldo general tampoco salen.
+      assert.equal(await saldoMarketing.enviarAJh(), null);
+
+      // Y una creación terminada solo se debita del wallet, nunca por la cola vieja.
+      const r = await encolarLib.encolar(USUARIO, CREAR);
+      await completar(r.g.id);
+      await wallet.informarGasto(r.g.id);
+      await wallet.procesarCola();
+      assert.equal((await pool.query('SELECT count(*)::int n FROM pagos_eventos')).rows[0].n, 0);
+      assert.equal(saldos.length, 0, 'no se tocó el saldo general ni una vez');
+      assert.equal(w.debitos.length, 1, 'un solo débito al wallet');
+    } finally { pagos.ajustar = original; }
+  });
+
 }
