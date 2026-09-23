@@ -28,8 +28,10 @@ router.get('/logos', ruta(async (req, res) => {
   res.json({ logos: lista, ajustes: soloAjustes(a), puedeSubir: !!req.user.puedeLogos, ffmpeg: await marca.disponible() });
 }));
 
-// El archivo, para verlo en el panel (y para la vista previa).
-router.get('/logos/:id/:version', ruta(async (req, res) => {
+// El archivo del logo. Va aparte y SIN sesión: las etiquetas <img> del navegador no mandan el
+// token, y un logo de marca no es secreto (termina impreso en lo que se publica).
+const publico = express.Router();
+publico.get('/logos/:id/:version', ruta(async (req, res) => {
   const a = await logos.archivo(Number(req.params.id) || 0, req.params.version.replace(/\.\w+$/, ''));
   if (!a) return res.status(404).json({ error: 'No está.' });
   res.setHeader('Content-Type', a.mime);
@@ -76,4 +78,4 @@ router.put('/logos/ajustes', soloLogos, ruta(async (req, res) => {
   res.json({ ajustes: soloAjustes(await ajustes.leer()) });
 }));
 
-module.exports = { router };
+module.exports = { router, publico };

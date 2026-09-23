@@ -142,6 +142,7 @@ app.post('/api/n8n/costo-camila', ruta(async (req, res) => {
 }));
 
 // ── Con sesion y acceso a este panel ──
+app.use('/api', require('./logos').publico); // los archivos de los logos se ven sin sesión
 app.use('/api', auth.requireAcceso);
 
 app.get('/api/me', ruta(async (req, res) => {
