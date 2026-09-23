@@ -80,7 +80,12 @@ const ruta = (fn) => async (req, res) => {
 };
 
 // ── Publico ──
-app.get('/api/health', (req, res) => res.json({ ok: true, auth: auth.configurado() }));
+// Salud: tambien dice si el servidor puede poner marcas de agua (ffmpeg, lib/marca.js).
+let _marcaOk = null;
+app.get('/api/health', async (req, res) => {
+  if (_marcaOk === null) _marcaOk = await require('./lib/marca').disponible();
+  res.json({ ok: true, auth: auth.configurado(), marca: _marcaOk });
+});
 app.get('/api/config', (req, res) => res.json(auth.configPublica()));
 
 // Vuelta del OAuth del generador (la inicia un super_admin desde Super Admin). Sin sesion
