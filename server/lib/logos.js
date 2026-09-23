@@ -108,6 +108,14 @@ async function renombrar(id, nombre) {
   return limpio(l);
 }
 
+/** Cambia de lugar las dos versiones (si una entró como la que no era). */
+async function intercambiar(id) {
+  await migrar();
+  const { rows: [l] } = await pool.query(`UPDATE logos SET claro = oscuro, oscuro = claro WHERE id = $1 RETURNING ${COLS}`, [id]);
+  if (!l) throw new ErrorDeLogo('Ese logo ya no está.', { status: 404 });
+  return limpio(l);
+}
+
 async function marcarDefecto(id) {
   await migrar();
   const cli = await pool.connect();
@@ -136,4 +144,4 @@ async function borrar(id, { version = null } = {}) {
   return null;
 }
 
-module.exports = { migrar, lista, uno, archivo, porDefecto, versiones, guardar, renombrar, marcarDefecto, borrar, ErrorDeLogo, TIPOS, MAX_BYTES };
+module.exports = { migrar, lista, uno, archivo, porDefecto, versiones, guardar, renombrar, intercambiar, marcarDefecto, borrar, ErrorDeLogo, TIPOS, MAX_BYTES };

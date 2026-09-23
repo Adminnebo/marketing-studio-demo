@@ -121,6 +121,31 @@ async function ponerMarca(entrada, logos, opciones = {}) {
 }
 
 /**
+ * Qué tan claro es el dibujo del logo (0 = negro, 255 = blanco), mirando SOLO lo que se ve
+ * (pesa cada pixel por su transparencia). Sirve para saber si el logo es la versión clara
+ * (para fotos oscuras) o la oscura (para fotos claras). Devuelve null si no se pudo medir.
+ */
+async function luminanciaDe(bytes, ext = 'png') {
+  const dir = await carpetaTemp();
+  try {
+    const entrada = path.join(dir, `logo.${ext}`);
+    const crudo = path.join(dir, 'crudo.rgba');
+    await fs.writeFile(entrada, bytes);
+    // Se achica primero: alcanza de sobra para el promedio y no come memoria.
+    await correr(FFMPEG, ['-y', '-v', 'error', '-i', entrada, '-vf', 'scale=128:-1,format=rgba', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', crudo], { timeoutMs: 30000 });
+    const b = await fs.readFile(crudo);
+    let suma = 0; let peso = 0;
+    for (let i = 0; i < b.length; i += 4) {
+      const a = b[i + 3] / 255;
+      if (a < 0.2) continue; // lo transparente no cuenta
+      suma += (0.2126 * b[i] + 0.7152 * b[i + 1] + 0.0722 * b[i + 2]) * a;
+      peso += a;
+    }
+    return peso > 20 ? Math.round(suma / peso) : null;
+  } catch { return null; } finally { await borrarCarpeta(dir); }
+}
+
+/**
  * Deja transparente el fondo blanco de un logo (muchos vienen en JPG o PNG con fondo liso).
  * Devuelve un PNG nuevo. Si el logo ya trae transparencia, no le pasa nada.
  */
@@ -139,4 +164,4 @@ async function quitarFondo(bytes, ext = 'png') {
 async function carpetaTemp() { return fs.mkdtemp(path.join(os.tmpdir(), 'marca-')); }
 const borrarCarpeta = (dir) => fs.rm(dir, { recursive: true, force: true }).catch(() => {});
 
-module.exports = { ponerMarca, quitarFondo, medir, brilloDe, posicionPara, caja, disponible, carpetaTemp, borrarCarpeta, POSICIONES, DEFECTOS, ErrorDeMarca };
+module.exports = { ponerMarca, quitarFondo, luminanciaDe, medir, brilloDe, posicionPara, caja, disponible, carpetaTemp, borrarCarpeta, POSICIONES, DEFECTOS, ErrorDeMarca };

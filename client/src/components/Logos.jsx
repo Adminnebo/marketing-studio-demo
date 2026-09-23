@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchLogos, subirLogo, renombrarLogo, logoPorDefecto, borrarLogo, guardarAjustesLogo } from '../api';
+import { fetchLogos, subirLogo, renombrarLogo, logoPorDefecto, intercambiarLogo, borrarLogo, guardarAjustesLogo } from '../api';
 
 const ESQUINAS = [['arriba-izq', 'Arriba izq.'], ['arriba-der', 'Arriba der.'], ['abajo-izq', 'Abajo izq.'], ['abajo-der', 'Abajo der.'], ['centro', 'Centro']];
 const FORMATOS = [
@@ -60,6 +60,9 @@ function Logo({ l, puedeSubir, onCambio, onSubirVersion }) {
             : <button className="mini-btn" onClick={() => logoPorDefecto(l.id).then(onCambio)}>Usar este</button>}
           <button className="mini-btn" onClick={() => onSubirVersion(l, 'claro')}>{l.tiene_claro ? 'Cambiar la clara' : '＋ Versión clara'}</button>
           <button className="mini-btn" onClick={() => onSubirVersion(l, 'oscuro')}>{l.tiene_oscuro ? 'Cambiar la oscura' : '＋ Versión oscura'}</button>
+          {(l.tiene_claro !== l.tiene_oscuro || (l.tiene_claro && l.tiene_oscuro)) && (
+            <button className="mini-btn" title="Si el panel las puso al revés, esto las cambia de lugar" onClick={() => intercambiarLogo(l.id).then(onCambio)}>⇄ Cambiarlas de lugar</button>
+          )}
           <button className="mini-btn ms-gen-borrar" onClick={() => window.confirm(`¿Borrar "${l.nombre}"?`) && borrarLogo(l.id).then(onCambio)}>🗑</button>
         </div>
       )}
@@ -74,7 +77,7 @@ export default function Logos() {
   const [subiendo, setSubiendo] = useState(false);
   const [quitarFondo, setQuitarFondo] = useState(true);
   const archivo = useRef(null);
-  const destino = useRef({ logoId: null, version: 'claro' });
+  const destino = useRef({ logoId: null, version: 'auto' });
   const cargar = () => fetchLogos().then(setD).catch((e) => setError(e.message));
   useEffect(() => { cargar(); }, []);
 
@@ -83,8 +86,8 @@ export default function Logos() {
     if (!f) return;
     setSubiendo(true); setMsg(null);
     try {
-      await subirLogo(f, { ...destino.current, nombre: f.name.replace(/\.\w+$/, ''), quitarFondo });
-      setMsg({ ok: 'Logo guardado.' });
+      const l = await subirLogo(f, { ...destino.current, nombre: f.name.replace(/\.\w+$/, ''), quitarFondo });
+      setMsg({ ok: l.versionPuesta ? `Guardado como versión ${l.versionPuesta} (${l.versionPuesta === 'oscuro' ? 'para fotos claras' : 'para fotos oscuras'}). Si no es, usa "Cambiarlas de lugar".` : 'Logo guardado.' });
       await cargar();
     } catch (e) { setMsg({ error: e.message }); }
     setSubiendo(false);
@@ -115,7 +118,7 @@ export default function Logos() {
         {d.puedeSubir && (
           <div className="lg-subir">
             <input ref={archivo} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={(e) => { subir(e.target.files?.[0]); e.target.value = ''; }} />
-            <button className="btn" disabled={subiendo} onClick={() => elegir(null, 'claro')}>{subiendo ? 'Subiendo…' : '＋ Subir un logo'}</button>
+            <button className="btn" disabled={subiendo} onClick={() => elegir(null, 'auto')}>{subiendo ? 'Subiendo…' : '＋ Subir un logo'}</button>
             <label className="gn-check"><input type="checkbox" checked={quitarFondo} onChange={(e) => setQuitarFondo(e.target.checked)} /> Quitarle el fondo blanco</label>
             <span className="ms-cost">PNG, WEBP o JPG, hasta 2 MB.</span>
             {msg && <span className={msg.ok ? 'cr-ok' : 'cr-err'}>{msg.ok || msg.error}</span>}

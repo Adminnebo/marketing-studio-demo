@@ -50,19 +50,28 @@ router.post('/logos', soloLogos, express.raw({ type: TIPOS, limit: '3mb' }), rut
     const r = await marca.quitarFondo(bytes, logos.TIPOS[mime] || 'png').catch((e) => { console.error('[logos] quitar fondo', e.message); return null; });
     if (r) { bytes = r; quitado = true; }
   }
+  // Sin versión dicha a mano, la adivina: un logo de dibujo oscuro es el de las fotos claras.
+  let version = req.headers['x-version'];
+  let luz = null;
+  if (version !== 'claro' && version !== 'oscuro') {
+    luz = await marca.luminanciaDe(bytes, logos.TIPOS[mime] || 'png');
+    version = luz != null && luz < 128 ? 'oscuro' : 'claro';
+  }
   const l = await logos.guardar({
     id: Number(req.headers['x-logo-id']) || null,
     nombre: req.headers['x-nombre'] ? decodeURIComponent(req.headers['x-nombre']) : 'Logo',
-    version: req.headers['x-version'] === 'oscuro' ? 'oscuro' : 'claro',
-    bytes, mime: quitado ? 'image/png' : mime, por: req.user.email,
+    version, bytes, mime: quitado ? 'image/png' : mime, por: req.user.email,
   });
-  console.log(`[logos] ${req.user.email} subió "${l.nombre}" (${req.headers['x-version'] || 'claro'}${quitado ? ', sin fondo' : ''})`);
+  l.versionPuesta = version;
+  l.luz = luz;
+  console.log(`[logos] ${req.user.email} subió "${l.nombre}" (${version}${luz != null ? `, luz ${luz}` : ''}${quitado ? ', sin fondo' : ''})`);
   res.status(201).json(l);
 }));
 
 router.put('/logos/:id', soloLogos, ruta(async (req, res) => {
   const id = Number(req.params.id) || 0;
   if (req.body?.porDefecto === true) return res.json(await logos.marcarDefecto(id));
+  if (req.body?.intercambiar === true) return res.json(await logos.intercambiar(id));
   res.json(await logos.renombrar(id, req.body?.nombre));
 }));
 

@@ -95,9 +95,11 @@ export const cambiarMarca = (id, datos) => api(`/generaciones/${id}/marca`, { me
 export const fetchLogos = () => api('/logos');
 export const renombrarLogo = (id, nombre) => api(`/logos/${id}`, { method: 'PUT', body: JSON.stringify({ nombre }) });
 export const logoPorDefecto = (id) => api(`/logos/${id}`, { method: 'PUT', body: JSON.stringify({ porDefecto: true }) });
+export const intercambiarLogo = (id) => api(`/logos/${id}`, { method: 'PUT', body: JSON.stringify({ intercambiar: true }) });
 export const borrarLogo = (id, version) => api(`/logos/${id}` + (version ? `?version=${version}` : ''), { method: 'DELETE' });
 export const guardarAjustesLogo = (cambios) => api('/logos/ajustes', { method: 'PUT', body: JSON.stringify(cambios) });
-export async function subirLogo(archivo, { nombre, version = 'claro', logoId = null, quitarFondo = false } = {}) {
+// version 'auto' = que el servidor decida mirando si el logo es claro u oscuro.
+export async function subirLogo(archivo, { nombre, version = 'auto', logoId = null, quitarFondo = false } = {}) {
   const r = await fetch('/api/logos', {
     method: 'POST',
     headers: {

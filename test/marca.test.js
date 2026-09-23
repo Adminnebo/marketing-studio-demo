@@ -76,6 +76,20 @@ if (!hay) {
     assert.equal(sobreOscuro.version, 'claro');
   });
 
+  test('adivina si el logo es claro u oscuro mirando solo lo que se ve', async () => {
+    const { promises: f } = require('fs');
+    const blanco = path.join(dir, 'lum-claro.png');
+    const negro = path.join(dir, 'lum-oscuro.png');
+    await f.writeFile(blanco, png(60, 60, [250, 250, 250, 255]));
+    await f.writeFile(negro, png(60, 60, [15, 15, 15, 255]));
+    assert.ok(await marca.luminanciaDe(await f.readFile(blanco)) > 200);
+    assert.ok(await marca.luminanciaDe(await f.readFile(negro)) < 60);
+    // Lo transparente no cuenta: un dibujo oscuro sobre fondo transparente sigue siendo oscuro.
+    const conAlfa = path.join(dir, 'lum-alfa.png');
+    await f.writeFile(conAlfa, png(60, 60, [20, 20, 20, 0]));
+    assert.equal(await marca.luminanciaDe(await f.readFile(conAlfa)), null);
+  });
+
   test('video vertical: logo arriba, sigue siendo video y conserva la duración', async () => {
     const v = path.join(dir, 'v.mp4');
     await new Promise((res, rej) => require('child_process').execFile('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi',
