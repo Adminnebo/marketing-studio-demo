@@ -762,6 +762,32 @@ button.badge:hover { background: var(--surface-2); color: var(--text-primary); }
 .cal-leyenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.74rem; color: var(--text-muted); }
 .cal-leyenda span { display: inline-flex; align-items: center; gap: 5px; }
 .cal-leyenda-n { margin-left: auto; font-style: italic; }
+
+/* ── Plantillas propias (diseños de JH convertidos en receta) ── */
+.pp { display: flex; flex-direction: column; gap: 14px; }
+.pp-barra { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pp-titulo { margin: 0; font-size: 1.05rem; }
+.pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.pp-card { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.pp-card-img { position: relative; border: 0; padding: 0; background: var(--surface-2, rgba(127,127,127,0.08)); cursor: pointer; aspect-ratio: 4 / 3; display: grid; place-items: center; font-size: 1.6rem; }
+.pp-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pp-card-tipo { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.55); border-radius: 6px; padding: 1px 5px; font-size: 0.78rem; font-style: normal; }
+.pp-card-cuerpo { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 12px; }
+.pp-card-t { font-weight: 600; }
+.pp-card-m { font-size: 0.76rem; color: var(--text-muted); }
+.pp-card-receta { font-size: 0.8rem; line-height: 1.45; white-space: pre-wrap; }
+.pp-card-acc, .pp-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.pp-nueva { display: flex; flex-direction: column; gap: 12px; }
+.pp-paso { display: flex; flex-direction: column; gap: 8px; }
+.pp-lbl { font-weight: 600; font-size: 0.86rem; }
+.pp-nota { font-size: 0.76rem; color: var(--text-muted); }
+.pp-prev { display: flex; align-items: center; gap: 10px; }
+.pp-prev img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; }
+.pp-prev-n { font-size: 0.82rem; margin-bottom: 4px; }
+.pp-receta { min-height: 130px; }
+.pp-fila { display: flex; flex-wrap: wrap; gap: 12px; }
+.pp-edit { display: flex; flex-direction: column; gap: 8px; }
+.lb-propia { font-size: 0.8rem; background: var(--surface-2, rgba(127,127,127,0.08)); border-radius: 8px; padding: 8px 10px; }
 .cal-aviso { font-size: 0.76rem; color: var(--text-muted); background: var(--surface-2, rgba(127,127,127,0.08)); border-radius: 8px; padding: 6px 10px; }
 .cal-cuentas { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .cal-red { white-space: nowrap; }

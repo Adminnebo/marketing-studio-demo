@@ -53,13 +53,14 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
   const [enviando, setEnviando] = useState(false);
   const [generandoPrompt, setGenerandoPrompt] = useState(false);
   const [producto, setProducto] = useState('');
-  const [indicaciones, setIndicaciones] = useState('');
+  const [indicaciones, setIndicaciones] = useState(inicial?.indicaciones || '');
   const [avisos, setAvisos] = useState([]);
   const [grande, setGrande] = useState(null); // caja abierta en grande: 'prompt' o 'indicaciones'
   const [indicBase, setIndicBase] = useState(null); // indicaciones con las que la IA escribio la descripcion
   const [msg, setMsg] = useState(null);
   const [drag, setDrag] = useState(false);
   const [base, setBase] = useState(null); // ajustes con los que se escribió la descripción
+  const propia = inicial?.propia || null; // plantilla propia de la que salió este pedido
   const inputRef = useRef(null);
   const caja = useRef(null);
 
@@ -113,7 +114,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
     base.imagen !== ajustesActuales.imagen && 'la foto del producto',
   ].filter(Boolean);
 
-  const datos = () => ({ modelo: modelo?.id, prompt, aspecto, duracion: duracion ? Number(duracion) : null, opciones, imagen: imagen && { media_id: imagen.media_id, url: imagen.url, nombre: imagen.nombre }, promptAuto: modoPrompt === 'auto' });
+  const datos = () => ({ modelo: modelo?.id, prompt, aspecto, duracion: duracion ? Number(duracion) : null, opciones, imagen: imagen && { media_id: imagen.media_id, url: imagen.url, nombre: imagen.nombre }, promptAuto: modoPrompt === 'auto', ...(propia ? { propiaId: propia.id } : {}) });
 
   // Costo en vivo (sin generar), con pausa para no pedirlo en cada cambio.
   useEffect(() => {
@@ -462,6 +463,11 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
               <label className="filter-field" style={{ width: '100%', maxWidth: 420 }}><span>Nombre del producto (opcional)</span>
                 <input className="ms-input" maxLength={120} placeholder="Ej.: Breaker Siemens 2P 40A" value={producto} onChange={(e) => setProducto(e.target.value)} />
               </label>
+              {propia && (
+                <div className="lb-propia">
+                  🖼️ Usando tu plantilla <strong>{propia.nombre}</strong>: su receta ya está aquí abajo. Sube la foto del producto y escribe la descripción.
+                </div>
+              )}
               <label className="filter-field" style={{ width: '100%' }}><span>Cuéntale qué quieres (opcional): escríbelo o díctalo, en español</span>
                 <div className="eg-envol">
                   <textarea className="ms-textarea lb-ind" maxLength={2000}

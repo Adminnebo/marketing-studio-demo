@@ -17,6 +17,7 @@ const catalogo = require('./lib/catalogo');
 const billetera = require('./lib/billetera');
 const modelos = require('./lib/modelos');
 const promptAuto = require('./lib/prompt-auto');
+const propias = require('./lib/plantillas-propias');
 const hfOauth = require('./lib/hf-oauth');
 const hfCli = require('./lib/hf-cli');
 const pagos = require('./lib/pagos');
@@ -438,22 +439,94 @@ app.post('/api/libre/autoprompt', ruta(async (req, res) => {
   }
 }));
 
+// ── Plantillas propias: un diseño que JH ya publicó, convertido en receta reutilizable ──
+// (lib/plantillas-propias.js). Compartidas por todo el equipo; la receta se usa después como
+// indicaciones del generador de prompts sobre la foto del producto nuevo.
+
+app.get('/api/plantillas-propias', ruta(async (req, res) => res.json({ items: await propias.listar() })));
+
+// Analiza el diseño subido y propone la receta (no guarda nada: el usuario la revisa primero).
+app.post('/api/plantillas-propias/analizar', ruta(async (req, res) => {
+  const b = req.body || {};
+  if (!b.imagen?.url) return res.status(400).json({ error: 'Sube la imagen del diseño.' });
+  if (!(await saldoMarketing.puedeGastarIa(req.user))) return res.status(402).json({ error: 'No hay saldo de Marketing para usar la IA. Pide una recarga en Créditos.', sinSaldo: true });
+  const aJh = saldoMarketing.exento(req.user);
+  try {
+    const r = await propias.analizar({ imagenUrl: b.imagen.url, para: b.para === 'foto' ? 'foto' : 'video', nombre: b.nombre });
+    console.log(`[propias] ${req.user.email} analizó un diseño (${r.modelo}, ${r.tokens.entrada}/${r.tokens.salida} tok)`);
+    const costoIa = await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'plantilla', modelo: r.modelo, entrada: r.tokens.entrada, salida: r.tokens.salida, aJh })
+      .catch((e) => { console.error('[propias] cobro IA', e.message); return 0; });
+    res.json({ nombre: r.nombre, receta: r.receta, aspecto: r.aspecto, duracion: r.duracion, avisos: r.avisos, costoIa });
+  } catch (e) {
+    if (e.uso) {
+      await saldoMarketing.cobrarIa({ por: req.user.email, clase: 'plantilla', detalle: 'no salió', modelo: e.uso.modelo, entrada: e.uso.entrada, salida: e.uso.salida, aJh })
+        .catch((x) => console.error('[propias] cobro IA', x.message));
+    }
+    if (e instanceof promptAuto.ErrorDePrompt) { console.error('[propias]', e.message, e.detalle || ''); return res.status(e.status).json({ error: e.message }); }
+    throw e;
+  }
+}));
+
+app.post('/api/plantillas-propias', ruta(async (req, res) => {
+  const b = req.body || {};
+  try {
+    const f = await propias.crear(b, {
+      email: req.user.email,
+      portada: b.imagen?.url ? { url: b.imagen.url } : null,
+      origen: b.imagen?.media_id ? { media_id: b.imagen.media_id, url: b.imagen.url || null, nombre: b.imagen.nombre || null } : null,
+    });
+    console.log(`[propias] ${req.user.email} guardó la plantilla "${f.nombre}" (#${f.id})`);
+    res.status(201).json(f);
+  } catch (e) {
+    if (e.status === 400) return res.status(400).json({ error: e.message });
+    throw e;
+  }
+}));
+
+app.patch('/api/plantillas-propias/:id', ruta(async (req, res) => {
+  const actual = await propias.leer(req.params.id);
+  if (!actual) return res.status(404).json({ error: 'Esa plantilla no existe.' });
+  try {
+    const f = await propias.editar(req.params.id, { ...actual, conAudio: actual.con_audio, ...req.body });
+    res.json(f);
+  } catch (e) {
+    if (e.status === 400) return res.status(400).json({ error: e.message });
+    throw e;
+  }
+}));
+
+// Borrar: quien la creó o un admin (las creaciones que salieron de ella no se tocan).
+app.delete('/api/plantillas-propias/:id', ruta(async (req, res) => {
+  const f = await propias.leer(req.params.id);
+  if (!f) return res.status(404).json({ error: 'Esa plantilla no existe.' });
+  if (f.creado_por !== req.user.email && req.user.rol === 'usuario') {
+    return res.status(403).json({ error: 'Solo quien la creó o un admin pueden borrarla.' });
+  }
+  await propias.borrar(req.params.id);
+  console.log(`[propias] ${req.user.email} borró la plantilla "${f.nombre}" (#${f.id})`);
+  res.json({ ok: true });
+}));
+
 app.post('/api/libre', ruta(async (req, res) => {
   const b = req.body || {};
   const l = await leerLibre(b);
   if (l.error) return res.status(400).json({ error: l.error });
   const creditos = await modelos.costo(l.armado); // el costo lo decide el servidor, no el navegador
+  // Si salio de una plantilla propia, se relee de la base (no se confia en el navegador).
+  const propia = b.propiaId ? await propias.leer(b.propiaId) : null;
   const r = await encolar(req, {
     presetId: l.modelo.id, presetNombre: l.modelo.nombre, presetTipo: l.modelo.tipo === 'video' ? 'libre_video' : 'libre_imagen',
     portada: b.imagen?.url ? { url: b.imagen.url } : null,
     entrada: {
       tool: l.armado.tool, params: l.armado.params,
-      libre: { modelo: l.modelo.id, aspecto: b.aspecto || null, duracion: b.duracion || null, opciones: b.opciones || {}, promptAuto: !!b.promptAuto },
+      libre: { modelo: l.modelo.id, aspecto: b.aspecto || null, duracion: b.duracion || null, opciones: b.opciones || {}, promptAuto: !!b.promptAuto,
+        ...(propia ? { propia: { id: propia.id, nombre: propia.nombre } } : {}) },
       producto: b.imagen?.media_id ? { media_id: b.imagen.media_id, url: b.imagen.url || null, nombre: b.imagen.nombre || null } : null,
     },
     creditos,
   });
   if (r.error) return res.status(r.status).json(r.error);
+  if (propia) await propias.usada(propia.id);
   res.status(201).json(r.g);
 }));
 

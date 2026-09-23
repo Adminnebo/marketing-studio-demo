@@ -185,5 +185,12 @@ export const correrConciliacion = () => api('/superadmin/conciliacion', { method
 
 // Calendario: creaciones listas y publicaciones (programadas o hechas) en un rango de fechas.
 export const fetchCalGeneraciones = (desde, hasta) => api(`/calendario/generaciones?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+// Plantillas propias (diseños de JH convertidos en receta reutilizable).
+export const fetchPropias = () => api('/plantillas-propias');
+export const analizarPropia = (datos) => api('/plantillas-propias/analizar', { method: 'POST', body: JSON.stringify(datos) });
+export const crearPropia = (datos) => api('/plantillas-propias', { method: 'POST', body: JSON.stringify(datos) });
+export const editarPropia = (id, datos) => api(`/plantillas-propias/${id}`, { method: 'PATCH', body: JSON.stringify(datos) });
+export const borrarPropia = (id) => api(`/plantillas-propias/${id}`, { method: 'DELETE' });
+
 export const fetchCalPublicaciones = (desde, hasta) => api(`/publicaciones/calendario?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
 export const reprogramarPublicacion = (id, datos) => api(`/publicaciones/${id}/reprogramar`, { method: 'POST', body: JSON.stringify(datos) });

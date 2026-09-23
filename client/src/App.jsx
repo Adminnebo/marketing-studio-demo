@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { iniciarAuth, sesion, salir, cambiarVerComo, fetchCamilaEstado, fetchMe, fetchEstado, fetchSaldo, fetchCategorias, fetchCostos, fetchGeneraciones, usarComoBase, borrarGeneracion, fetchRedesEstado, fetchCuentas, fetchPublicaciones } from './api';
 import Login from './components/Login';
 import Plantillas from './components/Plantillas';
+import Propias from './components/Propias';
 import Recrear from './components/Recrear';
 import Generaciones, { EN_CURSO } from './components/Generaciones';
 import Redes from './components/Redes';
@@ -348,6 +349,9 @@ export default function App() {
                 <button role="tab" aria-selected={modoCrear === 'plantilla'} className={`cr-modo ${modoCrear === 'plantilla' ? 'on' : ''}`} onClick={() => setModoCrear('plantilla')}>
                   <span aria-hidden="true">🧩</span>Con una plantilla<span className="cr-rec">Recomendado</span>
                 </button>
+                <button role="tab" aria-selected={modoCrear === 'propias'} className={`cr-modo ${modoCrear === 'propias' ? 'on' : ''}`} onClick={() => setModoCrear('propias')}>
+                  <span aria-hidden="true">🖼️</span>Mis plantillas
+                </button>
                 <button role="tab" aria-selected={modoCrear === 'cero'} className={`cr-modo ${modoCrear === 'cero' ? 'on' : ''}`} onClick={() => setModoCrear('cero')}>
                   <span aria-hidden="true">✨</span>Desde cero
                 </button>
@@ -387,7 +391,16 @@ export default function App() {
                 <button className="cm-buscar-btn" onClick={() => abrirCamila()}><span className="cm-av">C</span>Buscar producto</button>
               </div>
             )}
-            {modoCrear === 'cero' ? (
+            {modoCrear === 'propias' ? (
+              <Propias email={me.email} rol={me.rol} onUsar={(p) => {
+                setLibre((x) => ({ n: x.n + 1, inicial: {
+                  tipo: p.para === 'foto' ? 'imagen' : 'video', aspecto: p.aspecto,
+                  duracion: p.para === 'foto' ? '' : String(p.duracion || 10),
+                  indicaciones: p.receta, propia: { id: p.id, nombre: p.nombre }, paso: 3,
+                } }));
+                setModoCrear('cero');
+              }} />
+            ) : modoCrear === 'cero' ? (
               <Libre key={libre.n} inicial={libre.inicial} {...saldoProps} rol={me.rol} rolReal={me.rolReal}
                 productoListo={productoListo} onBuscarCamila={() => abrirCamila('libre')} onFoto={setFotoPuesta}
                 onVer={() => setTab('generaciones')} onRecargar={() => setTab('creditos')}

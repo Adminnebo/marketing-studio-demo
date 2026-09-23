@@ -580,7 +580,7 @@ function leer(respuesta, { minimo = 200 } = {}) {
   };
 }
 
-async function llamar(cuerpo, { fetch: pedir = globalThis.fetch, minimo } = {}) {
+async function pedirIa(cuerpo, { fetch: pedir = globalThis.fetch } = {}) {
   if (!API_KEY) throw new ErrorDePrompt('El prompt automático no está configurado.', { status: 503 });
   let r;
   try {
@@ -600,10 +600,29 @@ async function llamar(cuerpo, { fetch: pedir = globalThis.fetch, minimo } = {}) 
     if ([400, 404, 413, 422].includes(r.status)) throw new ErrorDePrompt('La IA rechazó la imagen. Prueba con otra o escribe el prompt a mano.', { status: 422, detalle });
     throw new ErrorDePrompt('La IA está saturada o no respondió. Prueba de nuevo en un rato.', { status: 503, detalle });
   }
-  const j = await r.json();
-  try { return leer(j, { minimo }); } catch (e) { e.uso = usoDe(j); throw e; } // la IA respondio: esos tokens se gastaron igual
+  return r.json();
 }
 const usoDe = (j) => ({ modelo: j?.model || MODELO_PROMPT, entrada: j?.usage?.input_tokens || 0, salida: j?.usage?.output_tokens || 0 });
+
+async function llamar(cuerpo, { minimo, ...opciones } = {}) {
+  const j = await pedirIa(cuerpo, opciones);
+  try { return leer(j, { minimo }); } catch (e) { e.uso = usoDe(j); throw e; } // la IA respondio: esos tokens se gastaron igual
+}
+
+/** Como llamar, pero devuelve el JSON del esquema tal cual (para esquemas que no son { prompt, avisos }). */
+async function llamarDatos(cuerpo, opciones = {}) {
+  const j = await pedirIa(cuerpo, opciones);
+  const uso = usoDe(j);
+  try { return { datos: datosDe(j), ...uso }; } catch (e) { e.uso = uso; throw e; }
+}
+
+function datosDe(respuesta) {
+  if (respuesta?.status === 'incomplete') throw new ErrorDePrompt('La IA no terminó. Prueba de nuevo.', { detalle: respuesta.incomplete_details?.reason });
+  const bloques = (respuesta?.output ?? []).flatMap((i) => i.content ?? []);
+  if (bloques.some((b) => b.type === 'refusal')) throw new ErrorDePrompt('La IA no quiso analizar esa imagen. Prueba con otra.', { status: 422 });
+  const texto = bloques.filter((b) => b.type === 'output_text').map((b) => b.text ?? '').join('');
+  try { return JSON.parse(texto); } catch { throw new ErrorDePrompt('La IA respondió con un formato inesperado.', { detalle: texto.slice(0, 300) }); }
+}
 
 const generar = (datos, opciones) => llamar(pedido(datos), opciones);
 
@@ -641,6 +660,6 @@ function pedidoDeTexto({ texto, motivo }) {
 const corregirTexto = (datos, opciones) => llamar(pedidoDeTexto(datos), { minimo: 10, ...opciones });
 
 module.exports = {
-  generar, corregir, corregirTexto, pedido, pedidoDeTexto, leer, tramos, ritmo, configurado, ErrorDePrompt,
-  MOTIVOS, INSTRUCCIONES_VIDEO, INSTRUCCIONES_FOTO, INSTRUCCIONES_TEXTO,
+  generar, corregir, corregirTexto, pedido, pedidoDeTexto, leer, datosDe, llamarDatos, tramos, ritmo, configurado, ErrorDePrompt,
+  MODELO_PROMPT, MOTIVOS, INSTRUCCIONES_VIDEO, INSTRUCCIONES_FOTO, INSTRUCCIONES_TEXTO,
 };

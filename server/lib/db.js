@@ -180,6 +180,23 @@ const MIGRACIONES = [
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS gasto_informado TIMESTAMPTZ`,
   // Reintento automatico tras un rechazo del filtro de contenido (lib/reintento.js): la creacion nueva.
   `ALTER TABLE generaciones ADD COLUMN IF NOT EXISTS reintento_id BIGINT`,
+  // Plantillas propias: los disenos que JH ya publico, convertidos en receta reutilizable
+  // (lib/plantillas-propias.js). Compartidas: las crea cualquiera y las usa todo el equipo.
+  `CREATE TABLE IF NOT EXISTS plantillas_propias (
+     id BIGSERIAL PRIMARY KEY,
+     nombre TEXT NOT NULL,
+     para TEXT NOT NULL DEFAULT 'video',
+     receta TEXT NOT NULL,
+     aspecto TEXT NOT NULL DEFAULT '9:16',
+     duracion INT,
+     con_audio BOOLEAN NOT NULL DEFAULT false,
+     portada JSONB,
+     origen JSONB,
+     creado_por TEXT NOT NULL,
+     usos INT NOT NULL DEFAULT 0,
+     eliminada BOOLEAN NOT NULL DEFAULT false,
+     creado TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
   `CREATE INDEX IF NOT EXISTS publicaciones_zernio_idx ON publicaciones (zernio_post_id)`,
   `CREATE INDEX IF NOT EXISTS generaciones_estado_idx ON generaciones (estado)`,
   `CREATE INDEX IF NOT EXISTS generaciones_creado_idx ON generaciones (creado DESC)`,
