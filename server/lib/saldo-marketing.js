@@ -306,6 +306,41 @@ async function resolverRevision(id, { por, aplicada }) {
   }
 }
 
+/** Guarda la respuesta de la plataforma en una solicitud (id de allá, texto). */
+const anotarRespuesta = (id, respuesta) => pool.query('UPDATE solicitudes_recarga SET respuesta = $2 WHERE id = $1', [id, String(respuesta || '').slice(0, 1000)]);
+
+/** Borra una solicitud que no llegó a la plataforma (para que puedan volver a pedirla). */
+const borrarSolicitud = (id) => pool.query(`DELETE FROM solicitudes_recarga WHERE id = $1 AND estado = 'pendiente'`, [id]);
+
+/**
+ * Con wallet: la recarga la aprueba una persona en el panel central de Nebo. Aquí no se
+ * aprueba nada; se mira si el monto ya entró al wallet (un movimiento 'credit' con nuestra
+ * referencia 'mkt-rec-<id>') y recién ahí la solicitud pasa a aprobada.
+ */
+async function revisarSolicitudesEnWallet(remotas) {
+  const pendientes = await solicitudes({ abiertas: true, limite: 50 });
+  if (!pendientes.length) return 0;
+  const porRef = new Map((remotas || []).filter((s) => s.referencia).map((s) => [s.referencia, s]));
+  const ESTADOS = { approved: 'aprobada', accepted: 'aprobada', rejected: 'rechazada', denied: 'rechazada', declined: 'rechazada', cancelled: 'rechazada' };
+  let n = 0;
+  for (const s of pendientes) {
+    const r = porRef.get(`mkt-rec-${s.id}`);
+    const estado = r && ESTADOS[r.estado];
+    if (!estado) continue;
+    const nota = [
+      estado === 'aprobada' ? 'Aprobada en el panel de Nebo' : 'Rechazada en el panel de Nebo',
+      r.aprobadoUsd != null && Math.abs(r.aprobadoUsd - Number(s.monto_usd)) > 0.005 ? `por ${r.aprobadoUsd} USD` : null,
+      r.nota,
+    ].filter(Boolean).join(' · ').slice(0, 300);
+    await pool.query(
+      `UPDATE solicitudes_recarga SET estado = $2, resuelto = COALESCE($3::timestamptz, now()), resuelto_por = COALESCE(resuelto_por, 'panel de Nebo'), nota = $4
+       WHERE id = $1 AND estado IN ('pendiente', 'revisar')`, [s.id, estado, r.decidido || null, nota]
+    );
+    n++;
+  }
+  return n;
+}
+
 /**
  * Fija el saldo de Marketing en un monto (super admin): registra un 'ajuste' por la diferencia.
  * Solo mueve el registro interno; NO toca el saldo general de JH en la plataforma de pagos.
@@ -380,5 +415,5 @@ async function enviarAJh() {
 
 module.exports = {
   migrar, activo, registra, saldo, bloquear, cobrarGeneracion, reembolsar, cobrarIa, puedeGastarIa, exento, movimientos, gastoDelMes,
-  solicitar, solicitudes, pendientes, aprobar, rechazar, resolverRevision, fijarSaldo, enviarAJh, SaldoMarketingError, CLASES_IA, _probar,
+  solicitar, solicitudes, pendientes, aprobar, rechazar, resolverRevision, fijarSaldo, enviarAJh, anotarRespuesta, borrarSolicitud, revisarSolicitudesEnWallet, SaldoMarketingError, CLASES_IA, _probar,
 };

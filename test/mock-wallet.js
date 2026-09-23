@@ -2,6 +2,8 @@
  * Wallet de Marketing SIMULADO (plataforma central) para pruebas y desarrollo local:
  *   GET  /api/budgets/marketing?clientId=&apiKey=   saldo
  *   POST /api/budgets/marketing/debit               debita { amount, description, reference }
+ *   POST /api/budgets/marketing/requests            pide una recarga (queda 'pending')
+ *   GET  /api/budgets/requests                      estado de las solicitudes
  *
  * La referencia se respeta: repetirla NO cobra dos veces (es lo que esperamos del real).
  * Con `idempotente(false)` se simula lo contrario, para ver que pasaria si no lo fuera.
@@ -12,6 +14,7 @@ const http = require('http');
 
 function crearWallet({ apiKey = 'clave-wallet', clientId = 16, saldo = 100, nombre = 'Marketing' } = {}) {
   const debitos = [];
+  const solicitudes = [];
   const peticiones = [];
   let caido = false; let modo = null; let idem = true; let lento = 0;
   const estado = { saldo };
@@ -43,12 +46,37 @@ function crearWallet({ apiKey = 'clave-wallet', clientId = 16, saldo = 100, nomb
         debitos.push(b);
         return responder(res, 200, { success: true, balance: Math.round(estado.saldo * 100) / 100 });
       }
+      if (req.method === 'POST' && url.pathname === '/api/budgets/marketing/requests') {
+        const b = JSON.parse(crudo || '{}');
+        if (modo) return responder(res, Number(modo), { success: false, error: 'boom' });
+        if (b.apiKey !== apiKey || String(b.clientId) !== String(clientId)) return responder(res, 401, { success: false, error: 'Invalid caller' });
+        if (!(Number(b.amount) > 0)) return responder(res, 400, { success: false, error: 'Invalid request' });
+        const ya = solicitudes.find((s) => s.reference && s.reference === b.reference);
+        if (ya) return responder(res, 200, { success: true, duplicate: true, request: ya });
+        const s = { id: solicitudes.length + 1, status: 'pending', amount: Number(b.amount), approvedAmount: null,
+          budget: { id: 1, name: nombre, slug: 'marketing', balance: estado.saldo }, description: b.description || null,
+          reference: b.reference || null, requestedBy: 'api', decidedAt: null, decisionNote: null, createdAt: new Date().toISOString() };
+        solicitudes.push(s);
+        return responder(res, 201, { success: true, duplicate: false, request: s });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/budgets/requests') {
+        if (url.searchParams.get('apiKey') !== apiKey) return responder(res, 401, { success: false, error: 'Invalid API key' });
+        return responder(res, 200, { success: true, requests: solicitudes });
+      }
       return responder(res, 404, { success: false, error: 'ruta_desconocida' });
     });
   });
 
   return {
-    server, debitos, peticiones, estado,
+    server, debitos, peticiones, estado, solicitudes,
+    // Lo que hace una persona en el panel de Nebo:
+    decidir: (ref, { estado: e = 'approved', aprobado = null, nota = null } = {}) => {
+      const s = solicitudes.find((x) => x.reference === ref);
+      if (!s) return false;
+      s.status = e; s.approvedAmount = aprobado; s.decisionNote = nota; s.decidedAt = new Date().toISOString();
+      if (e === 'approved') estado.saldo += aprobado ?? s.amount;
+      return true;
+    },
     caer: (v = true) => { caido = v; },
     fallar: (status) => { modo = status; },
     idempotente: (v) => { idem = v; },

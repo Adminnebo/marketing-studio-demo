@@ -118,6 +118,88 @@ async function debitar({ usd, descripcion, referencia }) {
   throw new ErrorDeWallet(`HTTP ${r.status}`, { seguro: NO_LLEGO.has(r.status), detalle: texto });
 }
 
+// ── Pedir recarga (la aprueba una persona en el panel central de Nebo) ──
+
+/**
+ * Manda una solicitud de recarga del wallet.
+ *   POST {WALLET_URL}/requests { clientId, apiKey, amount, description, reference }
+ * La `referencia` ('mkt-rec-12') la armamos nosotros: si el pedido se repite, del otro lado
+ * se ve que es el mismo. Devuelve { id, estado, respuesta }.
+ */
+async function solicitarRecarga({ usd, descripcion, referencia }) {
+  if (!configurado()) throw new ErrorDeWallet('El wallet de Marketing no está configurado', { definitivo: true });
+  const monto = centavos(usd);
+  if (!(monto > 0)) throw new ErrorDeWallet(`monto inválido (${usd})`, { seguro: true, definitivo: true });
+  let r;
+  const cuerpo = {
+    clientId: Number(CLIENTE()) || CLIENTE(), apiKey: CLAVE(), amount: monto,
+    description: String(descripcion || 'Recarga de Marketing').slice(0, 200), reference: String(referencia || '').slice(0, 100),
+  };
+  try {
+    r = await fetch(`${URL_BASE()}/requests`, {
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(cuerpo), signal: AbortSignal.timeout(TIEMPO_MS),
+    });
+  } catch (e) {
+    throw new ErrorDeWallet(`sin respuesta (${e.message})`, { seguro: /abort|timeout/i.test(e.message) ? false : true });
+  }
+  const texto = (await r.text().catch(() => '')).slice(0, 2000);
+  let j = {};
+  try { j = JSON.parse(texto); } catch { /* respuesta no-JSON */ }
+  const error = String(j.error || j.message || '');
+  if (r.ok && j.success !== false) {
+    // `duplicate: true` = esa referencia ya se habia pedido: no se creo otra solicitud.
+    return { id: j.id ?? j.requestId ?? j.request?.id ?? null, estado: j.status || j.request?.status || 'pendiente',
+      duplicada: j.duplicate === true, respuesta: texto };
+  }
+  if (/duplicat|already|repetid|existe/i.test(error)) return { id: j.id ?? null, estado: 'pendiente', duplicada: true, respuesta: texto };
+  if (r.status === 401 || r.status === 403) throw new ErrorDeWallet('la plataforma rechazó la clave', { seguro: true, definitivo: true, detalle: texto });
+  if (r.status === 400 || r.status === 404) throw new ErrorDeWallet(`la plataforma rechazó el pedido (HTTP ${r.status})`, { seguro: true, definitivo: true, detalle: texto });
+  throw new ErrorDeWallet(`HTTP ${r.status}`, { seguro: NO_LLEGO.has(r.status), detalle: texto });
+}
+
+/**
+ * Estado de las solicitudes de recarga en la plataforma.
+ *   GET {WALLET_URL sin el slug}/requests -> { requests: [{ id, status, amount, approvedAmount,
+ *        budget:{slug}, reference, decisionNote, decidedAt, createdAt }] }
+ * Devuelve solo las de este wallet.
+ */
+async function solicitudesEnPlataforma(limite = 60) {
+  if (!configurado()) return [];
+  const slug = URL_BASE().split('/').pop();
+  const url = new URL(`${URL_BASE().replace(/\/[^/]+$/, '')}/requests`);
+  url.searchParams.set('clientId', CLIENTE());
+  url.searchParams.set('apiKey', CLAVE());
+  const r = await fetch(url, { signal: AbortSignal.timeout(TIEMPO_MS), headers: { accept: 'application/json' } })
+    .catch((e) => { throw new ErrorDeWallet(`sin respuesta (${e.message})`, { seguro: true }); });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.success === false) throw new ErrorDeWallet(`respuesta inesperada: HTTP ${r.status}`, { seguro: true });
+  return (j.requests || [])
+    .filter((s) => !s.budget?.slug || s.budget.slug === slug)
+    .slice(0, limite)
+    .map((s) => ({
+      idPlataforma: s.id, estado: String(s.status || '').toLowerCase(), referencia: s.reference || null,
+      montoUsd: Number(s.amount), aprobadoUsd: s.approvedAmount == null ? null : Number(s.approvedAmount),
+      nota: s.decisionNote || null, decidido: s.decidedAt || null, creado: s.createdAt || null, pedidaPor: s.requestedBy || null,
+    }));
+}
+
+/** Movimientos del wallet en la plataforma (para ver si una recarga ya entró). */
+async function movimientos(limite = 50) {
+  if (!configurado()) return [];
+  const url = new URL(`${URL_BASE()}/movements`);
+  url.searchParams.set('clientId', CLIENTE());
+  url.searchParams.set('apiKey', CLAVE());
+  const r = await fetch(url, { signal: AbortSignal.timeout(TIEMPO_MS), headers: { accept: 'application/json' } })
+    .catch((e) => { throw new ErrorDeWallet(`sin respuesta (${e.message})`, { seguro: true }); });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.success === false) throw new ErrorDeWallet(`respuesta inesperada: HTTP ${r.status}`, { seguro: true });
+  return (j.movements || []).slice(0, limite).map((m) => ({
+    id: m.id, tipo: m.kind, usd: Number(m.amount), referencia: m.reference || null,
+    concepto: m.description || '', fecha: m.at || null, saldoDespues: Number(m.balanceAfter),
+  }));
+}
+
 // ── Cola de debitos (wallet_debitos) ──
 
 /**
@@ -257,6 +339,7 @@ const marcarHecho = async (id, quien) => (await pool.query(
 )).rowCount > 0;
 
 module.exports = {
+  solicitarRecarga, movimientos, solicitudesEnPlataforma,
   configurado, leer, olvidar, debitar, encolar, informarGasto, encolarFaltantes, procesarCola, liberarEnviando,
   pendiente, resumen, paraRevisar, reintentar, marcarHecho,
   ErrorDeWallet, MINIMO_USD, centavos,

@@ -41,7 +41,21 @@ router.get('/creditos', ruta(async (req, res, next) => {
       console.error('[wallet]', e.message);
       r.errorSaldo = 'No se pudo leer el saldo del wallet de Marketing. Intenta de nuevo en un momento.';
     }
-    if (req.user.puedeAprobar) r.porRevisar = await wallet.paraRevisar(20);
+    // Recargas: se piden aquí y las aprueba una persona en el panel central de Nebo.
+    try {
+      const [remotas, movs] = await Promise.all([
+        wallet.solicitudesEnPlataforma(60),
+        wallet.movimientos(60).catch(() => []),
+      ]);
+      await saldoMarketing.revisarSolicitudesEnWallet(remotas);
+      r.recargas = movs.filter((m) => m.tipo === 'credit' || Number(m.usd) > 0).slice(0, 10);
+    } catch (e) { console.error('[wallet] solicitudes', e.message); }
+    r.misSolicitudes = await saldoMarketing.solicitudes({ por: req.user.email, limite: 10 });
+    r.apruebaNebo = true; // aquí no se aprueba: se decide allá
+    if (req.user.puedeAprobar) {
+      r.abiertas = await saldoMarketing.solicitudes({ abiertas: true, limite: 50 });
+      r.porRevisar = await wallet.paraRevisar(20);
+    }
     return res.json(r);
   }
   if (!saldoMarketing.activo()) return next();
@@ -73,13 +87,30 @@ router.post('/creditos/wallet/:id/:accion', soloAprobador, ruta(async (req, res)
 }));
 
 router.post('/creditos/solicitudes', ruta(async (req, res) => {
-  if (!saldoMarketing.activo()) return res.status(400).json({ error: 'Las recargas por solicitud no están activas.' });
+  if (!wallet.configurado() && !saldoMarketing.activo()) return res.status(400).json({ error: 'Las recargas por solicitud no están activas.' });
   const s = await saldoMarketing.solicitar({ montoUsd: Number(req.body?.monto), motivo: req.body?.motivo, por: req.user.email });
-  console.log(`[saldo-mkt] ${req.user.email} pidio una recarga de ${s.monto_usd} USD (#${s.id})`);
+  // Con wallet, el pedido va al panel central de Nebo, que es donde se aprueba.
+  if (wallet.configurado()) {
+    const quien = req.user.nombre ? `${req.user.nombre} (${req.user.email})` : req.user.email;
+    try {
+      const r = await wallet.solicitarRecarga({
+        usd: s.monto_usd, referencia: `mkt-rec-${s.id}`,
+        descripcion: `Marketing JH · ${s.motivo ? `${s.motivo} · ` : ''}pedida por ${quien}`,
+      });
+      await saldoMarketing.anotarRespuesta(s.id, r.respuesta);
+      console.log(`[saldo-mkt] ${req.user.email} pidio ${s.monto_usd} USD al panel de Nebo (mkt-rec-${s.id}, ${r.estado})`);
+    } catch (e) {
+      // Si no llegó, la solicitud no queda colgada: se borra y se puede volver a pedir.
+      if (e.seguro) { await saldoMarketing.borrarSolicitud(s.id); return res.status(502).json({ error: `No se pudo enviar la solicitud: ${e.message}. No se pidió nada; intenta de nuevo.` }); }
+      await saldoMarketing.anotarRespuesta(s.id, `sin confirmar: ${e.message}`);
+      return res.status(502).json({ error: 'La solicitud se envió pero la plataforma no confirmó. Revisa en el panel de Nebo antes de volver a pedirla.' });
+    }
+  }
   res.status(201).json(s);
 }));
 
 router.post('/creditos/solicitudes/:id/aprobar', soloAprobador, ruta(async (req, res) => {
+  if (wallet.configurado()) return res.status(400).json({ error: 'Las recargas se aprueban en el panel de Nebo, no aquí.' });
   res.json(await saldoMarketing.aprobar(Number(req.params.id), { por: req.user.email, nota: String(req.body?.nota || '').slice(0, 300) || null }));
 }));
 

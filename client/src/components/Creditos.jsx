@@ -372,9 +372,61 @@ function CreditosWallet({ d, onActualizar, actualizando }) {
 
       <div className="card cr-wallet-nota">
         <strong>El saldo vive en la plataforma central de Nebo.</strong>
-        <p>Cada creación y cada ayuda de IA se debitan de ahí en el momento, con su propia referencia. Para recargar, pídelo en la plataforma central: el botón de solicitudes desde aquí queda pendiente de que nos entreguen ese endpoint.</p>
+        <p>Cada creación y cada ayuda de IA se debitan de ahí en el momento, con su propia referencia. Las recargas se piden desde aquí y las aprueba una persona en el panel de Nebo; cuando entran, el saldo sube solo.</p>
         <button className="btn secondary" onClick={onActualizar} disabled={actualizando}>{actualizando ? 'Actualizando…' : '↻ Actualizar saldo'}</button>
       </div>
+
+      <div className="section-title">Pedir recarga</div>
+      <PedirRecarga onPedida={onActualizar} />
+      {d.misSolicitudes?.length > 0 && (
+        <div className="cr-mias">
+          {d.misSolicitudes.map((s) => (
+            <div key={s.id} className="cr-mia">
+              <span className="num">{usd(s.monto_usd)}</span>
+              <span className="cr-mia-f">{fecha(s.creado)}</span>
+              <span className={`pill sol-${s.estado}`}>{s.estado === 'pendiente' ? 'Esperando a Nebo' : EST_SOL[s.estado]}</span>
+              <span className="cr-mia-f">ref. mkt-rec-{s.id}</span>
+              {s.motivo && <span className="cr-mia-n">“{s.motivo}”</span>}
+              {s.nota && <span className="cr-mia-n">{s.nota}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {d.puedeAprobar && d.abiertas?.length > 0 && (
+        <>
+          <div className="section-title">Solicitudes de todo el equipo <span className="hd-n">{d.abiertas.length}</span></div>
+          <div className="card">
+            <div className="ms-cost" style={{ marginBottom: 10 }}>Se aprueban en el panel de Nebo. Aquí solo se ven, y el saldo sube solo cuando las aprueban.</div>
+            <div className="cr-mias">
+              {d.abiertas.map((s) => (
+                <div key={s.id} className="cr-mia">
+                  <span className="num">{usd(s.monto_usd)}</span>
+                  <span className="cr-mia-f">{s.pedido_por} · {fecha(s.creado)}</span>
+                  <span className={`pill sol-${s.estado}`}>{s.estado === 'pendiente' ? 'Esperando a Nebo' : EST_SOL[s.estado]}</span>
+                  <span className="cr-mia-f">ref. mkt-rec-{s.id}</span>
+                  {s.motivo && <span className="cr-mia-n">“{s.motivo}”</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {d.recargas?.length > 0 && (
+        <>
+          <div className="section-title">Últimas recargas recibidas</div>
+          <div className="card cr-mias">
+            {d.recargas.map((m) => (
+              <div key={m.id} className="cr-mia">
+                <span className="num" style={{ color: 'var(--good-ink)' }}>+{usd(Math.abs(m.usd))}</span>
+                <span className="cr-mia-f">{m.fecha ? fecha(m.fecha) : ''}</span>
+                <span className="cr-mia-n">{m.concepto}{m.referencia ? ` · ref. ${m.referencia}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {d.puedeAprobar && d.porRevisar?.length > 0 && (
         <>
