@@ -16,7 +16,7 @@ const esVideoGen = (g) => g.preset_tipo === 'libre_video' || TIPOS_VIDEO.has(g.p
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
 
-function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
+function Tarjeta({ g: gen, rol, limpia = false, onRepetir, onPublicar, onBase, onBorrar }) {
   const [g, setG] = useState(gen);
   useEffect(() => { setG((x) => (gen.marca_estado === x.marca_estado && gen.resultados === x.resultados ? x : gen)); }, [gen]);
   const [marcando, setMarcando] = useState(false);
@@ -42,13 +42,15 @@ function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
     try { await descargar(g.id, Math.min(i, ok.length - 1)); } catch (e) { setErrBaja(e.message); } finally { setBajando(false); }
   };
   return (
-    <div className="ms-gen">
+    <div className={`ms-gen ${limpia ? 'limpia' : ''}`}>
       <div className={`ms-gen-media ${g.estado === 'completado' && r ? 'done' : ''}`}>
         {marcando && <div className="ms-gen-overlay"><div className="spinner" />Poniendo el logo…</div>}
         {g.estado === 'completado' && r ? (
           <>
             {esVideoUrl(r.url)
-              ? <video src={r.url} controls playsInline preload="metadata" />
+              // En vista limpia no hay barra de controles (sale en la grabación): un clic la pausa o la sigue.
+              ? <video src={r.url} controls={!limpia} playsInline preload="metadata"
+                  onClick={limpia ? (e) => { const v = e.currentTarget; v.muted = true; if (v.paused) v.play().catch(() => {}); else v.pause(); } : undefined} />
               : onPublicar
                 // Clic en la foto: abre Publicar con esta foto (quien no puede publicar la ve grande).
                 ? <button className="ms-gen-pub" onClick={() => onPublicar(g, Math.min(i, ok.length - 1))} title="Publicar esta foto"><img src={r.miniatura || r.url} alt={g.preset_nombre} loading="lazy" /></button>
@@ -75,6 +77,7 @@ function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
         </div>
       )}
       <div className="ms-gen-body">
+        {!limpia && (<>
         <div className="ms-gen-top">
           <span className="ms-gen-name" title={g.preset_nombre}>{g.preset_nombre || 'Plantilla'}</span>
           <span className={`pill st-${g.estado}`}>{ESTADOS[g.estado] || g.estado}</span>
@@ -114,6 +117,7 @@ function Tarjeta({ g: gen, rol, onRepetir, onPublicar, onBase, onBorrar }) {
               ) : <button className="linklike" onClick={() => marcar({})}>🏷️ Poner el logo</button>}
           </div>
         )}
+        </>)}
         {ajustando && (
           <div className="ms-modal aj-modal" onMouseDown={(e) => e.target === e.currentTarget && setAjustando(false)}>
             <div className="ms-modal__box aj-box" role="dialog" aria-label="Ajustar el logo">
@@ -195,6 +199,39 @@ export default function Generaciones({ items: todas, cargando: cargandoTodas, er
   const hayMas = b.activa ? !!b.siguiente : hayMasTodas;
   const visibles = items.filter((g) => !filtro || (filtro === 'curso' ? EN_CURSO.has(g.estado) : g.estado === filtro));
   const cambiar = (k, v) => setF((x) => ({ ...x, [k]: v }));
+
+  // Solo super admin, y solo en este navegador: vista para grabar sin costos ni autores,
+  // y un botón que arranca a la vez, sin sonido y desde cero, todos los videos que se ven.
+  const esSuper = rol === 'super_admin';
+  const [limpiaSt, setLimpiaSt] = useState(() => { try { return localStorage.getItem('ms_vista_limpia') === '1'; } catch { return false; } });
+  const limpia = esSuper && limpiaSt;
+  const cambiarLimpia = (v) => { setLimpiaSt(v); try { localStorage.setItem('ms_vista_limpia', v ? '1' : '0'); } catch { /* sin storage */ } };
+  const grilla = useRef(null);
+  const [reproduccion, setReproduccion] = useState('quieto'); // quieto | preparando | sonando
+  const nVideos = visibles.filter((g) => g.estado === 'completado' && esVideoUrl((g.resultados || []).find((x) => x.url)?.url)).length;
+  const reproducirTodos = async () => {
+    const vids = [...(grilla.current?.querySelectorAll('video') || [])];
+    if (!vids.length) return;
+    setReproduccion('preparando');
+    // Todos a cero y cargando, y recién cuando TODOS pueden arrancar se les da play juntos.
+    const listos = vids.map((v) => new Promise((res) => {
+      v.pause(); v.muted = true; v.loop = false; v.preload = 'auto';
+      const ok = () => { v.removeEventListener('canplay', ok); res(); };
+      v.addEventListener('canplay', ok);
+      v.load(); // vuelve a cero y empieza a bajar
+      setTimeout(ok, 8000); // si uno tarda demasiado, no frena a los demás
+    }));
+    await Promise.all(listos);
+    vids.forEach((v) => { v.currentTime = 0; v.muted = true; });
+    await Promise.all(vids.map((v) => v.play().catch(() => {})));
+    setReproduccion('sonando');
+  };
+  const pausarTodos = () => {
+    grilla.current?.querySelectorAll('video').forEach((v) => v.pause());
+    setReproduccion('quieto');
+  };
+  useEffect(() => { setReproduccion('quieto'); }, [f.q, f.medio, f.dias, f.autor, f.publicadas, filtro]);
+
   return (
     <>
       <div className="gn-filtros" role="search">
@@ -224,7 +261,23 @@ export default function Generaciones({ items: todas, cargando: cargandoTodas, er
             return <button key={k} className={`pl-cat ${filtro === k ? 'on' : ''}`} onClick={() => setFiltro(k)}>{l} <span className="pl-cat-n">{n}</span></button>;
           })}
         </div>
-        <Tamano valor={tam} onCambio={setTam} min={180} max={400} />
+        <div className="gn-derecha">
+          {esSuper && (
+            <div className="gn-super" role="group" aria-label="Vista para grabar (solo super admin)">
+              <button className={`gn-super-b ${limpia ? 'on' : ''}`} onClick={() => cambiarLimpia(!limpia)} aria-pressed={limpia}
+                title="Oculta costos, autores y descripciones. Solo en este navegador; nadie más lo ve.">
+                👁 Vista limpia
+              </button>
+              {reproduccion === 'sonando'
+                ? <button className="gn-super-b on" onClick={pausarTodos}>⏸ Pausar videos</button>
+                : <button className="gn-super-b" onClick={reproducirTodos} disabled={!nVideos || reproduccion === 'preparando'}
+                    title="Arranca desde cero y sin sonido todos los videos que se ven ahora, a la vez">
+                    {reproduccion === 'preparando' ? 'Preparando…' : `▶ Reproducir ${nVideos || ''} ${nVideos === 1 ? 'video' : 'videos'}`}
+                  </button>}
+            </div>
+          )}
+          <Tamano valor={tam} onCambio={setTam} min={180} max={400} />
+        </div>
       </div>
       {error && <div className="banner-off">{error}</div>}
       {!items.length && cargando ? (
@@ -240,8 +293,8 @@ export default function Generaciones({ items: todas, cargando: cargandoTodas, er
           )}
         </div>
       ) : (
-        <div className="ms-gens" style={{ '--tam': `${tam}px` }}>
-          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} onRepetir={onRepetir} onPublicar={onPublicar} onBase={onBase} onBorrar={borrar} />)}
+        <div className={`ms-gens ${limpia ? 'limpia' : ''}`} ref={grilla} style={{ '--tam': `${tam}px` }}>
+          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} limpia={limpia} onRepetir={onRepetir} onPublicar={onPublicar} onBase={onBase} onBorrar={borrar} />)}
         </div>
       )}
       {hayMas && (

@@ -391,3 +391,13 @@ a.riel-it:hover { background: var(--surface-2); color: var(--text-primary); }
 .pb-ajuste { z-index: 60; }
 .pb-conlogo { display: inline-flex; align-items: center; gap: 8px; }
 .pb-conlogo .linklike { color: #cfe3ff; }
+
+/* Mis creaciones: vista para grabar (solo super admin, por navegador) */
+.gn-derecha { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.gn-super { display: inline-flex; gap: 6px; padding: 3px; border-radius: 10px; border: 1px dashed var(--border); }
+.gn-super-b { font: inherit; font-size: 0.78rem; font-weight: 600; padding: 5px 10px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.gn-super-b:hover:not(:disabled) { background: var(--surface-2); color: var(--text-primary); }
+.gn-super-b.on { background: var(--series-1); color: #fff; }
+.gn-super-b:disabled { opacity: 0.5; cursor: default; }
+.ms-gen.limpia .ms-gen-body { padding-top: 8px; }
+.ms-gen.limpia .ms-gen-media video { cursor: pointer; }
