@@ -6,8 +6,8 @@
 @media (min-width: 1000px) { .app { padding-left: 84px; } }
 
 /* ── Encabezado: Marketing + usuario | pestañas | saldo + tema ── */
-.hd { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; display: flex; align-items: center; gap: 16px; height: 58px; margin: 0 0 16px;
-  background: color-mix(in srgb, var(--page) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--grid); }
+.hd { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 41; display: flex; align-items: center; gap: 16px; height: 58px; margin: 0;
+  background: color-mix(in srgb, var(--page) 92%, transparent); backdrop-filter: blur(8px); }
 .hd-marca { display: flex; align-items: baseline; gap: 8px; flex: none; }
 .hd-marca > b { font-size: 1.12rem; font-weight: 750; letter-spacing: -0.02em; }
 .hd-user { position: relative; }
@@ -25,11 +25,24 @@
 .hd-menu-vc { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 9px 7px; font-size: 0.82rem; color: var(--text-secondary); }
 .hd-menu-vc select { font: inherit; font-size: 0.8rem; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); border-radius: 7px; padding: 4px 6px; }
 
-.hd-tabs { display: flex; gap: 2px; align-self: stretch; margin-left: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.hd-tab { position: relative; display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; font: inherit; font-size: 0.92rem; font-weight: 620; color: var(--text-secondary); padding: 0 12px; cursor: pointer; white-space: nowrap; }
+/* Fila propia, a todo el ancho de la pagina: con ocho secciones apretadas entre
+   la marca y el saldo no se distinguian unas de otras. Cada pestaña se reparte
+   el ancho a partes iguales; en pantallas chicas vuelve a medir por contenido y
+   se desliza, porque a partes iguales quedarian de 45 px. */
+.hd-tabs { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 58px); z-index: 40;
+  display: flex; align-items: stretch; height: 44px; margin: 0 0 20px;
+  background: color-mix(in srgb, var(--page) 92%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--grid); overflow-x: auto; scrollbar-width: none; }
+.hd-tabs::-webkit-scrollbar { display: none; }
+.hd-tab { position: relative; flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; background: none; font: inherit; font-size: 0.92rem; font-weight: 620; color: var(--text-secondary); padding: 0 10px; cursor: pointer; white-space: nowrap; }
 .hd-tab:hover { color: var(--text-primary); }
 .hd-tab.on { color: var(--text-primary); }
-.hd-tab.on::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--series-1); }
+.hd-tab.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--series-1); }
+.hd-tab:focus-visible { outline: 2px solid var(--series-1); outline-offset: -3px; border-radius: 6px 6px 0 0; }
+@media (max-width: 860px) {
+  .hd-tab { flex: 0 0 auto; padding: 0 14px; }
+}
 .hd-n { font-size: 0.68rem; font-weight: 700; line-height: 17px; padding: 0 6px; border-radius: 999px; background: var(--series-1); color: #fff; }
 .hd-n.gris { background: var(--surface-2); color: var(--text-muted); }
 .hd-r { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }

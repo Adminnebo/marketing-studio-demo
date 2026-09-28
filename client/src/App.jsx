@@ -273,16 +273,6 @@ export default function App() {
           <b>Marketing</b>
           <MenuUsuario me={me} estado={estado} saldoGenerador={saldo} onSalir={salir} onSuperAdmin={() => setTab('superadmin')} />
         </div>
-        <nav className="hd-tabs" aria-label="Secciones">
-          {tabs.map((t) => (
-            <button key={t.id} className={`hd-tab ${tab === t.id ? 'on' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
-              {t.label}
-              {t.id === 'generaciones' && enCurso > 0 && <span className="hd-n">{enCurso}</span>}
-              {t.id === 'creditos' && me.solicitudesPendientes > 0 && <span className="hd-n" title="Solicitudes de recarga por aprobar">{me.solicitudesPendientes}</span>}
-              {t.id === 'redes' && cuentas?.length > 0 && <span className="hd-n gris">{cuentas.length}</span>}
-            </button>
-          ))}
-        </nav>
         <div className="hd-r">
           <button className={`hd-saldo ${saldoValor != null && saldoValor < 0 ? 'neg' : ''}`} onClick={() => setTab('creditos')}
             title={marketing ? 'Saldo de Marketing' : externo ? `Saldo total ${me.saldoUsd != null ? usd(me.saldoUsd) : '—'}${me.saldoPendienteUsd ? ` · ${usd(me.saldoPendienteUsd)} por descontar` : ''}` : 'Saldo de créditos de JH'}>
@@ -305,6 +295,17 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      <nav className="hd-tabs" aria-label="Secciones">
+        {tabs.map((t) => (
+          <button key={t.id} className={`hd-tab ${tab === t.id ? 'on' : ''}`} onClick={() => { setTab(t.id); if (t.id === 'redes') cargarRedes(); }}>
+            {t.label}
+            {t.id === 'generaciones' && enCurso > 0 && <span className="hd-n">{enCurso}</span>}
+            {t.id === 'creditos' && me.solicitudesPendientes > 0 && <span className="hd-n" title="Solicitudes de recarga por aprobar">{me.solicitudesPendientes}</span>}
+            {t.id === 'redes' && cuentas?.length > 0 && <span className="hd-n gris">{cuentas.length}</span>}
+          </button>
+        ))}
+      </nav>
 
       {me.verComo && (
         <div className="vc-banner">
