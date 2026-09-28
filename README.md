@@ -194,18 +194,20 @@ Proyecto propio, **Marketing Studio**, con tres servicios que salen de este mism
 Variables: ver `.env.example`. `HF_REFRESH_TOKEN` solo siembra la base de datos la primera vez; después se puede
 borrar.
 
+**El panel vive en su propio dominio**, `https://panelmarketing.neboaiconsulting.com` (desde el 2026-09-28: CNAME
+`panelmarketing` → `b4i15vma.up.railway.app`, `PANEL_URL` puesta en `panel` y `worker`, los otros 3 paneles
+enlazando ahí y el nodo "Cobrar en Panel Marketing" de n8n apuntando a `/api/n8n/costo-camila` del dominio nuevo).
+La URL vieja de Railway sigue respondiendo, pero no es la buena para nada nuevo.
+
+`PANEL_URL` no es cosmética: con ella el panel registra su webhook en Zernio al arrancar (**sin ella el registro no
+se hace**), construye la vuelta de OAuth al conectar redes y la de reconectar el generador. Su valor se ve en
+Super Admin → Redes, junto con los webhooks registrados.
+
 ## Pendiente (detalles y correcciones finales)
 
-- **Saldo de Marketing (activo desde 2026-09-22)**: arranca en $0; nadie de Marketing (salvo super admins) puede crear hasta que se apruebe la primera recarga. Dar el permiso **Aprueba recargas** en Super Admin → Usuarios a quien corresponda.
 - **Costos de super admins y sistema**: se registran y van al saldo general de JH por lotes (worker, cada 10 min). Falta una pantalla para resolver lotes que queden "A JH · revisar" (hoy solo se marcan en Movimientos y en los logs del worker). Verificar en Super Admin que "Informar creaciones de super admins" esté activado (el valor guardado manda sobre el nuevo defecto).
-- **Conciliación (activa desde 2026-09-22)**: Camila faltante se cobra estimada sola; en Higgsfield solo se informa. La primera corrida encontró 3 creaciones con otro costo que el estimado y 3.5 cr gastados fuera del panel: revisarlas en Super Admin → Consumo y decidir si las diferencias se cobran automáticamente.
-- **Camila, tono**: pegar la sección de marketing en tuteo en el system message del Agente en n8n y publicar.
-- **Recargar la cuenta del generador** (admin@neboaiconsulting.com): el 2026-09-18 quedó en 19 créditos y las creaciones que cuestan más se rechazan con aviso claro.
 - **Idempotencia en el descuento**: pedir al equipo de pagos que `/api/credits/adjust` acepte una referencia única y rechace repetidos; hoy un corte a mitad requiere revisión manual.
-- **Política de saldo negativo**: JH está en -$1,018 en la plataforma; con el ajuste en $0 no pueden crear hasta pagar. Definir si se permite un margen.
-- **Redes (Zernio)**: clave cargada el 2026-09-22 (panel y worker). La cuenta de Zernio es compartida con otros proyectos: el panel usa solo el perfil de JH (Super Admin → Redes muestra los perfiles y permite cambiarlo) y nunca crea ni toca perfiles ajenos. Falta conectar Instagram/Facebook/TikTok en ese perfil (hoy solo tiene WhatsApp, que el panel no usa) y probar una publicación real.
-- **Dominio propio** (`panelmarketing.neboaiconsulting.com`): el dominio ya está dado de alta en Railway y espera el DNS. Falta, en Squarespace (DNS de neboaiconsulting.com): **CNAME · host `panelmarketing` · apunta a `b4i15vma.up.railway.app`**. Cuando resuelva, correr `scripts/cambiar-dominio.sh` (comprueba DNS y certificado, y cambia `PANEL_URL` en panel y worker; el webhook de Zernio se reapunta solo al arrancar) y después `scripts/cambiar-dominio-paneles.sh` (enlace a Marketing en los otros 3 paneles; deja los commits sin subir). A mano queda el nodo "Cobrar en Panel Marketing" del flujo n8n "Camila Paralela - Costos" → `https://panelmarketing.neboaiconsulting.com/api/n8n/costo-camila`. La URL vieja de Railway sigue funcionando.
-- **Primer usuario de JH**: cargar saldo en la billetera (recarga manual) y darle acceso desde Super Admin.
+- **Redes (Zernio)**: clave cargada el 2026-09-22 (panel y worker). La cuenta de Zernio es compartida con otros proyectos: el panel usa solo el perfil de JH (Super Admin → Redes muestra los perfiles y permite cambiarlo) y nunca crea ni toca perfiles ajenos. **Instagram ya está conectado** (2026-09-28). Falta **probar una publicación real**, y conectar Facebook y TikTok si se van a usar.
 - **Cuenta de prueba** `prueba.marketing@neboaiconsulting.com` (agente sin permisos en los otros paneles, rol Usuario en Marketing): borrarla o quitarle el acceso cuando no haga falta.
 - **Probar Cinema Studio 4.0 desde el panel** con una generación real (la CLI y el seguimiento ya se probaron por separado: video de 5 s, 35 créditos).
 - **Sesión de la CLI** (Cinema Studio 4.0 y 3.5): se renueva sola; si Super Admin la marca vencida, recargarla con `scripts/sesion-cli.js`. Si el MCP llega a exponer estos modelos, el panel usa el del MCP y la CLI deja de hacer falta.
