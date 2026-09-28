@@ -44,8 +44,10 @@ if (!process.env.TEST_DATABASE_URL) {
               ('vendedor@jh.com','veo3','libre_video','{}','completado', 8, '2026-09-22T15:00:00Z', NULL, true)`
     );
     // Lo que ya debitó el wallet nuevo (no se vuelve a cobrar).
-    await pool.query(`INSERT INTO wallet_debitos (referencia, usd, descripcion, estado, hecho) VALUES ('mkt-gen-500', 1.2, 'x', 'hecho', now())`);
-    await pool.query(`INSERT INTO wallet_debitos (referencia, usd, descripcion, estado) VALUES ('mkt-ia-501', 0.3, 'y', 'pendiente')`);
+    // 'creado' explicito y dentro del rango: con now() el test aprobaba solo mientras
+    // hoy cayera entre DESDE y HASTA, y dejaba de aprobar dias despues.
+    await pool.query(`INSERT INTO wallet_debitos (referencia, usd, descripcion, estado, hecho, creado) VALUES ('mkt-gen-500', 1.2, 'x', 'hecho', '2026-09-22T18:00:00Z', '2026-09-22T18:00:00Z')`);
+    await pool.query(`INSERT INTO wallet_debitos (referencia, usd, descripcion, estado, creado) VALUES ('mkt-ia-501', 0.3, 'y', 'pendiente', '2026-09-22T18:30:00Z')`);
   });
   test.after(async () => { await pool.end(); });
 
