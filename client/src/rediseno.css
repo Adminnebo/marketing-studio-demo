@@ -40,9 +40,6 @@
 .hd-tab.on { color: var(--text-primary); }
 .hd-tab.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--series-1); }
 .hd-tab:focus-visible { outline: 2px solid var(--series-1); outline-offset: -3px; border-radius: 6px 6px 0 0; }
-@media (max-width: 860px) {
-  .hd-tab { flex: 0 0 auto; padding: 0 14px; }
-}
 .hd-n { font-size: 0.68rem; font-weight: 700; line-height: 17px; padding: 0 6px; border-radius: 999px; background: var(--series-1); color: #fff; }
 .hd-n.gris { background: var(--surface-2); color: var(--text-muted); }
 .hd-r { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
@@ -59,7 +56,14 @@
 .num { font-variant-numeric: tabular-nums; }
 @media (max-width: 860px) {
   .hd { height: auto; flex-wrap: wrap; padding: 8px 0 0; row-gap: 2px; }
-  .hd-tabs { order: 3; width: 100%; margin-left: -6px; height: 38px; }
+  /* 'order' y 'margin-left' venian de cuando las pestañas vivian dentro del
+     encabezado; ahora son su propia fila y el margen negativo solo las sacaba
+     6 px del borde del contenido. */
+  /* Sin sticky: aqui el encabezado envuelve y su alto varia, asi que una fila
+     pegada arriba se le montaria encima al hacer scroll. */
+  .hd-tabs { position: static; height: 40px; margin-bottom: 16px; }
+  /* A partes iguales quedarian de 45 px: aqui vuelven a medir por contenido. */
+  .hd-tab { flex: 0 0 auto; padding: 0 14px; }
 }
 @media (max-width: 560px) { .hd-saldo-usd, .hd-saldo-l { display: none; } .hd-user-b { max-width: 150px; } }
 
