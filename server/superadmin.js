@@ -177,13 +177,19 @@ router.post('/superadmin/plantillas/clasificar', ruta(async (req, res) => {
 // Setup de redes (Zernio): estado, perfiles de la cuenta con sus redes y perfil elegido.
 router.get('/superadmin/zernio', ruta(async (req, res) => {
   const wh = await pool.query(`SELECT valor FROM config WHERE clave = 'zernio_webhook_id'`).then((r) => r.rows[0]?.valor || null).catch(() => null);
-  const base = { configurado: zernio.configurado(), webhookListo: zernio.webhookListo(), webhookId: wh, panelUrl: !!process.env.PANEL_URL };
+  // El valor, no un booleano: saber SI esta puesta no sirve para comprobar que
+  // apunta al dominio correcto, que es justo lo que hay que verificar al mudarlo.
+  const base = { configurado: zernio.configurado(), webhookListo: zernio.webhookListo(), webhookId: wh, panelUrl: process.env.PANEL_URL || null };
   if (!zernio.configurado()) return res.json(base);
   try {
     // Si no hay perfil elegido, intenta el automatico (el unico con "JH"); si no se puede, queda por elegir.
     let elegido = await zernio.perfilElegido();
     if (!elegido) elegido = await zernio.perfilId().catch(() => null);
-    res.json({ ...base, perfilId: elegido, perfiles: await zernio.perfiles() });
+    const [perfiles, webhooks] = await Promise.all([
+      zernio.perfiles(),
+      zernio.webhooksNuestros().catch(() => null),
+    ]);
+    res.json({ ...base, perfilId: elegido, perfiles, webhooks });
   } catch (e) {
     throw errPublico('Zernio no respondió bien: ' + e.message.slice(0, 120), 502);
   }
@@ -202,6 +208,15 @@ router.put('/superadmin/zernio/perfil', ruta(async (req, res) => {
 }));
 
 // Webhook de Zernio: registrar/actualizar y mandar un evento de prueba.
+// Borrar los webhooks nuestros que sobran (los que quedaron de una URL vieja).
+// Accion explicita de un super admin: la cuenta de Zernio es compartida.
+router.post('/superadmin/zernio/webhook/limpiar', ruta(async (req, res) => {
+  if (!zernio.webhookListo()) throw errPublico('Falta la conexión o el secreto del webhook', 400);
+  const r = await zernio.limpiarWebhooks();
+  console.log(`[zernio] ${req.user.email} limpió ${r.borrados.length} webhook/s de más`);
+  res.json(r);
+}));
+
 router.post('/superadmin/zernio/webhook', ruta(async (req, res) => {
   const base = process.env.PANEL_URL || `${req.protocol}://${req.get('host')}`;
   try {

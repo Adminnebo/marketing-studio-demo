@@ -122,17 +122,77 @@ const EVENTOS = [
 ];
 const webhookListo = () => !!(API_KEY && SECRETO_WEBHOOK);
 
-// Registra (o actualiza) el webhook del panel en Zernio. Idempotente: busca por URL.
+const NOMBRE_WEBHOOK = 'Marketing JH';
+const RUTA_WEBHOOK = '/api/zernio/webhook';
+
+const rutaDe = (u) => { try { return new URL(u).pathname; } catch { return null; } };
+// Para MOSTRAR: cualquiera que lleve nuestro nombre o nuestra ruta.
+const pareceNuestro = (w) => w?.name === NOMBRE_WEBHOOK || rutaDe(w?.url) === RUTA_WEBHOOK;
+// Para BORRAR: las dos cosas a la vez. La cuenta de Zernio es compartida con
+// otros proyectos y no se puede tocar nada que no sea inequivocamente nuestro.
+const seguroBorrar = (w) => w?.name === NOMBRE_WEBHOOK && rutaDe(w?.url) === RUTA_WEBHOOK;
+
+const webhookGuardado = () => pool.query(`SELECT valor FROM config WHERE clave = 'zernio_webhook_id'`)
+  .then((r) => r.rows[0]?.valor || null).catch(() => null);
+
+/**
+ * Registra (o mueve) el webhook del panel en Zernio.
+ *
+ * Busca el nuestro en este orden: el id que ya teniamos anotado, el de la misma
+ * URL, el del mismo nombre. Buscar SOLO por URL —como hacia antes— dejaba un
+ * huerfano cada vez que cambiaba el dominio: creaba uno nuevo y el viejo seguia
+ * activo, asi que cada evento llegaba dos veces. La deduplicacion por id de
+ * evento lo hacia inofensivo, pero quedaba basura en una cuenta compartida.
+ */
 async function asegurarWebhook(base) {
   if (!webhookListo()) return { ok: false, motivo: !API_KEY ? 'sin_api_key' : 'sin_secreto' };
-  const url = `${base.replace(/\/+$/, '')}/api/zernio/webhook`;
+  const url = `${base.replace(/\/+$/, '')}${RUTA_WEBHOOK}`;
   const { webhooks = [] } = await llamar('GET', '/webhooks/settings');
-  const hay = webhooks.find((w) => w.url === url);
-  const cuerpo = { name: 'Marketing JH', url, secret: SECRETO_WEBHOOK, events: EVENTOS, isActive: true };
+  const guardado = await webhookGuardado();
+  const hay = (guardado && webhooks.find((w) => w._id === guardado))
+    || webhooks.find((w) => w.url === url)
+    || webhooks.find((w) => w.name === NOMBRE_WEBHOOK);
+  const cuerpo = { name: NOMBRE_WEBHOOK, url, secret: SECRETO_WEBHOOK, events: EVENTOS, isActive: true };
   const r = hay ? await llamar('PUT', '/webhooks/settings', { body: { _id: hay._id, ...cuerpo } }) : await llamar('POST', '/webhooks/settings', { body: cuerpo });
   const id = r.webhook?._id || hay?._id;
   await pool.query(`INSERT INTO config (clave, valor) VALUES ('zernio_webhook_id', $1) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor`, [id || '']);
-  return { ok: true, id, url, creado: !hay };
+  // Los que sobran NO se borran solos: la cuenta es compartida. Se avisan para
+  // que un super admin decida (Super Admin -> Redes).
+  const sobran = webhooks.filter((w) => pareceNuestro(w) && w._id !== id)
+    .map((w) => ({ id: w._id, nombre: w.name, url: w.url, ultimo: w.lastFiredAt || null, fallos: w.failureCount || 0, borrable: seguroBorrar(w) }));
+  if (sobran.length) {
+    console.warn(`[zernio] AVISO: hay ${sobran.length} webhook/s nuestro/s de más (${sobran.map((w) => w.url).join(', ')}). Cada evento llega repetido; se limpian desde Super Admin → Redes.`);
+  }
+  return { ok: true, id, url, creado: !hay, movido: !!(hay && hay.url !== url), sobran };
+}
+
+// Los webhooks que parecen nuestros, para mostrarlos en Super Admin.
+async function webhooksNuestros() {
+  const { webhooks = [] } = await llamar('GET', '/webhooks/settings');
+  const guardado = await webhookGuardado();
+  return webhooks.filter(pareceNuestro).map((w) => ({
+    id: w._id, nombre: w.name, url: w.url, activo: w.isActive !== false,
+    eventos: (w.events || []).length, ultimo: w.lastFiredAt || null, fallos: w.failureCount || 0,
+    enUso: w._id === guardado, borrable: seguroBorrar(w) && w._id !== guardado,
+  }));
+}
+
+/**
+ * Borra los webhooks nuestros que sobran (los que quedaron de una URL vieja).
+ * Solo toca los que llevan nuestro nombre Y nuestra ruta, y nunca el que esta
+ * en uso: en esta cuenta de Zernio viven tambien los webhooks de otros proyectos.
+ */
+async function limpiarWebhooks() {
+  const { webhooks = [] } = await llamar('GET', '/webhooks/settings');
+  const guardado = await webhookGuardado();
+  const sobran = webhooks.filter((w) => seguroBorrar(w) && w._id !== guardado);
+  const borrados = [];
+  for (const w of sobran) {
+    await llamar('DELETE', '/webhooks/settings', { query: { webhookId: w._id } });
+    console.log(`[zernio] webhook de más borrado: ${w.url} (${w._id})`);
+    borrados.push({ id: w._id, url: w.url });
+  }
+  return { borrados, enUso: guardado, revisar: webhooks.filter((w) => pareceNuestro(w) && !seguroBorrar(w) && w._id !== guardado).map((w) => ({ id: w._id, nombre: w.name, url: w.url })) };
 }
 
 async function probarWebhook() {
@@ -159,5 +219,5 @@ const plataformasDe = (post) => (post?.platforms || []).map((x) => ({
 
 module.exports = {
   plataformasDe, configurado, llamar, perfilId, perfiles, elegirPerfil, perfilElegido, cuentas, urlConexion, desconectar, infoTiktok, crearPost, leerPost, borrarPost, reprogramarPost, ZernioError,
-  webhookListo, asegurarWebhook, probarWebhook, firmaValida, EVENTOS,
+  webhookListo, asegurarWebhook, webhooksNuestros, limpiarWebhooks, probarWebhook, firmaValida, EVENTOS, NOMBRE_WEBHOOK,
 };

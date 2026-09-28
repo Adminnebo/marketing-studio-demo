@@ -228,3 +228,4 @@ export const borrarPropia = (id) => api(`/plantillas-propias/${id}`, { method: '
 
 export const fetchCalPublicaciones = (desde, hasta) => api(`/publicaciones/calendario?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
 export const reprogramarPublicacion = (id, datos) => api(`/publicaciones/${id}/reprogramar`, { method: 'POST', body: JSON.stringify(datos) });
+export const limpiarWebhooksRedes = () => api('/superadmin/zernio/webhook/limpiar', { method: 'POST' });
