@@ -1,3 +1,6 @@
+> **Este repo es la DEMO para prospectos**, un clon del panel. Lo que hay que saber de la demo está en
+> [DEMO.md](DEMO.md). De aquí para abajo es el README del panel del que se clonó, tal cual.
+
 # Marketing Studio · JH
 
 Panel intermediario de [Higgsfield Marketing Studio](https://higgsfield.ai/marketing-studio) para JH. Tiene las mismas

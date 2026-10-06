@@ -16,7 +16,8 @@ const esVideoGen = (g) => g.preset_tipo === 'libre_video' || TIPOS_VIDEO.has(g.p
 const fecha = (s) => new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esVideoUrl = (u) => /\.(mp4|mov|webm)($|\?)/i.test(u || '');
 
-function Tarjeta({ g: gen, rol, limpia = false, onRepetir, onPublicar, onBase, onBorrar }) {
+// `demo` (solo en la demo para prospectos): el logo y publicar se ven, con candado.
+function Tarjeta({ g: gen, rol, limpia = false, onRepetir, onPublicar, onBase, onBorrar, demo = false, onCompleta }) {
   const [g, setG] = useState(gen);
   useEffect(() => { setG((x) => (gen.marca_estado === x.marca_estado && gen.resultados === x.resultados ? x : gen)); }, [gen]);
   const [marcando, setMarcando] = useState(false);
@@ -101,7 +102,12 @@ function Tarjeta({ g: gen, rol, limpia = false, onRepetir, onPublicar, onBase, o
         )}
         {g.error && <div className="ms-gen-err">{g.error}{g.estado === 'fallido' && g.precio_usd != null && !/administrador/.test(g.error) && ' Los créditos se devolvieron a tu saldo.'}</div>}
         {errBaja && <div className="ms-gen-err">{errBaja}</div>}
-        {g.estado === 'completado' && (
+        {g.estado === 'completado' && demo && (
+          <div className="ms-gen-logo">
+            <button className="linklike demo-bloq" onClick={() => onCompleta?.()}>🔒 Poner tu logo</button>
+          </div>
+        )}
+        {g.estado === 'completado' && !demo && (
           <div className="ms-gen-logo">
             {g.marca_estado === 'pendiente' ? <span className="ms-cost">🏷️ Poniéndole el logo…</span>
               : marcando ? <span className="ms-cost">🏷️ Aplicando el logo…</span>
@@ -132,6 +138,7 @@ function Tarjeta({ g: gen, rol, limpia = false, onRepetir, onPublicar, onBase, o
         <div className="ms-gen-actions">
           {r && <button className="mini-btn" onClick={bajar} disabled={bajando}>{bajando ? 'Descargando…' : '⬇ Descargar'}</button>}
           {r && onPublicar && <button className="mini-btn" onClick={() => onPublicar(g, Math.min(i, ok.length - 1))}>📣 Publicar</button>}
+          {r && demo && <button className="mini-btn demo-bloq" onClick={() => onCompleta?.()} title="Publicar en Instagram, Facebook y TikTok está en la versión completa">🔒 Publicar</button>}
           {r && !esVideoUrl(r.url) && onBase && (
             <button className="mini-btn" disabled={base} title="Crear otra foto o un video partiendo de esta imagen, para darle más detalles o cambiarle cosas"
               onClick={async () => { setBase(true); setErrBaja(null); try { await onBase(g, Math.min(i, ok.length - 1)); } catch (e) { setErrBaja(e.message); } finally { setBase(false); } }}>
@@ -183,14 +190,14 @@ function useBusqueda(f) {
   return { activa, ...r, mas, quitar };
 }
 
-export default function Generaciones({ items: todas, cargando: cargandoTodas, error: errorTodas, hayMas: hayMasTodas, onMas, onRepetir, onPublicar, onBase, onBorrar, rol, onCrear }) {
+export default function Generaciones({ items: todas, cargando: cargandoTodas, error: errorTodas, hayMas: hayMasTodas, onMas, onRepetir, onPublicar, onBase, onBorrar, rol, onCrear, demo = false, onCompleta }) {
   const [filtro, setFiltro] = useState('');
   const [f, setF] = useState(FILTROS_VACIOS);
   const [autores, setAutores] = useState([]);
   const [tam, setTam] = useTamano('ms_tam_creaciones', 250);
   const b = useBusqueda(f);
   const borrar = onBorrar && (async (g) => { await onBorrar(g); b.quitar(g.id); });
-  useEffect(() => { if (rol !== 'usuario') fetchAutores().then((d) => setAutores(d.autores)).catch(() => {}); }, [rol]);
+  useEffect(() => { if (rol !== 'usuario' && !demo) fetchAutores().then((d) => setAutores(d.autores)).catch(() => {}); }, [rol]);
   // Lo que esta en curso se actualiza en la lista general; en la busqueda se toma de ahi.
   const frescas = new Map(todas.map((g) => [g.id, g]));
   const items = b.activa ? b.items.map((g) => frescas.get(g.id) || g) : todas;
@@ -234,7 +241,8 @@ export default function Generaciones({ items: todas, cargando: cargandoTodas, er
 
   return (
     <>
-      <div className="gn-filtros" role="search">
+      {/* En la demo hay dos piezas como mucho: sin buscador ni filtros. */}
+      {!demo && <div className="gn-filtros" role="search">
         <div className="gn-buscar">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <input id="gn-q" type="search" value={f.q} onChange={(e) => cambiar('q', e.target.value)} maxLength={80}
@@ -253,7 +261,7 @@ export default function Generaciones({ items: todas, cargando: cargandoTodas, er
         </select>
         <label className="gn-check"><input id="gn-pub" type="checkbox" checked={f.publicadas === '1'} onChange={(e) => cambiar('publicadas', e.target.checked ? '1' : '')} /> Publicadas</label>
         {b.activa && <button className="linklike gn-limpiar" onClick={() => setF(FILTROS_VACIOS)}>Quitar filtros</button>}
-      </div>
+      </div>}
       <div className="pl-barra">
         <div className="pl-cats">
           {FILTROS.map(([k, l]) => {
@@ -294,7 +302,7 @@ export default function Generaciones({ items: todas, cargando: cargandoTodas, er
         </div>
       ) : (
         <div className={`ms-gens ${limpia ? 'limpia' : ''}`} ref={grilla} style={{ '--tam': `${tam}px` }}>
-          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} limpia={limpia} onRepetir={onRepetir} onPublicar={onPublicar} onBase={onBase} onBorrar={borrar} />)}
+          {visibles.map((g) => <Tarjeta key={g.id} g={g} rol={rol} limpia={limpia} onRepetir={onRepetir} onPublicar={onPublicar} onBase={onBase} onBorrar={borrar} demo={demo} onCompleta={onCompleta} />)}
         </div>
       )}
       {hayMas && (

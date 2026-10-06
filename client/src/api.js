@@ -6,9 +6,34 @@ let supabase = null;
 let token = null;
 const avisar = () => window.dispatchEvent(new Event('ms-sesion'));
 
+// ── Demo para prospectos ──
+// Esta copia del panel corre como demo: no hay cuentas, se entra con un código
+// y la sesión es una cookie que pone el servidor (server/demo-app.js).
+let demo = false;
+let sesionDemo = null;
+let contacto = null; // a dónde escribir para la versión completa (lo dice el servidor)
+export const esDemo = () => demo;
+export const datosDemo = () => sesionDemo;
+export const contactoDemo = () => contacto;
+
+export async function entrarDemo(codigo) {
+  const r = await fetch('/api/demo/entrar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ codigo }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'No se pudo entrar.');
+  sesionDemo = j;
+  avisar();
+}
+
 // Carga la config publica y restaura la sesion guardada. Devuelve la sesion (o null).
 export async function iniciarAuth() {
   const cfg = await (await fetch('/api/config')).json();
+  if (cfg.demo) {
+    demo = true;
+    contacto = cfg.contacto || null;
+    const r = await fetch('/api/demo/sesion');
+    sesionDemo = r.ok ? await r.json() : null;
+    return sesionDemo ? { email: sesionDemo.prospecto } : null;
+  }
   supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });
   const { data: { session } } = await supabase.auth.getSession();
   token = session?.access_token || null;
@@ -20,7 +45,7 @@ export async function iniciarAuth() {
   return session ? { email: session.user.email } : null;
 }
 
-export function sesion() { return token ? { token } : null; }
+export function sesion() { return demo ? (sesionDemo ? { demo: true } : null) : token ? { token } : null; }
 
 export async function entrar(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -34,6 +59,12 @@ export async function entrar(email, password) {
 }
 
 export async function salir() {
+  if (demo) {
+    try { await fetch('/api/demo/salir', { method: 'POST' }); } catch { /* sin red */ }
+    sesionDemo = null;
+    avisar();
+    return;
+  }
   try { await supabase?.auth.signOut(); } catch { /* sin red */ }
   token = null;
   avisar();

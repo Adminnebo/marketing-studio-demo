@@ -1,0 +1,74 @@
+/* Demo para prospectos. Solo lo propio de la demo: la etiqueta, el cupo, los
+   candados y el aviso de la version completa. Usa los tokens de styles.css. */
+
+.demo-etiqueta { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #fff; background: var(--series-1); border-radius: 999px; padding: 2px 9px; align-self: center; }
+.demo-quien { font-size: 0.84rem; font-weight: 600; color: var(--text-muted); max-width: 260px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Cupo en el encabezado: lo que queda de cada pieza. */
+.demo-cupo { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600;
+  color: var(--text-secondary); border: 1px solid var(--border); background: var(--surface-1);
+  border-radius: 10px; padding: 5px 10px; white-space: nowrap; }
+.demo-cupo b { font-variant-numeric: tabular-nums; color: var(--good-ink);
+  background: color-mix(in srgb, var(--good) 14%, transparent); border-radius: 6px; padding: 1px 6px; }
+.demo-cupo.usado { color: var(--text-muted); }
+.demo-cupo.usado b { color: var(--text-muted); background: var(--surface-2); }
+
+.demo-tab-completa { flex: 0 0 auto !important; color: var(--series-1) !important; }
+
+/* La franja que explica que es una demo, siempre visible. */
+.demo-franja { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  font-size: 0.86rem; color: var(--text-secondary); line-height: 1.5;
+  border: 1px solid color-mix(in srgb, var(--series-1) 28%, var(--border));
+  background: color-mix(in srgb, var(--series-1) 7%, var(--surface-1));
+  border-radius: 12px; padding: 11px 14px; margin-bottom: 18px; }
+.demo-franja strong { color: var(--text-primary); }
+.demo-franja > span { flex: 1 1 320px; }
+
+/* Candados: lo bloqueado se ve, pero apagado y con su cerradura. */
+.mp-card.bloq { opacity: 0.62; cursor: not-allowed; border-style: dashed; }
+.mp-card.bloq:hover { border-color: var(--border); opacity: 0.8; }
+.mp-tag.tbloq { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+.seg button.bloq { opacity: 0.55; cursor: not-allowed; }
+.seg button.bloq:hover { opacity: 0.75; }
+.cr-modo.bloq { opacity: 0.6; cursor: not-allowed; }
+.cr-modo.bloq .cr-rec { background: var(--surface-2); color: var(--text-muted); }
+.demo-queda { display: block; font-size: 0.7rem; font-weight: 600; opacity: 0.75; margin-top: 2px; }
+
+.demo-bloq { color: var(--text-muted) !important; }
+.demo-bloq:hover { color: var(--text-secondary) !important; }
+.demo-pronto { font-style: normal; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; margin-left: 8px; vertical-align: 2px; }
+
+/* El aviso que sale al tocar algo bloqueado. */
+.demo-candado { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  font-size: 0.86rem; font-weight: 600; color: var(--text-primary);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border-radius: 10px; padding: 9px 13px; margin-bottom: 12px; }
+.demo-incluida { font-size: 0.9rem !important; }
+
+.demo-codigo { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: 0.08em; text-align: center; font-size: 1.05rem; }
+
+/* Ventana de la version completa. */
+.demo-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px;
+  background: color-mix(in srgb, #000 55%, transparent); }
+.demo-modal-caja { width: 100%; max-width: 560px; max-height: calc(100vh - 32px); overflow-y: auto;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px; padding: 22px 22px 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35); }
+.demo-modal-caja h2 { margin: 0 0 6px; font-size: 1.25rem; font-weight: 720; letter-spacing: -0.01em; text-wrap: balance; }
+.demo-modal-sub { margin: 0 0 16px; font-size: 0.9rem; color: var(--text-secondary); line-height: 1.55; }
+.demo-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.demo-lista li { display: flex; gap: 12px; align-items: flex-start; }
+.demo-lista li > span { flex: none; width: 34px; height: 34px; display: grid; place-items: center; font-size: 1.05rem;
+  background: var(--surface-2); border-radius: 9px; }
+.demo-lista b { display: block; font-size: 0.92rem; font-weight: 660; }
+.demo-lista div > span { display: block; font-size: 0.84rem; color: var(--text-secondary); line-height: 1.5; margin-top: 1px; }
+.demo-modal-acc { display: flex; justify-content: flex-end; gap: 9px; flex-wrap: wrap; margin-top: 20px; }
+.demo-modal-acc a.btn { text-decoration: none; }
+
+@media (max-width: 720px) {
+  .demo-quien { display: none; }
+  .demo-cupo { padding: 4px 8px; font-size: 0.76rem; }
+}

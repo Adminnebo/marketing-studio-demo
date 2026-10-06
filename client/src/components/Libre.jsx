@@ -31,13 +31,18 @@ const pasosDe = (tipo) => [
 // Crear desde cero, paso a paso. El orden importa: el formato y la duracion van ANTES de la
 // descripcion, porque la que escribe la IA se arma para esa duracion (tramos y ritmo), ese
 // formato y el sonido. Si despues se cambia alguno, se avisa y se ofrece reescribirla.
-export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal, inicial, productoListo, onBuscarCamila, onFoto, onEnviada, onVer, onRecargar }) {
+// `demo` (solo en la demo para prospectos): { cupo, descripciones }. Con él, lo que
+// no entra en la demo se sigue viendo, pero con candado: el modelo, la calidad y
+// la duración abiertos los marca el servidor en cada modelo (m.bloqueado, m.demo).
+export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal, inicial, productoListo, onBuscarCamila, onFoto, onEnviada, onVer, onRecargar, demo = null, onCompleta }) {
+  const [candado, setCandado] = useState(null); // lo último bloqueado que se tocó
   const [modelos, setModelos] = useState(null);
   const [iaUsd, setIaUsd] = useState(0); // ayudas de IA ya cobradas (descripcion, ficha): se suman al total
   const [error, setError] = useState(null);
   // 'Usar de nuevo' trae todo lleno: abre en Revisar. 'Usar como base' abre en el paso 1 (foto o video).
   const [paso, setPaso] = useState(inicial?.paso || (inicial?.prompt ? 5 : 1));
-  const [tipo, setTipo] = useState(inicial?.tipo || 'video');
+  // En la demo se arranca por la pieza que todavía queda.
+  const [tipo, setTipo] = useState(inicial?.tipo || (demo && !(demo.cupo?.videos?.quedan > 0) && demo.cupo?.imagenes?.quedan > 0 ? 'imagen' : 'video'));
   const [modeloId, setModeloId] = useState(inicial?.modelo || '');
   const [verModelos, setVerModelos] = useState(false);
   const [prompt, setPrompt] = useState(inicial?.prompt || '');
@@ -98,6 +103,16 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
     });
     setOpciones((o) => Object.fromEntries(modelo.params.map((p) => [p.nombre, p.nombre in o && (p.tipo === 'bool' || p.opciones.includes(o[p.nombre])) ? o[p.nombre] : p.def])));
   }, [modelo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // En la demo, la duración y la calidad son las que fija el servidor.
+  const reglas = demo ? modelo?.demo || null : null;
+  useEffect(() => {
+    if (!reglas) return;
+    if (reglas.duracion) setDuracion(String(reglas.duracion));
+    if (reglas.fijo) setOpciones((o) => ({ ...o, ...reglas.fijo }));
+  }, [modelo?.id, !!reglas]); // eslint-disable-line react-hooks/exhaustive-deps
+  const enCompleta = (que) => { setCandado(que); onCompleta?.(que); };
+  const cupoTipo = demo ? demo.cupo?.[tipo === 'video' ? 'videos' : 'imagenes'] : null;
 
   const paramAudio = (modelo?.params || []).find(esAudio);
   const conAudio = paramAudio ? !!opciones[paramAudio.nombre] && opciones[paramAudio.nombre] !== 'off' : false;
@@ -171,6 +186,9 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
     !modelo && [1, 'Elige un modelo.'],
     modelo?.pideImagen && !imagen && [3, 'Sube la foto del producto: este modelo la necesita.'],
     !prompt.trim() && [4, usaIa ? 'Falta la descripción: toca "Escribir descripción" y la IA la escribe.' : `Escribe o dicta qué quieres ver en ${elTipo}.`],
+    cupoTipo && cupoTipo.quedan <= 0 && [5, tipo === 'video'
+      ? 'Ya usaste el video de tu demo. Con la versión completa generas los que necesites.'
+      : 'Ya usaste la imagen de tu demo. Con la versión completa generas las que necesites.'],
     sinSaldo && [5, `No te alcanza el saldo: tienes ${textoSaldo} y esto cuesta ${saldoUsd != null ? usd(costo.precio) : `${cred(costo.creditos)} créditos`}.`],
   ].filter(Boolean);
 
@@ -178,7 +196,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
   const listo = (n) => (n === 1 ? !!modelo : n === 2 ? !!modelo && (tipo !== 'video' || !modelo.duracion || !!duracion)
     : n === 3 ? (!modelo?.aceptaImagen || !!imagen) : n === 4 ? !!prompt.trim() : false);
 
-  const ir = (n) => { setPaso(n); caja.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  const ir = (n) => { setPaso(n); setCandado(null); caja.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
   const generar = async () => {
     if (faltan.length || enviando) return;
@@ -222,6 +240,12 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
 
   return (
     <div className="card lb" ref={caja}>
+      {demo && candado && (
+        <div className="demo-candado" role="status">
+          <span>🔒 {candado}</span>
+          <button className="linklike" onClick={() => setCandado(null)} aria-label="Cerrar">Entendido</button>
+        </div>
+      )}
       {/* Barra de pasos: siempre se puede volver a cualquiera y cambiar lo que sea. */}
       <nav className="lb-barra" aria-label="Pasos">
         {pasosDe(tipo).map(([nom, ic], i) => {
@@ -241,7 +265,9 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
           <h3 className="lb-h">¿Qué quieres crear?</h3>
           <div className="seg">
             {[['video', '🎬', 'Un video'], ['imagen', '🖼️', 'Una foto']].map(([k, ic, l]) => (
-              <button key={k} className={tipo === k ? 'on' : ''} onClick={() => { setTipo(k); setModeloId(''); }}><span>{ic}</span>{l}</button>
+              <button key={k} className={tipo === k ? 'on' : ''} onClick={() => { setTipo(k); setModeloId(''); }}><span>{ic}</span>{l}
+                {demo && (() => { const q = demo.cupo?.[k === 'video' ? 'videos' : 'imagenes']?.quedan ?? 0; return <small className="demo-queda">{q > 0 ? `${q} disponible${q === 1 ? '' : 's'}` : 'ya usado'}</small>; })()}
+              </button>
             ))}
           </div>
           {modelo && (() => {
@@ -251,10 +277,14 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
             const elegidoAparte = !destacados.some((m) => m.id === modelo.id);
             const familias = [...new Set(deTipo.map((m) => m.familia))];
             const Tarjeta = ({ m, chica }) => (
-              <button key={m.id} className={`mp-card ${chica ? 'chica' : ''} ${m.id === modelo.id ? 'on' : ''}`} onClick={() => setModeloId(m.id)} aria-pressed={m.id === modelo.id}>
+              <button key={m.id} className={`mp-card ${chica ? 'chica' : ''} ${m.id === modelo.id ? 'on' : ''} ${demo && m.bloqueado ? 'bloq' : ''}`}
+                onClick={() => (demo && m.bloqueado ? enCompleta(`${m.nombre} está en la versión completa.`) : setModeloId(m.id))}
+                aria-pressed={m.id === modelo.id} aria-disabled={demo && m.bloqueado ? true : undefined}>
                 <span className="mp-top">
                   <b>{m.nombre}</b>
-                  {!chica && (m.rec ? <span className={`mp-tag t${m.rec.orden}`}>{m.rec.etiqueta}</span> : m.id === recomendado?.id ? <span className="mp-tag t1">Recomendado</span> : <span className="mp-tag t0">Elegido</span>)}
+                  {demo && m.bloqueado ? <span className="mp-tag tbloq">🔒 Versión completa</span>
+                    : demo ? <span className="mp-tag t1">Incluido en tu demo</span>
+                      : !chica && (m.rec ? <span className={`mp-tag t${m.rec.orden}`}>{m.rec.etiqueta}</span> : m.id === recomendado?.id ? <span className="mp-tag t1">Recomendado</span> : <span className="mp-tag t0">Elegido</span>)}
                   <span className="mp-check" aria-hidden="true">{m.id === modelo.id ? '✓' : ''}</span>
                 </span>
                 {(m.rec?.desc || m.descripcion) && <span className="mp-desc">{chica ? m.descripcion || m.rec?.desc : m.rec?.desc || m.descripcion}</span>}
@@ -314,7 +344,16 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
           <div className="lb-fila">
             {modelo.tipo === 'video' && modelo.duracion && (
               <label className="filter-field lb-dur"><span>Duración: <strong>{duracion || '—'} segundos</strong></span>
-                {modelo.duracion.opciones ? (
+                {reglas?.duracion ? (
+                  // Demo: se ven las duraciones que hay, pero solo la incluida se puede elegir.
+                  <div className="seg seg-sm">
+                    {[...new Set([reglas.duracion, ...(modelo.duracion.opciones || [5, 10, 15, 20, 30].filter((d) => d >= modelo.duracion.min && d <= modelo.duracion.max))])].sort((a, b) => a - b).map((d) => (
+                      d === reglas.duracion
+                        ? <button key={d} className="on">{d} s</button>
+                        : <button key={d} className="bloq" aria-disabled="true" onClick={() => enCompleta(`Los videos de ${d} segundos están en la versión completa.`)}>🔒 {d} s</button>
+                    ))}
+                  </div>
+                ) : modelo.duracion.opciones ? (
                   <div className="seg seg-sm">
                     {modelo.duracion.opciones.map((d) => <button key={d} className={String(duracion) === String(d) ? 'on' : ''} onClick={() => setDuracion(String(d))}>{d} s</button>)}
                   </div>
@@ -329,20 +368,28 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
             {principales.map((p) => (
               esAudio(p) ? (
                 <label key={p.nombre} className="lb-check">
-                  <input type="checkbox" checked={!!opciones[p.nombre] && opciones[p.nombre] !== 'off'}
+                  <input type="checkbox" checked={!!opciones[p.nombre] && opciones[p.nombre] !== 'off'} disabled={!!reglas}
                     onChange={(e) => setOpciones({ ...opciones, [p.nombre]: p.tipo === 'bool' ? e.target.checked : (e.target.checked ? (p.opciones.find((o) => o !== 'off') || p.def) : 'off') })} />
                   🔊 Con sonido
                 </label>
               ) : p.tipo === 'opciones' && (
                 <label key={p.nombre} className="filter-field"><span>{p.nombre === 'quality' || !hayQuality ? 'Calidad' : 'Resolución'}</span>
                   <div className="seg seg-sm">
-                    {p.opciones.map((o) => <button key={o} className={(opciones[p.nombre] ?? p.def) === o ? 'on' : ''} onClick={() => setOpciones({ ...opciones, [p.nombre]: o })}>{nombreCalidad(o)}</button>)}
+                    {/* Demo: lo que está por debajo de lo incluido no se ofrece; lo que está por encima, con candado. */}
+                    {p.opciones.filter((o, n) => !(reglas?.fijo && p.nombre in reglas.fijo) || n >= p.opciones.indexOf(reglas.fijo[p.nombre])).map((o) => (
+                      reglas?.fijo && p.nombre in reglas.fijo && o !== reglas.fijo[p.nombre]
+                        ? <button key={o} className="bloq" aria-disabled="true" onClick={() => enCompleta(`La calidad ${nombreCalidad(o)} está en la versión completa.`)}>🔒 {nombreCalidad(o)}</button>
+                        : <button key={o} className={(opciones[p.nombre] ?? p.def) === o ? 'on' : ''} onClick={() => setOpciones({ ...opciones, [p.nombre]: o })}>{nombreCalidad(o)}</button>
+                    ))}
                   </div>
                 </label>
               )
             ))}
           </div>
-          {avanzados.length > 0 && (
+          {avanzados.length > 0 && demo && (
+            <button className="linklike" onClick={() => enCompleta('Las opciones avanzadas están en la versión completa.')}>🔒 Opciones avanzadas</button>
+          )}
+          {avanzados.length > 0 && !demo && (
             <>
               <button className="linklike" onClick={() => setAvanzado(!avanzado)}>{avanzado ? 'Ocultar opciones avanzadas ▲' : 'Opciones avanzadas ▼'}</button>
               {avanzado && (
@@ -413,7 +460,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
           {onBuscarCamila && modelo?.aceptaImagen && (
             <div className="lb-camila">
               <span>¿No tienes la foto a mano?</span>
-              <button className="cm-buscar-btn" onClick={onBuscarCamila}><span className="cm-av">C</span>Buscar en el catálogo de JH con Camila</button>
+              <button className="cm-buscar-btn" onClick={onBuscarCamila}><span className="cm-av">C</span>Buscar en el catálogo con Camila</button>
             </div>
           )}
           {subida?.error && <div className="ms-gen-err">{subida.error}</div>}
@@ -525,7 +572,7 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
         <section className="lb-cuerpo-paso">
           <div className="lb-pasoN">Paso {paso} de 5</div>
           <h3 className="lb-h">Revisar y crear</h3>
-          <p className="lb-porque">Repasa todo antes de gastar créditos. Puedes editar cualquier cosa.</p>
+          <p className="lb-porque">{demo ? 'Repasa todo antes de crear: en la demo tienes una sola de cada una. Puedes editar cualquier cosa.' : 'Repasa todo antes de gastar créditos. Puedes editar cualquier cosa.'}</p>
           <div className="lb-revisar">
             {[
               [1, tipo === 'video' ? 'Video' : 'Foto', modelo?.nombre],
@@ -568,11 +615,16 @@ export default function Libre({ saldo, saldoUsd = null, negativoUsd = 0, rolReal
       {/* Pie fijo: costo, lo que falta y navegación entre pasos */}
       <div className="lb-resumen">
         <div className="lb-costo">
-          {costo.cargando ? <span className="ms-cost">Calculando costo…</span> : costo.error ? <span className="ms-cost">{costo.error}</span> : costo.creditos != null && (
+          {demo && cupoTipo && (
+            <span className="lb-costo-n demo-incluida">
+              {cupoTipo.quedan > 0 ? <>🎁 {tipo === 'video' ? 'Tu video' : 'Tu imagen'} de la demo, sin costo</> : <>🔒 Ya usaste {tipo === 'video' ? 'el video' : 'la imagen'} de tu demo</>}
+            </span>
+          )}
+          {demo ? null : costo.cargando ? <span className="ms-cost">Calculando costo…</span> : costo.error ? <span className="ms-cost">{costo.error}</span> : costo.creditos != null && (
             <>
               <span className="lb-costo-n">{nCred(costo.creditos)}{costo.precio != null && <span> · {usd(costo.precio)}</span>}</span>
               {cobra && iaUsd > 0 && <span className="lb-costo-ia" title="Descripción automática y lectura de la ficha técnica: ya se cobraron y se suman al total de esta creación">+ {usdFino(iaUsd)} de IA{costo.precio != null && <> · total {usd(costo.precio + iaUsd)}</>}</span>}
-              <span className="ms-cost">{cobra ? (saldoUsd != null || saldo != null ? `Tu saldo: ${textoSaldo}` : '') : 'Super admin: no se descuenta del saldo de JH'}</span>
+              <span className="ms-cost">{cobra ? (saldoUsd != null || saldo != null ? `Tu saldo: ${textoSaldo}` : '') : 'Super admin: no se descuenta del saldo'}</span>
             </>
           )}
           {paso === 5 && faltan.length > 0 && (
